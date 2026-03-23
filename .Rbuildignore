@@ -1,0 +1,13 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^LICENSE\.md$
+^README\.Rmd$
+^\.github$
+^cran-comments\.md$
+^validation-report\.md$
+^dev$
+^bayesian-validation-fred\.md$
+^validation-summary\.md$
+^release-risk-review\.md$
+^release-checklist\.md$
+^bayesian-rbc-capital-walkthrough\.md$
