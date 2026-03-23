@@ -11,3 +11,6 @@
 ^release-risk-review\.md$
 ^release-checklist\.md$
 ^bayesian-rbc-capital-walkthrough\.md$
+^Rplots\.pdf$
+^releases$
+^dsge_.*\.tar\.gz$
