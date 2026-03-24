@@ -4,7 +4,7 @@
 \alias{solve_dsge}
 \title{Solve a Linear or Linearized DSGE Model}
 \usage{
-solve_dsge(model, params = NULL, shock_sd = NULL, tol = 1e-06)
+solve_dsge(model, params = NULL, shock_sd = NULL, tol = 1e-06, order = 1L)
 }
 \arguments{
 \item{model}{A \code{dsge_model} or \code{dsgenl_model} object.}
@@ -17,6 +17,10 @@ If \code{NULL}, defaults to 1 for all shocks.}
 
 \item{tol}{Tolerance for classifying eigenvalues as stable (|lambda| < 1 + tol).
 Default is 1e-6.}
+
+\item{order}{Integer. Approximation order: 1 (default) for first-order,
+2 for second-order perturbation. Second-order is only available for
+nonlinear models (\code{dsgenl_model}).}
 }
 \value{
 An object of class \code{"dsge_solution"} containing:
