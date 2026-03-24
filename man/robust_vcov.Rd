@@ -9,10 +9,8 @@ robust_vcov(object, ...)
 \arguments{
 \item{object}{A \code{"dsge_fit"} object estimated via ML.}
 
-\item{...}{Additional arguments (currently unused).}
-
-\item{step}{Numeric. Step size for numerical gradient computation
-(default 1e-5).}
+\item{...}{Additional arguments passed to methods (e.g., \code{step}
+for numerical gradient step size).}
 }
 \value{
 An object of class \code{"dsge_robust_vcov"} containing:
@@ -29,7 +27,7 @@ ML-estimated DSGE model parameters. This provides standard errors that
 are robust to model misspecification.
 }
 \details{
-The sandwich estimator is: V_robust = H^{-1} B H^{-1}, where H is the
+The sandwich estimator is: V_robust = inv(H) B inv(H), where H is the
 Hessian of the negative log-likelihood and B is the outer product of
 the per-observation score vectors.
 }

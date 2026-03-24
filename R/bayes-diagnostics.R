@@ -15,12 +15,8 @@
 #' of the data.
 #'
 #' @param object A \code{"dsge_bayes"} object.
-#' @param n_draws Integer. Number of posterior draws to use (default 200).
-#' @param statistics Character vector of statistics to check.
-#'   Default \code{c("variance", "acf1")}. Options: \code{"variance"},
-#'   \code{"acf1"} (lag-1 autocorrelation).
-#' @param seed Optional random seed.
-#' @param ... Additional arguments (currently unused).
+#' @param ... Additional arguments passed to methods (e.g., \code{n_draws},
+#'   \code{statistics}, \code{seed}).
 #'
 #' @return An object of class \code{"dsge_ppc"} with posterior predictive
 #'   distributions and p-values for each statistic.
@@ -192,6 +188,7 @@ print.dsge_ppc <- function(x, digits = 4, ...) {
 }
 
 #' @export
+#' @importFrom graphics hist
 plot.dsge_ppc <- function(x, ...) {
   n_stats <- length(x$statistics)
   n_vars <- length(x$variables)
@@ -225,14 +222,11 @@ plot.dsge_ppc <- function(x, ...) {
 #'
 #' Estimates the log marginal likelihood using the modified harmonic mean
 #' estimator (Geweke, 1999). This provides a practical Bayesian model
-#' comparison tool via Bayes factors: BF_{12} = exp(logML_1 - logML_2).
+#' comparison tool via Bayes factors: BF12 = exp(logML1 - logML2).
 #'
 #' @param object A \code{"dsge_bayes"} object.
-#' @param method Character. Estimation method. Currently only
-#'   \code{"harmonic_mean"} is supported.
-#' @param tau Numeric. Truncation parameter for the modified harmonic mean
-#'   (default 0.5). Higher values are more stable but less efficient.
-#' @param ... Additional arguments (currently unused).
+#' @param ... Additional arguments passed to methods (e.g., \code{method},
+#'   \code{tau}).
 #'
 #' @return An object of class \code{"dsge_marginal_likelihood"}.
 #'
@@ -374,9 +368,8 @@ print.dsge_marginal_likelihood <- function(x, digits = 2, ...) {
 #' means of the first and last portions of each chain using a z-test.
 #'
 #' @param object A \code{"dsge_bayes"} object.
-#' @param frac1 Fraction of chain for the first window (default 0.1).
-#' @param frac2 Fraction of chain for the last window (default 0.5).
-#' @param ... Additional arguments (currently unused).
+#' @param ... Additional arguments passed to methods (e.g., \code{frac1},
+#'   \code{frac2} for chain window fractions).
 #'
 #' @return An object of class \code{"dsge_geweke"} with z-scores and
 #'   p-values for each parameter and chain.

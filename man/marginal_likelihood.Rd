@@ -9,13 +9,8 @@ marginal_likelihood(object, ...)
 \arguments{
 \item{object}{A \code{"dsge_bayes"} object.}
 
-\item{...}{Additional arguments (currently unused).}
-
-\item{method}{Character. Estimation method. Currently only
-\code{"harmonic_mean"} is supported.}
-
-\item{tau}{Numeric. Truncation parameter for the modified harmonic mean
-(default 0.5). Higher values are more stable but less efficient.}
+\item{...}{Additional arguments passed to methods (e.g., \code{method},
+\code{tau}).}
 }
 \value{
 An object of class \code{"dsge_marginal_likelihood"}.
@@ -23,7 +18,7 @@ An object of class \code{"dsge_marginal_likelihood"}.
 \description{
 Estimates the log marginal likelihood using the modified harmonic mean
 estimator (Geweke, 1999). This provides a practical Bayesian model
-comparison tool via Bayes factors: BF_{12} = exp(logML_1 - logML_2).
+comparison tool via Bayes factors: BF12 = exp(logML1 - logML2).
 }
 \details{
 The harmonic mean estimator is known to be numerically unstable in some

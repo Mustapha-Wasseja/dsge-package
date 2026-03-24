@@ -8,14 +8,13 @@
 #' ML-estimated DSGE model parameters. This provides standard errors that
 #' are robust to model misspecification.
 #'
-#' The sandwich estimator is: V_robust = H^{-1} B H^{-1}, where H is the
+#' The sandwich estimator is: V_robust = inv(H) B inv(H), where H is the
 #' Hessian of the negative log-likelihood and B is the outer product of
 #' the per-observation score vectors.
 #'
 #' @param object A \code{"dsge_fit"} object estimated via ML.
-#' @param step Numeric. Step size for numerical gradient computation
-#'   (default 1e-5).
-#' @param ... Additional arguments (currently unused).
+#' @param ... Additional arguments passed to methods (e.g., \code{step}
+#'   for numerical gradient step size).
 #'
 #' @return An object of class \code{"dsge_robust_vcov"} containing:
 #' \describe{

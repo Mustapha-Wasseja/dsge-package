@@ -9,15 +9,8 @@ posterior_predictive(object, ...)
 \arguments{
 \item{object}{A \code{"dsge_bayes"} object.}
 
-\item{...}{Additional arguments (currently unused).}
-
-\item{n_draws}{Integer. Number of posterior draws to use (default 200).}
-
-\item{statistics}{Character vector of statistics to check.
-Default \code{c("variance", "acf1")}. Options: \code{"variance"},
-\code{"acf1"} (lag-1 autocorrelation).}
-
-\item{seed}{Optional random seed.}
+\item{...}{Additional arguments passed to methods (e.g., \code{n_draws},
+\code{statistics}, \code{seed}).}
 }
 \value{
 An object of class \code{"dsge_ppc"} with posterior predictive
