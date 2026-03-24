@@ -56,6 +56,7 @@ kalman_filter <- function(y, G, H, M, D) {
   predicted_obs <- matrix(0, n_T, n_obs)
   loglik <- 0
   filtered_P_list <- vector("list", n_T)
+  innovation_var_list <- vector("list", n_T)
 
   for (t in seq_len(n_T)) {
     # === Prediction step ===
@@ -74,6 +75,9 @@ kalman_filter <- function(y, G, H, M, D) {
     # Ensure symmetry
     F_t <- (F_t + t(F_t)) / 2
 
+    # Store innovation variance
+    innovation_var_list[[t]] <- F_t
+
     # Prediction error
     v_t <- y[t, ] - y_pred
     prediction_errors[t, ] <- v_t
@@ -85,6 +89,7 @@ kalman_filter <- function(y, G, H, M, D) {
                   predicted_states = predicted_states,
                   prediction_errors = prediction_errors,
                   filtered_P = filtered_P_list,
+                  innovation_var = innovation_var_list,
                   predicted_obs = predicted_obs))
     }
 
@@ -115,6 +120,7 @@ kalman_filter <- function(y, G, H, M, D) {
     predicted_states = predicted_states,
     prediction_errors = prediction_errors,
     filtered_P = filtered_P_list,
+    innovation_var = innovation_var_list,
     predicted_obs = predicted_obs
   )
 }
