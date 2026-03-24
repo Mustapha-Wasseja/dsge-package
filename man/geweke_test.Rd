@@ -9,11 +9,8 @@ geweke_test(object, ...)
 \arguments{
 \item{object}{A \code{"dsge_bayes"} object.}
 
-\item{...}{Additional arguments (currently unused).}
-
-\item{frac1}{Fraction of chain for the first window (default 0.1).}
-
-\item{frac2}{Fraction of chain for the last window (default 0.5).}
+\item{...}{Additional arguments passed to methods (e.g., \code{frac1},
+\code{frac2} for chain window fractions).}
 }
 \value{
 An object of class \code{"dsge_geweke"} with z-scores and
