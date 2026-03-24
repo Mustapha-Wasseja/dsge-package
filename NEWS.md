@@ -1,3 +1,85 @@
+# dsge 1.0.0
+
+## Major release: complete DSGE estimation and analysis toolkit
+
+### Model-implied covariance reporting (v0.10.0)
+
+* New `model_covariance()` for unconditional covariance and correlation
+  matrices of model observables and controls.
+* Supports ML fits, Bayesian fits, and raw solution objects.
+
+### Prediction and reporting tools (v0.10.0)
+
+* New `prediction_interval()` for one-step-ahead prediction bands using
+  Kalman filter innovation variance.
+* New `prediction_accuracy()` for RMSE, MAE, and mean bias statistics.
+* Enhanced `fitted()` method for ML-estimated models.
+
+### Robust standard errors (v0.10.0)
+
+* New `robust_vcov()` for sandwich (Huber-White) variance-covariance
+  estimation. Provides standard errors robust to model misspecification.
+
+### Bayesian diagnostics and model comparison (v0.10.0)
+
+* New `posterior_predictive()` for posterior predictive checks with
+  variance and autocorrelation statistics.
+* New `marginal_likelihood()` via modified harmonic mean estimator
+  for Bayesian model comparison.
+* New `geweke_test()` for Geweke (1992) convergence diagnostic.
+* New `mcmc_diagnostics()` for comprehensive MCMC health summary.
+
+# dsge 0.9.0
+
+## Occasionally binding constraints
+
+* New `simulate_occbin()` for piecewise-linear simulation under
+  inequality constraints (e.g., zero lower bound).
+* New `obc_constraint()` helper for constraint specification.
+* Shadow-shock algorithm with iterative regime detection.
+* Plot method with constraint-binding period shading.
+
+# dsge 0.8.0
+
+## Second-order perturbation
+
+* `solve_dsge()` now accepts `order = 2` for second-order approximation
+  of nonlinear models.
+* New `simulate_2nd_order()` for pruned second-order simulation.
+* New `irf_2nd_order()` for generalised impulse-response functions
+  with asymmetric shock effects.
+* Risk/precautionary corrections to the steady state (sigma-correction).
+
+# dsge 0.7.0
+
+## Perfect foresight / deterministic transition paths
+
+* New `perfect_foresight()` for deterministic simulation of transition
+  paths after temporary or permanent shocks.
+* Supports both linear and linearized nonlinear models.
+* Plot method with deviation-from-steady-state and level views.
+
+# dsge 0.6.0
+
+## Identification and sensitivity analysis
+
+* New `check_identification()` for local identification diagnostics
+  via Jacobian SVD of the autocovariance mapping.
+* New `parameter_sensitivity()` for sensitivity of likelihood, IRFs,
+  steady state, and policy matrices to parameter perturbations.
+* New `prior_posterior_update()` for Bayesian informativeness diagnostics
+  comparing posterior concentration to prior width.
+
+# dsge 0.5.0
+
+## Kalman smoother and shock decomposition
+
+* New `smooth_states()` for Rauch-Tung-Striebel Kalman smoothing.
+* New `smooth_shocks()` for extraction of smoothed structural shocks.
+* New `shock_decomposition()` for historical decomposition of observed
+  variables into individual shock contributions.
+* Plot methods for smoothed states and shock decomposition.
+
 # dsge 0.4.0
 
 ## Bayesian nonlinear DSGE estimation
@@ -8,13 +90,11 @@
   re-linearized at the candidate parameters, ensuring correct parameter-
   dependent dynamics.
 * Failed steady-state solves, linearization failures, and Blanchard-Kahn
-  violations are handled gracefully — proposals are rejected without
+  violations are handled gracefully --- proposals are rejected without
   crashing the sampler. Failure counts are reported in the output.
 * Data is automatically centered around the parameter-specific steady
   state for nonlinear models.
 * Posterior IRFs work for nonlinear models via the same `irf()` interface.
-* Example scripts: `bayesian_rbc_nonlinear.R` and
-  `bayesian_nk_nonlinear.R` in `inst/examples/`.
 
 # dsge 0.3.0
 
@@ -30,29 +110,8 @@
   constrained parameters.
 * MCMC diagnostics: effective sample size (ESS), R-hat (split), MCSE,
   and acceptance rates.
-* Posterior summary: mean, SD, median, 95% credible intervals.
-* `print()`, `summary()`, `coef()`, and `plot()` methods for `dsge_bayes`
-  objects. Plot supports trace plots and posterior density with prior overlay.
 * Posterior impulse-response functions via `irf()` with pointwise credible
   bands computed from posterior draws.
-* Default `inv_gamma(0.01, 0.01)` priors for shock standard deviations.
-* `irf()` is now an S3 generic, dispatching to `irf.default` (ML fits and
-  solutions) and `irf.dsge_bayes` (Bayesian fits).
-
-## Real-data examples
-
-* Bayesian NK model estimated on real FRED data (GDPDEF inflation and
-  federal funds rate, 1955Q1–2015Q4, 244 obs), producing economically
-  plausible posteriors and impulse-response functions.
-* Extended 3-observable NK model estimated on FRED data (inflation, FFR,
-  HP-filtered output gap) with cost-push shock.
-* Example scripts: `bayesian_nk_fred.R` and `bayesian_nk_extended.R`
-  in `inst/examples/`.
-
-## Bug fixes
-
-* Fixed data-informed initialization of shock standard deviations in
-  `estimate()` to avoid convergence to local optima.
 
 # dsge 0.2.0
 
@@ -61,62 +120,16 @@
 * New `dsgenl_model()` constructor for nonlinear DSGE models defined via
   string-based equations with `VAR(+1)` lead notation.
 * `steady_state()` generic for computing the deterministic steady state
-  via Newton-Raphson with damped line search. Supports user-supplied
-  analytical steady-state functions.
-* `linearize()` computes first-order Taylor expansion around steady state,
-  mapping the Jacobian blocks into the existing canonical structural form.
-* `solve_dsge()` now accepts `dsgenl_model` objects: automatically computes
-  steady state, linearizes, and solves via the existing Klein solver.
-* `estimate()` now accepts `dsgenl_model` objects: re-linearizes at each
-  parameter evaluation, subtracts model-implied steady state from data.
-* All existing postestimation tools (policy matrix, transition matrix,
-  stability, IRFs, forecasts, predict, residuals) work with nonlinear
-  models after linearization.
-* Extended Klein solver to handle A4 matrix (lead-state terms in control
-  equations) for broader model classes.
-
-## Limitations
-
-* Nonlinear support uses first-order perturbation only; second-order and
-  higher approximations are not yet implemented.
-* Steady-state solving is numerical; convergence depends on initial guesses.
+  via Newton-Raphson with damped line search.
+* `linearize()` computes first-order Taylor expansion around steady state.
+* `solve_dsge()` and `estimate()` now accept `dsgenl_model` objects.
 
 # dsge 0.1.0
 
-Initial CRAN release.
+Initial release.
 
-## Model specification
-
-* Formula-based model specification via `obs()`, `unobs()`, and `state()`
-  equation wrappers.
-* Forward expectations via `lead(x)` (core primitive) and `E(x)` (alias).
-* Fixed and free parameter separation with arbitrary nonlinear
-  parameter expressions in coefficients.
-* Endogenous state variables via `state(, shock = FALSE)`.
-
-## Solution
-
-* Klein (2000) solution via the method of undetermined coefficients.
-* Blanchard-Kahn saddle-path stability diagnostics.
-* Policy matrix G and transition matrix H extraction.
-
-## Estimation
-
-* Maximum likelihood estimation via Kalman filter log-likelihood.
-* Log-parameterization of shock standard deviations for positivity.
-* Delta-method standard errors for all estimated quantities.
-* Standard R methods: `coef()`, `vcov()`, `logLik()`, `nobs()`,
-  `predict()`, `residuals()`, `summary()`.
-
-## Postestimation
-
-* Policy and transition matrix extraction with delta-method standard errors.
-* Stability check with eigenvalue classification.
-* Impulse-response functions with confidence bands.
-* Dynamic multi-step forecasting from filtered states.
-* `predict()` with one-step-ahead and filtered/smoothed modes.
-
-## Plotting
-
-* `plot.dsge_irf()` for multi-panel IRF plots with CI bands.
-* `plot.dsge_forecast()` for forecast visualization.
+* Formula-based linear model specification.
+* Klein (2000) solution via method of undetermined coefficients.
+* Maximum likelihood estimation via Kalman filter.
+* Policy/transition matrix extraction with delta-method standard errors.
+* Impulse-response functions, forecasting, stability diagnostics.
