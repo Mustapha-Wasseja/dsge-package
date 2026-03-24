@@ -6,7 +6,7 @@
 \alias{dsge-package}
 \title{dsge: Dynamic Stochastic General Equilibrium Models}
 \description{
-Specify, solve, and estimate dynamic stochastic general equilibrium (DSGE) models by maximum likelihood and Bayesian methods. Supports both linear models via an equation-based formula interface and nonlinear models via string-based equations with first-order perturbation (linearization around deterministic steady state). Solution uses the method of undetermined coefficients (Klein, 2000 \doi{10.1016/S0165-1889(99)00045-7}), likelihood is evaluated via the Kalman filter. Bayesian estimation uses adaptive Random-Walk Metropolis-Hastings with prior specification. Postestimation tools include policy and transition matrix extraction, stability diagnostics, impulse-response functions with credible bands, and forecasting.
+Specify, solve, and estimate dynamic stochastic general equilibrium (DSGE) models by maximum likelihood and Bayesian methods. Supports both linear models via an equation-based formula interface and nonlinear models via string-based equations with first-order perturbation (linearization around deterministic steady state). Solution uses the method of undetermined coefficients (Klein, 2000 \doi{10.1016/S0165-1889(99)00045-7}). Likelihood evaluated via the Kalman filter. Bayesian estimation uses adaptive Random-Walk Metropolis-Hastings with prior specification. Additional tools include Kalman smoothing, historical shock decomposition, local identification diagnostics, parameter sensitivity analysis, second-order perturbation, occasionally binding constraints, impulse-response functions, forecasting, and robust standard errors.
 }
 \author{
 \strong{Maintainer}: Mohammed Mustapha Wasseja \email{muswaseja@gmail.com}
