@@ -49,12 +49,28 @@
 #' steady state, then linearizes the model via first-order Taylor
 #' expansion, and finally solves the resulting linear system.
 #'
+#' @param order Integer. Approximation order: 1 (default) for first-order,
+#'   2 for second-order perturbation. Second-order is only available for
+#'   nonlinear models (\code{dsgenl_model}).
+#'
 #' @export
-solve_dsge <- function(model, params = NULL, shock_sd = NULL, tol = 1e-6) {
+solve_dsge <- function(model, params = NULL, shock_sd = NULL, tol = 1e-6,
+                       order = 1L) {
+  order <- as.integer(order)
+  if (!order %in% c(1L, 2L)) stop("order must be 1 or 2.", call. = FALSE)
+
   # Dispatch to nonlinear solver if needed
   if (inherits(model, "dsgenl_model")) {
+    if (order == 2L) {
+      return(solve_2nd_order(model, params = params,
+                             shock_sd = shock_sd, tol = tol))
+    }
     return(solve_dsgenl(model, params = params,
                         shock_sd = shock_sd, tol = tol))
+  }
+
+  if (order == 2L) {
+    stop("Second-order perturbation requires a dsgenl_model.", call. = FALSE)
   }
 
   if (!inherits(model, "dsge_model")) {
