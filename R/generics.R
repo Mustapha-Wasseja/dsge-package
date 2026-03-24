@@ -6,11 +6,6 @@ coef.dsge_fit <- function(object, ...) {
 }
 
 #' @export
-vcov.dsge_fit <- function(object, ...) {
-  object$vcov
-}
-
-#' @export
 logLik.dsge_fit <- function(object, ...) {
   ll <- object$loglik
   n_free <- length(object$free_parameters)
