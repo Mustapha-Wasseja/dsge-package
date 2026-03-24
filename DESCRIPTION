@@ -1,6 +1,6 @@
 Package: dsge
 Title: Dynamic Stochastic General Equilibrium Models
-Version: 0.5.0
+Version: 0.6.0
 Authors@R: person("Mohammed Mustapha", "Wasseja", role = c("aut", "cre"),
     email = "muswaseja@gmail.com")
 Author: Mohammed Mustapha Wasseja [aut, cre]
