@@ -1,8 +1,8 @@
 Package: dsge
 Title: Dynamic Stochastic General Equilibrium Models
 Version: 1.0.0
-Authors@R: person("Mohammed Mustapha", "Wasseja", role = c("aut", "cre"),
-    email = "muswaseja@gmail.com")
+Authors@R: person(given = c("Mustapha", "Wasseja"), family = "Mohammed",
+    role = c("aut", "cre"), email = "muswaseja@gmail.com")
 Description: Specify, solve, and estimate dynamic stochastic general
     equilibrium (DSGE) models by maximum likelihood and Bayesian methods.
     Supports both linear models via an equation-based formula interface
