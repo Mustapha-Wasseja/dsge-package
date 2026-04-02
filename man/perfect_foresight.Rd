@@ -85,23 +85,20 @@ for large shocks. For small to moderate shocks, the linearized paths are
 accurate.
 }
 \examples{
-\dontrun{
 # Simple AR(1) model
 mod <- dsge_model(
-  "x" = state("x(-1)", "e_x"),
-  "p" = obs("x"),
-  params = list(rho = 0.9),
-  shock_names = "e_x"
+  obs(p ~ x),
+  state(x ~ rho * x),
+  start = list(rho = 0.9)
 )
-sol <- solve_dsge(mod, params = c(rho = 0.9), shock_sd = c(e_x = 0.01))
+sol <- solve_dsge(mod, params = list(rho = 0.9), shock_sd = c(x = 0.01))
 
-# One-time shock of 0.01 to e_x at period 1
-pf <- perfect_foresight(sol, shocks = list(e_x = 0.01), horizon = 40)
+# One-time shock at period 1
+pf <- perfect_foresight(sol, shocks = list(x = 0.01), horizon = 40)
 plot(pf)
 
 # Displaced initial condition
 pf2 <- perfect_foresight(sol, initial = c(x = 0.05), horizon = 40)
 plot(pf2)
-}
 
 }

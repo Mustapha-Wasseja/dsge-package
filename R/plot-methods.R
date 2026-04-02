@@ -14,6 +14,9 @@
 #'   if available.
 #' @param ... Additional arguments passed to base plotting functions.
 #'
+#' @return No return value, called for the side effect of producing
+#'   a multi-panel impulse-response plot on the active graphics device.
+#'
 #' @export
 plot.dsge_irf <- function(x, impulse = NULL, response = NULL,
                           ci = TRUE, ...) {
@@ -73,6 +76,9 @@ plot.dsge_irf <- function(x, impulse = NULL, response = NULL,
 #'
 #' @param x A `dsge_forecast` object from [forecast.dsge_fit()].
 #' @param ... Additional arguments passed to base plotting functions.
+#'
+#' @return No return value, called for the side effect of producing
+#'   forecast path plots on the active graphics device.
 #'
 #' @export
 plot.dsge_forecast <- function(x, ...) {

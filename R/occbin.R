@@ -108,15 +108,23 @@ obc_constraint <- function(variable, type = ">=", bound = 0, shock = NULL) {
 #' dynamics through the state transition.
 #'
 #' @examples
-#' \dontrun{
-#' # NK model with ZLB
-#' sol <- solve_dsge(nk_model, params = nk_params, shock_sd = nk_sd)
+#' # Simple NK model with ZLB
+#' nk <- dsge_model(
+#'   obs(pi ~ beta * lead(pi) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(pi) - g)),
+#'   obs(r ~ psi * pi + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99, kappa = 0.1, psi = 1.5),
+#'   start = list(rhou = 0.5, rhog = 0.5)
+#' )
+#' sol <- solve_dsge(nk, params = list(rhou = 0.5, rhog = 0.5),
+#'                   shock_sd = c(u = 0.5, g = 0.5))
 #' obc <- simulate_occbin(sol,
 #'   constraints = list("r >= 0"),
-#'   shocks = list(u = -0.05),
+#'   shocks = list(g = -0.05),
 #'   horizon = 40)
 #' plot(obc)
-#' }
 #'
 #' @export
 simulate_occbin <- function(x, constraints, shocks = NULL, initial = NULL,
@@ -415,6 +423,11 @@ summary.dsge_occbin <- function(object, ...) {
 #'   constraints bind.
 #' @param max_panels Integer. Maximum panels per page. Default 9.
 #' @param ... Additional arguments (unused).
+#'
+#' @return No return value, called for the side effect of producing
+#'   OccBin simulation plots on the active graphics device. Constrained
+#'   and unconstrained paths are shown, with shaded regions where
+#'   constraints bind.
 #'
 #' @importFrom graphics mtext
 #' @export

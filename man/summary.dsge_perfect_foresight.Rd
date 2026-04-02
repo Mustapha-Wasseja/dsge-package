@@ -11,6 +11,11 @@
 
 \item{...}{Additional arguments (unused).}
 }
+\value{
+Invisibly returns the \code{dsge_perfect_foresight} object. Called
+for the side effect of printing impact effects, peak deviations,
+and convergence diagnostics to the console.
+}
 \description{
 Summary of Perfect Foresight Transition
 }

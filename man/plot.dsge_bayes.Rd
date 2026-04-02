@@ -53,6 +53,10 @@ Ignored for \code{irf} (use \code{impulse}/\code{response} instead).}
 \code{periods}, \code{impulse}, \code{response}, \code{n_draws}, and \code{level} are
 passed to \code{\link[=irf.dsge_bayes]{irf.dsge_bayes()}}.}
 }
+\value{
+Invisibly returns the \code{dsge_bayes} object \code{x}. Called for the
+side effect of producing diagnostic plots on the active graphics device.
+}
 \description{
 Produces diagnostic plots for posterior draws from a Bayesian DSGE fit.
 }

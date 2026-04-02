@@ -62,24 +62,21 @@
 #' accurate.
 #'
 #' @examples
-#' \dontrun{
 #' # Simple AR(1) model
 #' mod <- dsge_model(
-#'   "x" = state("x(-1)", "e_x"),
-#'   "p" = obs("x"),
-#'   params = list(rho = 0.9),
-#'   shock_names = "e_x"
+#'   obs(p ~ x),
+#'   state(x ~ rho * x),
+#'   start = list(rho = 0.9)
 #' )
-#' sol <- solve_dsge(mod, params = c(rho = 0.9), shock_sd = c(e_x = 0.01))
+#' sol <- solve_dsge(mod, params = list(rho = 0.9), shock_sd = c(x = 0.01))
 #'
-#' # One-time shock of 0.01 to e_x at period 1
-#' pf <- perfect_foresight(sol, shocks = list(e_x = 0.01), horizon = 40)
+#' # One-time shock at period 1
+#' pf <- perfect_foresight(sol, shocks = list(x = 0.01), horizon = 40)
 #' plot(pf)
 #'
 #' # Displaced initial condition
 #' pf2 <- perfect_foresight(sol, initial = c(x = 0.05), horizon = 40)
 #' plot(pf2)
-#' }
 #'
 #' @export
 perfect_foresight <- function(x, shocks = NULL, initial = NULL,
@@ -345,6 +342,9 @@ print.dsge_perfect_foresight <- function(x, ...) {
 #'   Default 9.
 #' @param ... Additional arguments (currently unused).
 #'
+#' @return No return value, called for the side effect of producing
+#'   transition path plots on the active graphics device.
+#'
 #' @export
 plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
                                         max_panels = 9L, ...) {
@@ -425,6 +425,10 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
 #'
 #' @param object A \code{dsge_perfect_foresight} object.
 #' @param ... Additional arguments (unused).
+#'
+#' @return Invisibly returns the `dsge_perfect_foresight` object. Called
+#'   for the side effect of printing impact effects, peak deviations,
+#'   and convergence diagnostics to the console.
 #'
 #' @export
 summary.dsge_perfect_foresight <- function(object, ...) {

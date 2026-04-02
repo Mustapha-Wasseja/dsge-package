@@ -524,6 +524,9 @@ print.dsge_decomposition <- function(x, ...) {
 #'   state variables; `"fit"` plots the smoothed observables against data.
 #' @param ... Additional arguments passed to [plot()].
 #'
+#' @return No return value, called for the side effect of producing
+#'   smoothed state or fit plots on the active graphics device.
+#'
 #' @export
 plot.dsge_smoothed <- function(x, which = NULL, type = c("states", "fit"),
                                 ...) {
@@ -592,6 +595,10 @@ plot_smoothed_fit <- function(x, ...) {
 #' @param which Which observable(s) to plot. Integer or character. Default
 #'   is all.
 #' @param ... Additional arguments (currently unused).
+#'
+#' @return No return value, called for the side effect of producing
+#'   stacked bar charts of the historical shock decomposition on the
+#'   active graphics device.
 #'
 #' @export
 plot.dsge_decomposition <- function(x, which = NULL, ...) {

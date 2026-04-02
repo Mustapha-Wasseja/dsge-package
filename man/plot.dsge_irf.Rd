@@ -20,6 +20,10 @@ if available.}
 
 \item{...}{Additional arguments passed to base plotting functions.}
 }
+\value{
+No return value, called for the side effect of producing
+a multi-panel impulse-response plot on the active graphics device.
+}
 \description{
 Creates a multi-panel plot of impulse-response functions with
 optional confidence bands.

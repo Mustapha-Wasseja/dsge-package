@@ -20,6 +20,10 @@ Default 9.}
 
 \item{...}{Additional arguments (currently unused).}
 }
+\value{
+No return value, called for the side effect of producing
+transition path plots on the active graphics device.
+}
 \description{
 Plot the deterministic transition paths from a \code{perfect_foresight}
 result.

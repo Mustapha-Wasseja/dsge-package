@@ -17,6 +17,10 @@ state variables; \code{"fit"} plots the smoothed observables against data.}
 
 \item{...}{Additional arguments passed to \code{\link[=plot]{plot()}}.}
 }
+\value{
+No return value, called for the side effect of producing
+smoothed state or fit plots on the active graphics device.
+}
 \description{
 Plot Smoothed States
 }
