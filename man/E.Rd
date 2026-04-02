@@ -9,6 +9,11 @@ E(x)
 \arguments{
 \item{x}{A variable name (unquoted) within a DSGE equation formula.}
 }
+\value{
+This function is not meant to be called directly; it always
+throws an error. It is recognized as a syntactic marker by the
+equation parser inside \code{\link[=dsge_model]{dsge_model()}}.
+}
 \description{
 A user-friendly alias for \code{lead(x, 1)}. Represents the one-period-ahead
 model-consistent expectation of variable \code{x}.

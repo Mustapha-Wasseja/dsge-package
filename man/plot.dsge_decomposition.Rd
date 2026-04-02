@@ -14,6 +14,11 @@ is all.}
 
 \item{...}{Additional arguments (currently unused).}
 }
+\value{
+No return value, called for the side effect of producing
+stacked bar charts of the historical shock decomposition on the
+active graphics device.
+}
 \description{
 Creates a stacked bar chart showing the contribution of each structural
 shock to the observed variables over time.

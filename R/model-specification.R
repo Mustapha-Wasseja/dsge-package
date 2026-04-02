@@ -16,6 +16,9 @@
 #' This function is not meant to be called directly. It is recognized by
 #' the equation parser inside [dsge_model()].
 #'
+#' @return This function is not meant to be called directly; it always
+#'   throws an error. It is recognized as a syntactic marker by the
+#'   equation parser inside [dsge_model()].
 #' @seealso [E()] for a user-friendly alias, [dsge_model()]
 #' @export
 lead <- function(x, k = 1L) {
@@ -34,6 +37,9 @@ lead <- function(x, k = 1L) {
 #' `E(x)` is equivalent to `lead(x, 1)`. The parser translates `E(x)` to
 #' `lead(x, 1)` internally.
 #'
+#' @return This function is not meant to be called directly; it always
+#'   throws an error. It is recognized as a syntactic marker by the
+#'   equation parser inside [dsge_model()].
 #' @seealso [lead()], [dsge_model()]
 #' @export
 E <- function(x) {

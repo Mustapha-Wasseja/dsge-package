@@ -29,14 +29,19 @@
 #' }
 #'
 #' @examples
-#' \dontrun{
-#'   sol <- solve_dsge(model, params = p, shock_sd = s)
-#'   mc <- model_covariance(sol)
-#'   print(mc)
-#'
-#'   # With autocovariances
-#'   mc2 <- model_covariance(sol, n_lags = 4)
-#' }
+#' mod <- dsge_model(
+#'   obs(pi ~ beta * lead(pi) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(pi) - g)),
+#'   obs(r ~ psi * pi + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, psi = 1.5, rhou = 0.5, rhog = 0.5)
+#' )
+#' p <- list(kappa = 0.1, psi = 1.5, rhou = 0.5, rhog = 0.5)
+#' s <- c(u = 0.5, g = 0.5)
+#' sol <- solve_dsge(mod, params = p, shock_sd = s)
+#' model_covariance(sol)
 #'
 #' @export
 model_covariance <- function(x, variables = NULL, n_lags = 0L, ...) {

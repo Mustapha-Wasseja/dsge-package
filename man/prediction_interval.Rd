@@ -23,8 +23,15 @@ Computes point predictions and prediction intervals using the
 one-step-ahead innovation variance from the Kalman filter.
 }
 \examples{
-\dontrun{
-  fit <- estimate(model, data = dat)
+\donttest{
+  m <- dsge_model(
+    obs(y ~ z),
+    state(z ~ rho * z),
+    start = list(rho = 0.5)
+  )
+  set.seed(1)
+  z <- numeric(100); for (i in 2:100) z[i] <- 0.8 * z[i-1] + rnorm(1)
+  fit <- estimate(m, data = data.frame(y = z))
   pi <- prediction_interval(fit, level = 0.95)
   print(pi)
 }

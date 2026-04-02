@@ -22,6 +22,12 @@ constraints bind.}
 
 \item{...}{Additional arguments (unused).}
 }
+\value{
+No return value, called for the side effect of producing
+OccBin simulation plots on the active graphics device. Constrained
+and unconstrained paths are shown, with shaded regions where
+constraints bind.
+}
 \description{
 Plot OccBin Simulation Results
 }

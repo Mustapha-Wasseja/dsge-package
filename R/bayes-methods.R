@@ -124,6 +124,9 @@ coef.dsge_bayes <- function(object, ...) {
 #' **Forecast plotting** is not currently supported for Bayesian fits.
 #' Use [irf()] for posterior impulse-response analysis.
 #'
+#' @return Invisibly returns the `dsge_bayes` object `x`. Called for the
+#'   side effect of producing diagnostic plots on the active graphics device.
+#'
 #' @examples
 #' \donttest{
 #' m <- dsge_model(

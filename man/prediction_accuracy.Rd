@@ -26,8 +26,15 @@ Computes root mean squared error (RMSE), mean absolute error (MAE),
 and mean error (bias) of one-step-ahead predictions.
 }
 \examples{
-\dontrun{
-  fit <- estimate(model, data = dat)
+\donttest{
+  m <- dsge_model(
+    obs(y ~ z),
+    state(z ~ rho * z),
+    start = list(rho = 0.5)
+  )
+  set.seed(1)
+  z <- numeric(100); for (i in 2:100) z[i] <- 0.8 * z[i-1] + rnorm(1)
+  fit <- estimate(m, data = data.frame(y = z))
   acc <- prediction_accuracy(fit)
   print(acc)
 }

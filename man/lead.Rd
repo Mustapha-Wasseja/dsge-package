@@ -12,6 +12,11 @@ lead(x, k = 1L)
 \item{k}{Integer lead horizon. Currently only \code{k = 1} is supported.
 Default is 1.}
 }
+\value{
+This function is not meant to be called directly; it always
+throws an error. It is recognized as a syntactic marker by the
+equation parser inside \code{\link[=dsge_model]{dsge_model()}}.
+}
 \description{
 Marks a variable as a one-period-ahead model-consistent expectation
 in a DSGE equation formula. This is the core primitive for forward-looking

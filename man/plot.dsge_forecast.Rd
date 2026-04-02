@@ -11,6 +11,10 @@
 
 \item{...}{Additional arguments passed to base plotting functions.}
 }
+\value{
+No return value, called for the side effect of producing
+forecast path plots on the active graphics device.
+}
 \description{
 Plots forecast paths for observed variables.
 }

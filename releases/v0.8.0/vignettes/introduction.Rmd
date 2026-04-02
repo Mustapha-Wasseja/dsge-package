@@ -1,0 +1,374 @@
+---
+title: "Introduction to the dsge Package"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to the dsge Package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Overview
+
+The `dsge` package provides tools for specifying, solving, and estimating
+dynamic stochastic general equilibrium (DSGE) models by maximum likelihood
+and Bayesian methods. It supports linear models (formula interface),
+nonlinear models (first-order perturbation), and Bayesian estimation of
+linear models (adaptive RWMH). This vignette walks through examples
+demonstrating the core workflow.
+
+## A Simple AR(1) Model
+
+We start with the simplest possible DSGE model: a single observed variable
+driven by a single autoregressive state variable.
+
+The model is:
+$$y_t = z_t$$
+$$z_{t+1} = \rho z_t + \varepsilon_{t+1}$$
+
+where $\varepsilon_t \sim N(0, \sigma^2)$.
+
+### Simulate Data
+
+```{r simulate}
+set.seed(42)
+true_rho <- 0.8
+true_sd <- 1.0
+n <- 200
+
+z <- numeric(n)
+for (i in 2:n) z[i] <- true_rho * z[i - 1] + true_sd * rnorm(1)
+dat <- data.frame(y = z)
+```
+
+### Specify the Model
+
+```{r specify}
+library(dsge)
+
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+
+print(m)
+```
+
+### Solve at Known Parameters
+
+Before estimating, we can solve the model at specific parameter values
+to inspect the state-space solution.
+
+```{r solve}
+sol <- solve_dsge(m, params = c(rho = 0.8))
+print(sol)
+```
+
+### Estimate the Model
+
+```{r estimate}
+fit <- estimate(m, data = dat)
+summary(fit)
+```
+
+The estimated value of `rho` should be close to the true value of 0.8.
+
+### Postestimation
+
+```{r postest}
+# Policy matrix (maps states to controls)
+policy_matrix(fit, se = FALSE)
+
+# Transition matrix (state dynamics)
+transition_matrix(fit, se = FALSE)
+
+# Stability check
+stability(fit)
+```
+
+### Impulse-Response Functions
+
+```{r irf, fig.height=3}
+irfs <- irf(fit, periods = 20, se = FALSE)
+plot(irfs)
+```
+
+The IRF shows the response of `y` to a one-standard-deviation shock
+to the state variable `z`. The response decays geometrically at rate `rho`.
+
+### Forecasting
+
+```{r forecast, fig.height=3}
+fc <- forecast(fit, horizon = 12)
+plot(fc)
+```
+
+The forecast converges toward the unconditional mean of the series.
+
+## A Three-Equation New Keynesian Model
+
+A more realistic example is a simple New Keynesian model with three
+observed/unobserved variables:
+
+- $p_t$: inflation (observed)
+- $x_t$: output gap (unobserved)
+- $r_t$: interest rate (observed)
+
+The linearized model is:
+
+$$p_t = \beta E_t[p_{t+1}] + \kappa x_t$$
+$$x_t = E_t[x_{t+1}] - (r_t - E_t[p_{t+1}] - g_t)$$
+$$r_t = \psi p_t + u_t$$
+$$u_{t+1} = \rho_u u_t + \varepsilon_{u,t+1}$$
+$$g_{t+1} = \rho_g g_t + \varepsilon_{g,t+1}$$
+
+### Model Specification
+
+```{r nk-model}
+nk <- dsge_model(
+  obs(p   ~ beta * lead(p) + kappa * x),
+  unobs(x ~ lead(x) - (r - lead(p) - g)),
+  obs(r   ~ psi * p + u),
+  state(u ~ rhou * u),
+  state(g ~ rhog * g),
+  fixed = list(beta = 0.96),
+  start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+)
+
+print(nk)
+```
+
+This model has five equations, three control variables (two observed,
+one unobserved), and two exogenous state variables. The discount factor
+$\beta$ is constrained to 0.96.
+
+### Simulate and Estimate
+
+We simulate data from the model at known parameter values and then
+estimate the parameters by maximum likelihood.
+
+```{r nk-sim-est}
+# Solve at true parameters to get state-space form
+true_params <- c(beta = 0.96, kappa = 0.085, psi = 1.94,
+                 rhou = 0.70, rhog = 0.95)
+true_sd <- c(u = 2.3, g = 0.57)
+sol <- solve_dsge(nk, params = true_params, shock_sd = true_sd)
+
+# Simulate data
+set.seed(123)
+n <- 200
+states <- matrix(0, n, 2)
+colnames(states) <- c("u", "g")
+for (t in 2:n) {
+  states[t, "u"] <- 0.70 * states[t - 1, "u"] + 2.3 * rnorm(1)
+  states[t, "g"] <- 0.95 * states[t - 1, "g"] + 0.57 * rnorm(1)
+}
+Z <- sol$D %*% sol$G
+obs_data <- states %*% t(Z)
+colnames(obs_data) <- c("p", "r")
+nk_dat <- as.data.frame(obs_data)
+
+# Estimate
+nk_fit <- estimate(nk, data = nk_dat,
+                   start = list(kappa = 0.1, psi = 1.5,
+                                rhou = 0.7, rhog = 0.9),
+                   control = list(maxit = 500))
+summary(nk_fit)
+```
+
+### Impulse-Response Functions
+
+```{r nk-irf, fig.height=5}
+nk_irfs <- irf(nk_fit, periods = 20)
+plot(nk_irfs)
+```
+
+The IRF panels show how inflation, interest rate, and the output gap
+respond to monetary policy (u) and demand (g) shocks.
+
+### Forecasting
+
+```{r nk-forecast, fig.height=4}
+nk_fc <- forecast(nk_fit, horizon = 12)
+plot(nk_fc)
+```
+
+## Nonlinear DSGE Models
+
+The package also supports nonlinear DSGE models via first-order perturbation
+(linearization around the deterministic steady state). Nonlinear models are
+specified using string-based equations with `VAR(+1)` notation for leads.
+
+### A Simple RBC Model
+
+```{r rbc-model}
+rbc <- dsgenl_model(
+  "1/C = beta / C(+1) * (alpha * exp(Z) * K^(alpha-1) + 1 - delta)",
+  "K(+1) = exp(Z) * K^alpha - C + (1 - delta) * K",
+  "Z(+1) = rho * Z",
+  observed = "C",
+  endo_state = "K",
+  exo_state = "Z",
+  fixed = list(alpha = 0.33, beta = 0.99, delta = 0.025),
+  start = list(rho = 0.9),
+  ss_guess = c(C = 2, K = 30, Z = 0)
+)
+print(rbc)
+```
+
+### Steady State
+
+```{r rbc-ss}
+params <- c(alpha = 0.33, beta = 0.99, delta = 0.025, rho = 0.9)
+ss <- steady_state(rbc, params = params)
+print(ss)
+```
+
+### Solve and Inspect
+
+`solve_dsge()` automatically linearizes and solves:
+
+```{r rbc-solve}
+sol <- solve_dsge(rbc, params = params, shock_sd = c(Z = 0.01))
+print(sol)
+stability(sol)
+```
+
+### IRFs
+
+```{r rbc-irf, fig.height=3}
+rbc_irfs <- irf(sol, periods = 40, se = FALSE)
+plot(rbc_irfs)
+```
+
+The IRF shows how consumption responds to a TFP shock, with the
+response decaying as capital adjusts back to steady state.
+
+## Bayesian Estimation
+
+The package supports Bayesian estimation of both linear and nonlinear DSGE
+models via adaptive Random-Walk Metropolis-Hastings (RWMH). For nonlinear
+models, the steady state is re-solved and the model re-linearized at each
+candidate parameter draw.
+
+### Specifying Priors
+
+Use `prior()` to define prior distributions for structural parameters:
+
+```{r bayes-priors, eval=FALSE}
+my_priors <- list(
+  beta  = prior("beta", shape1 = 95, shape2 = 5),
+  kappa = prior("beta", shape1 = 30, shape2 = 70),
+  psi   = prior("gamma", shape = 20, rate = 13.3),
+  rhou  = prior("beta", shape1 = 70, shape2 = 20),
+  rhog  = prior("beta", shape1 = 70, shape2 = 20)
+  # shock SDs default to inv_gamma(0.01, 0.01)
+)
+```
+
+Supported distributions: `normal`, `beta`, `gamma`, `uniform`, `inv_gamma`.
+
+### Running the Sampler
+
+```{r bayes-estimate, eval=FALSE}
+fit_bayes <- bayes_dsge(nk, data = nk_dat, priors = my_priors,
+                        chains = 2, iter = 10000, warmup = 5000,
+                        seed = 42)
+
+summary(fit_bayes)  # posterior table with ESS, R-hat, MCSE
+```
+
+### Posterior Diagnostics and IRFs
+
+```{r bayes-diag, eval=FALSE}
+# MCMC diagnostics
+plot(fit_bayes, type = "trace")            # trace plots (all chains)
+plot(fit_bayes, type = "density")          # posterior density + prior overlay
+plot(fit_bayes, type = "prior_posterior")   # dedicated prior-vs-posterior comparison
+plot(fit_bayes, type = "running_mean")     # cumulative mean convergence
+plot(fit_bayes, type = "acf")              # autocorrelation diagnostics
+plot(fit_bayes, type = "pairs")            # pairwise scatter + correlations
+plot(fit_bayes, type = "all")              # combined trace + density panel
+
+# Parameter selection (works with all types above)
+plot(fit_bayes, type = "trace", pars = c("kappa", "psi"))
+plot(fit_bayes, type = "density", pars = "rhou")
+
+# Posterior IRFs with credible bands
+plot(fit_bayes, type = "irf", periods = 12, n_draws = 500)
+# Or equivalently:
+bayes_irfs <- irf(fit_bayes, periods = 12, n_draws = 500)
+plot(bayes_irfs)
+```
+
+**Available plot types for `dsge_bayes` objects:**
+
+| Type | Description |
+|------|-------------|
+| `"trace"` | MCMC trace plots (all chains overlaid) |
+| `"density"` | Posterior density with prior overlay |
+| `"prior_posterior"` | Dedicated prior-vs-posterior comparison |
+| `"running_mean"` | Cumulative posterior mean by iteration |
+| `"acf"` | Autocorrelation function plots |
+| `"pairs"` | Pairwise scatter, correlations, histograms |
+| `"all"` | Combined trace + density side by side |
+| `"irf"` | Posterior IRFs with credible bands |
+
+The `pars` argument selects specific parameters (e.g.,
+`pars = c("kappa", "psi")`). Forecast plotting is not yet available
+for Bayesian fits.
+
+**Note:** Bayesian nonlinear estimation uses first-order perturbation
+(linearization around parameter-specific steady states). This is not
+a fully nonlinear filtering solution; higher-order approximations and
+particle filters are not yet implemented.
+
+For examples:
+
+- Linear Bayesian on real data: `inst/examples/bayesian_nk_fred.R`
+- Nonlinear Bayesian RBC: `inst/examples/bayesian_rbc_nonlinear.R`
+- Nonlinear Bayesian NK: `inst/examples/bayesian_nk_nonlinear.R`
+- RBC with capital accumulation: `inst/examples/bayesian_rbc_capital_demo.R`
+  (quick demo, ~2.5 min) or `bayesian_rbc_capital_full.R` (full, ~9 min)
+
+## What This Package Currently Supports
+
+**Included in v0.4.0:**
+
+- Linear DSGE models via formula interface
+- Nonlinear DSGE models via first-order perturbation
+- Bayesian estimation of linear and nonlinear DSGE models (adaptive RWMH)
+- Prior specification: normal, beta, gamma, uniform, inverse-gamma
+- MCMC diagnostics: ESS, R-hat, MCSE, acceptance rates
+- Posterior IRFs with credible bands
+- Deterministic steady-state solver
+- Solution via undetermined coefficients (Klein 2000)
+- Maximum likelihood estimation via the Kalman filter
+- Delta-method standard errors
+- IRFs with confidence bands; forecasts with fan charts
+- Policy/transition matrix extraction and stability diagnostics
+
+**Not yet supported:**
+
+- Higher-order perturbation (second-order, third-order)
+- Nonlinear filtering (particle filter)
+- Variance and historical shock decomposition
+
+## Notes
+
+- For linear models, `lead()` or `E()` marks forward expectations.
+- For nonlinear models, `VAR(+1)` denotes the next-period value.
+- The number of exogenous state variables (with shocks) must equal
+  the number of observed control variables.
+- Nonlinear models are solved by first-order linearization around
+  the deterministic steady state. The resulting linear system uses
+  the same solver and estimation pipeline as linear models.
