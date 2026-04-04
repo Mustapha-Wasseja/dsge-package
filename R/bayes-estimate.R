@@ -29,6 +29,12 @@
 #'   steady state.
 #' @param seed Integer. Random seed for reproducibility. If `NULL`, no seed
 #'   is set.
+#' @param n_cores Integer. Number of CPU cores for parallel chain execution.
+#'   Set to `1` (default) for sequential execution.  Values greater than
+#'   `chains` are silently clamped to `chains`.  On Windows a PSOCK cluster
+#'   is used; on POSIX systems (`mclapply` is used instead.  Parallel
+#'   execution requires the `dsge` package to be installed (not just loaded
+#'   via `devtools::load_all()`).
 #'
 #' @return An object of class `"dsge_bayes"` containing posterior draws
 #'   and diagnostics. For nonlinear models, the result also includes
@@ -53,6 +59,13 @@
 #' Blanchard-Kahn violation), the proposal is safely rejected. This is
 #' computationally more expensive than linear Bayesian estimation.
 #'
+#' ## Parallel chains
+#' When `n_cores > 1` each chain runs in its own R worker process,
+#' so wall-clock time scales roughly as `chains / min(n_cores, chains)`.
+#' Results are numerically identical to sequential execution given the
+#' same per-chain seeds.  The `parallel` package (part of base R) is used;
+#' no additional installation is required.
+#'
 #' @examples
 #' \donttest{
 #' m <- dsge_model(
@@ -74,7 +87,8 @@
 #' @export
 bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
                        warmup = floor(iter / 2), thin = 1L,
-                       proposal_scale = 0.1, demean = TRUE, seed = NULL) {
+                       proposal_scale = 0.1, demean = TRUE, seed = NULL,
+                       n_cores = 1L) {
   is_nonlinear <- inherits(model, "dsgenl_model")
   if (!inherits(model, "dsge_model") && !is_nonlinear) {
     stop("`model` must be a dsge_model or dsgenl_model object.", call. = FALSE)
@@ -199,25 +213,40 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
     solve(hess)
   }, error = function(e) NULL)
 
-  # Run chains
-  chain_results <- vector("list", chains)
+  # Build per-chain argument lists (each chain gets its own seed and start)
   chain_seeds <- sample.int(.Machine$integer.max, chains)
 
+  chain_args_list <- vector("list", chains)
   for (ch in seq_len(chains)) {
     set.seed(chain_seeds[ch])
-
-    # Disperse chains around mode with jitter
-    start_u <- mode_result + stats::rnorm(length(mode_result), sd = 0.1)
-
-    chain_results[[ch]] <- rwmh_sampler(
-      log_posterior_fn = log_posterior_fn,
-      start = start_u,
-      n_iter = iter,
-      n_warmup = warmup,
-      thin = thin,
+    start_u_ch <- mode_result + stats::rnorm(length(mode_result), sd = 0.1)
+    chain_args_list[[ch]] <- list(
+      model          = model,
+      y              = y,
+      prior_list     = prior_list,
+      free_params    = free_params,
+      shock_names    = shock_names,
+      all_fixed      = all_fixed,
+      is_nonlinear   = is_nonlinear,
+      obs_vars       = obs_vars,
+      start_u        = start_u_ch,
+      iter           = iter,
+      warmup         = warmup,
+      thin           = thin,
       proposal_scale = proposal_scale,
-      init_proposal_cov = mode_hessian
+      mode_hessian   = mode_hessian,
+      chain_seed     = chain_seeds[ch]
     )
+  }
+
+  # Dispatch: sequential or parallel
+  n_cores <- max(1L, as.integer(n_cores))
+  n_workers <- min(n_cores, chains)
+
+  if (n_workers > 1L) {
+    chain_results <- .run_chains_parallel(chain_args_list, n_workers)
+  } else {
+    chain_results <- lapply(chain_args_list, .run_chain_worker)
   }
 
   # Collect draws: transform back to natural space
@@ -240,6 +269,11 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
       }
     }
   }
+
+  # Accumulate solve failures from all chains
+  solve_fail_count <- sum(vapply(chain_results,
+                                 function(r) r$solve_failures %||% 0L,
+                                 integer(1L)))
 
   # Compute diagnostics
   diagnostics <- compute_mcmc_diagnostics(posterior)
@@ -406,4 +440,154 @@ compute_rhat <- function(chain_draws) {
 
   var_hat <- (chain_n - 1) / chain_n * W + B / chain_n
   sqrt(var_hat / W)
+}
+
+# --------------------------------------------------------------------------
+# Parallel chain helpers
+# --------------------------------------------------------------------------
+
+#' NULL-coalescing operator (internal)
+#' @noRd
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+#' Run a single RWMH chain from a self-contained argument list
+#'
+#' This function is the unit of work dispatched to each parallel worker.
+#' It receives everything it needs as a plain serializable list and
+#' reconstructs the log-posterior closure locally so that nothing from the
+#' parent process's environment is required.
+#'
+#' @param chain_args Named list produced by `bayes_dsge()` for each chain.
+#' @return List with `draws` (matrix), `acceptance_rate` (numeric),
+#'   `proposal_cov` (matrix), and `solve_failures` (integer).
+#' @noRd
+.run_chain_worker <- function(chain_args) {
+  model          <- chain_args$model
+  y              <- chain_args$y
+  prior_list     <- chain_args$prior_list
+  free_params    <- chain_args$free_params
+  shock_names    <- chain_args$shock_names
+  all_fixed      <- chain_args$all_fixed
+  is_nonlinear   <- chain_args$is_nonlinear
+  obs_vars       <- chain_args$obs_vars
+  start_u        <- chain_args$start_u
+  iter           <- chain_args$iter
+  warmup         <- chain_args$warmup
+  thin           <- chain_args$thin
+  proposal_scale <- chain_args$proposal_scale
+  mode_hessian   <- chain_args$mode_hessian
+  chain_seed     <- chain_args$chain_seed
+
+  set.seed(chain_seed)
+  n_shocks <- length(shock_names)
+  solve_fail_count <- 0L
+
+  # Rebuild log-posterior function locally (identical logic to bayes_dsge)
+  log_posterior_fn <- function(theta_u) {
+    theta_nat <- numeric(length(theta_u))
+    log_jac   <- 0
+    for (j in seq_along(theta_u)) {
+      theta_nat[j] <- from_unconstrained(theta_u[j], prior_list[[j]])
+      log_jac      <- log_jac + log_jacobian(theta_u[j], prior_list[[j]])
+    }
+
+    log_prior <- 0
+    for (j in seq_along(theta_nat)) {
+      lp <- dprior(prior_list[[j]], theta_nat[j])
+      if (!is.finite(lp)) return(-Inf)
+      log_prior <- log_prior + lp
+    }
+
+    n_free      <- length(free_params)
+    struct_vals <- theta_nat[seq_len(n_free)]
+    names(struct_vals) <- free_params
+    all_params  <- c(struct_vals, unlist(all_fixed))
+
+    shock_sd <- theta_nat[(n_free + 1L):(n_free + n_shocks)]
+    names(shock_sd) <- shock_names
+    if (any(shock_sd <= 0)) return(-Inf)
+
+    tryCatch({
+      sol <- solve_dsge(model, params = all_params, shock_sd = shock_sd)
+      if (!sol$stable) {
+        solve_fail_count <<- solve_fail_count + 1L
+        return(-Inf)
+      }
+      y_eval <- y
+      if (is_nonlinear) {
+        ss_obs <- sol$steady_state[obs_vars]
+        y_eval <- sweep(y, 2, ss_obs, "-")
+      }
+      kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D)
+      kf$loglik + log_prior + log_jac
+    }, error = function(e) {
+      solve_fail_count <<- solve_fail_count + 1L
+      -Inf
+    })
+  }
+
+  result <- rwmh_sampler(
+    log_posterior_fn  = log_posterior_fn,
+    start             = start_u,
+    n_iter            = iter,
+    n_warmup          = warmup,
+    thin              = thin,
+    proposal_scale    = proposal_scale,
+    init_proposal_cov = mode_hessian
+  )
+
+  result$solve_failures <- solve_fail_count
+  result
+}
+
+#' Dispatch chains to parallel workers
+#'
+#' Uses PSOCK clusters on Windows and fork-based `mclapply` on POSIX.
+#' Falls back to sequential `lapply` if the parallel package is not
+#' available or cluster setup fails.
+#'
+#' @param chain_args_list List of per-chain argument lists.
+#' @param n_workers Integer number of worker processes.
+#' @return List of chain results from `.run_chain_worker`.
+#' @noRd
+.run_chains_parallel <- function(chain_args_list, n_workers) {
+  if (!requireNamespace("parallel", quietly = TRUE)) {
+    warning("parallel package not available; running chains sequentially.",
+            call. = FALSE)
+    return(lapply(chain_args_list, .run_chain_worker))
+  }
+
+  # POSIX: lightweight fork-based parallelism (no cluster overhead)
+  if (.Platform$OS.type != "windows") {
+    return(parallel::mclapply(chain_args_list, .run_chain_worker,
+                              mc.cores = n_workers,
+                              mc.set.seed = FALSE))
+  }
+
+  # Windows: PSOCK cluster
+  cl <- tryCatch(parallel::makeCluster(n_workers), error = function(e) NULL)
+  if (is.null(cl)) {
+    warning("Could not create parallel cluster; running chains sequentially.",
+            call. = FALSE)
+    return(lapply(chain_args_list, .run_chain_worker))
+  }
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+
+  # Load the dsge package on each worker
+  pkg_ok <- tryCatch({
+    parallel::clusterCall(cl, function() {
+      suppressPackageStartupMessages(library("dsge", character.only = TRUE))
+    })
+    TRUE
+  }, error = function(e) FALSE)
+
+  if (!pkg_ok) {
+    warning(paste("Could not load 'dsge' on parallel workers.",
+                  "Install the package (install.packages('dsge')) for parallel",
+                  "chain support. Running chains sequentially."),
+            call. = FALSE)
+    return(lapply(chain_args_list, .run_chain_worker))
+  }
+
+  parallel::parLapply(cl, chain_args_list, .run_chain_worker)
 }
