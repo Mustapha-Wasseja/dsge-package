@@ -179,8 +179,8 @@ test_that("second-order solution with multi-variable model works", {
 
 test_that("invalid order value gives error", {
   mod <- build_nl_ar1()
-  expect_error(solve_dsge(mod, params = c(rhoA = 0.9), order = 3), "order must be 1 or 2")
-  expect_error(solve_dsge(mod, params = c(rhoA = 0.9), order = 0), "order must be 1 or 2")
+  expect_error(solve_dsge(mod, params = c(rhoA = 0.9), order = 4), "order must be 1, 2, or 3")
+  expect_error(solve_dsge(mod, params = c(rhoA = 0.9), order = 0), "order must be 1, 2, or 3")
 })
 
 test_that("second-order constant correction (g_ss) is finite", {
