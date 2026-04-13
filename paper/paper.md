@@ -37,17 +37,13 @@ method of undetermined coefficients [@klein2000]; second-order
 perturbation is also supported [@schmitt2004]. Models can be estimated
 by maximum likelihood using the Kalman filter or by Bayesian methods
 using an adaptive Random-Walk Metropolis-Hastings sampler with
-user-specified priors. The package also provides a broad set of
-post-estimation tools: impulse-response functions with delta-method or
-posterior credible bands, dynamic forecasting, Kalman smoothing,
-historical shock decomposition, local identification diagnostics,
-parameter sensitivity analysis, perfect-foresight transition paths,
-occasionally binding constraints (OccBin), model-implied covariance
-matrices, robust (sandwich) standard errors, prior-versus-posterior
-informativeness diagnostics, posterior predictive checks, and marginal
-likelihood for model comparison. Results are returned as standard S3
-objects that respond to `coef()`, `vcov()`, `logLik()`, `predict()`,
-`fitted()`, `residuals()`, `summary()`, and `plot()`.
+user-specified priors. Post-estimation tools include impulse-response
+functions, dynamic forecasting, Kalman smoothing, historical shock
+decomposition, local identification diagnostics, parameter sensitivity
+analysis, perfect-foresight transition paths, occasionally binding
+constraints, model-implied covariance matrices, robust standard
+errors, posterior predictive checks, and marginal likelihood for model
+comparison.
 
 # Statement of Need
 
@@ -62,166 +58,133 @@ agencies, and academic departments --- DSGE analysis has until now
 required stepping outside R, managing an external installation, and
 transferring data and results between systems.
 
-The only prior R interface to DSGE modeling was DynareR [@mati2024],
-which is a wrapper that executes Dynare code inside R Markdown or
-Quarto documents. DynareR still depends on a working Dynare and
-Octave installation and does not provide native R objects, model
-specification, or estimation routines. Outside R, MacroModelling.jl
-[@kockerols2023] and DSGE.jl [@frbnydsge2015] offer native
-implementations in Julia but require users to leave the R ecosystem.
-Within R, the `gEcon` package [@gecon2019] provides a DSGE modeling
-language on R-Forge (not CRAN) but does not implement maximum
-likelihood or Bayesian estimation. Table 1 summarizes the comparison.
+The `dsge` package closes this gap by providing the first
+comprehensive, CRAN-available, native-R implementation of a DSGE
+toolkit. It targets academic researchers in macroeconomics and applied
+econometrics; graduate students learning rational-expectations and
+Bayesian methods; and central-bank and policy-institution modelers
+who already work in R and want a reproducible, open-source environment
+for DSGE analysis.
 
-Table 1: Comparison of `dsge` with existing DSGE software.
+# State of the Field
+
+Existing DSGE software falls into three broad categories. First, full
+standalone toolboxes running on MATLAB or Octave, most prominently
+Dynare [@adjemian2011], which remains the reference implementation.
+Second, native implementations in Julia, including MacroModelling.jl
+[@kockerols2023] and DSGE.jl [@frbnydsge2015] from the Federal
+Reserve Bank of New York, which take advantage of Julia's numerical
+performance but require users to work outside the R ecosystem. Third,
+R-based wrappers such as DynareR [@mati2024], which call Dynare from
+R but do not themselves implement model specification, solution, or
+estimation.
+
+Within R, the `gEcon` package [@gecon2019] provides a DSGE modeling
+language and supports calibration and impulse responses, but is
+distributed only on R-Forge (not CRAN) and does not implement maximum
+likelihood or Bayesian estimation.
+
+: Comparison of `dsge` with existing DSGE software. \label{comparison}
 
 | Feature                 | `dsge` (R) | DynareR (R)   | Dynare (MATLAB) | MacroModelling.jl | gEcon (R)      |
 |-------------------------|------------|---------------|-----------------|-------------------|----------------|
 | Language                | R          | R (wrapper)   | MATLAB/Octave   | Julia             | R              |
 | External software       | None       | Dynare+Octave | MATLAB/Octave   | None              | None           |
 | On CRAN                 | Yes        | Yes           | N/A             | N/A               | No (R-Forge)   |
-| Linear DSGE             | Yes        | Via Dynare    | Yes             | Yes               | Yes            |
-| Nonlinear DSGE          | Yes        | Via Dynare    | Yes             | Yes               | Yes            |
-| Maximum likelihood      | Yes        | Via Dynare    | Yes             | Yes               | No             |
+| ML estimation           | Yes        | Via Dynare    | Yes             | Yes               | No             |
 | Bayesian estimation     | Yes        | Via Dynare    | Yes             | Yes               | No             |
 | 2nd-order perturbation  | Yes        | Via Dynare    | Yes             | Yes               | No             |
 | Occasionally binding    | Yes        | Via Dynare    | Yes             | Yes               | No             |
 | R formula interface     | Yes        | No            | No              | No                | No             |
 
-`dsge` closes this gap by providing the first comprehensive,
-CRAN-available, native-R implementation of a DSGE toolkit. It targets
-academic researchers in macroeconomics and applied econometrics;
-graduate students learning rational-expectations and Bayesian methods;
-and central-bank and policy-institution modelers who already work in R
-and want a reproducible, open-source environment for DSGE analysis.
+The `dsge` package is the first comprehensive, CRAN-available,
+native-R DSGE toolkit. Its main differentiators are: a formula-based
+model specification that mirrors R's familiar syntax; no external
+numerical software dependencies; deep integration with R's S3
+statistical model interface; and a broad feature set spanning both
+maximum-likelihood and Bayesian estimation, identification
+diagnostics, perfect-foresight paths, occasionally binding
+constraints, and second-order perturbation.
 
-# Key Features
+# Software Design
 
-- **Formula-based model specification** for linear models using
-  `obs()`, `unobs()`, `state()`, and a `lead()` (or `E()`) expectation
-  operator that mirrors R's familiar syntax.
-- **String-based specification** for nonlinear models via
-  `dsgenl_model()`, with automatic Newton-Raphson solution of the
-  deterministic steady state and automatic linearization.
-- **Solution** by the method of undetermined coefficients [@klein2000],
-  with Blanchard-Kahn stability diagnostics and support for
-  second-order perturbation [@schmitt2004].
-- **Maximum likelihood estimation** via the Kalman filter with
-  numerical BFGS optimization, Hessian-based standard errors, and a
-  sandwich (Huber-White) robust variance estimator.
-- **Bayesian estimation** via an adaptive Random-Walk
-  Metropolis-Hastings sampler supporting normal, beta, gamma, uniform,
-  and inverse-gamma priors; multiple chains; and automatic proposal
-  covariance tuning.
-- **Convergence diagnostics** including effective sample size,
-  Gelman-Rubin $\hat{R}$, Monte Carlo standard errors, Geweke tests,
-  and prior-versus-posterior informativeness diagnostics.
-- **Impulse responses** with delta-method confidence bands for ML fits
-  and posterior credible bands for Bayesian fits.
-- **Kalman smoothing**, **historical shock decomposition**, and
-  **forecasting** with uncertainty quantification.
-- **Identification diagnostics** based on the Jacobian of the
-  autocovariance-to-parameter map, and **parameter sensitivity
-  analysis** for the log-likelihood, IRFs, and steady state.
-- **Perfect-foresight transition paths** and **occasionally binding
-  constraints** (OccBin) for deterministic policy experiments such as
-  zero lower bounds on interest rates.
-- **Marginal likelihood** and **posterior predictive checks** for
-  Bayesian model comparison.
-- **Native R interface**: all results are S3 objects that respond to
-  `coef()`, `vcov()`, `logLik()`, `predict()`, `fitted()`,
-  `residuals()`, `summary()`, and `plot()`.
+The package solves the canonical linear rational-expectations
+state-space representation
 
-# Example Usage
+$$y_t = G\,x_t, \qquad x_{t+1} = H\,x_t + M\,\varepsilon_{t+1},$$
 
-Install the package from CRAN and load it.
+where $y_t$ collects the control (jump) variables, $x_t$ collects the
+predetermined states, and $\varepsilon_t$ is a vector of structural
+shocks. The policy matrix $G$ and transition matrix $H$ are obtained
+via the method of undetermined coefficients of @klein2000, which uses
+the generalized Schur (QZ) decomposition to enforce the
+Blanchard-Kahn saddle-path condition.
+
+Nonlinear models are specified using string-based equations. Their
+deterministic steady state is computed by a Newton-Raphson solver, and
+the model is automatically linearized by numerical differentiation.
+Second-order perturbation following @schmitt2004 is also available.
+
+The log-likelihood is evaluated by the Kalman filter using the
+standard prediction-error decomposition. Maximum-likelihood estimates
+are obtained via BFGS optimization. Bayesian estimation uses an
+adaptive RWMH sampler with automatic proposal covariance tuning,
+multiple chains, and convergence monitoring via effective sample size,
+the Gelman-Rubin $\hat{R}$ statistic, and Monte Carlo standard errors.
+
+The user-facing API follows R conventions. A three-equation New
+Keynesian model is specified as:
 
 ```r
-install.packages("dsge")
 library(dsge)
-```
-
-Specify a simple three-equation New Keynesian model. The model has
-inflation (`p`), an unobserved output gap (`x`), and a nominal
-interest rate (`r`), driven by a monetary shock (`u`) and a demand
-shock (`g`).
-
-```r
 nk <- dsge_model(
-  obs(p   ~ beta * lead(p) + kappa * x),      # Phillips curve
-  unobs(x ~ lead(x) - (r - lead(p) - g)),     # IS curve
-  obs(r   ~ psi * p + u),                      # Taylor rule
-  state(u ~ rhou * u),                         # Monetary shock
-  state(g ~ rhog * g),                         # Demand shock
+  obs(p   ~ beta * lead(p) + kappa * x),
+  unobs(x ~ lead(x) - (r - lead(p) - g)),
+  obs(r   ~ psi * p + u),
+  state(u ~ rhou * u),
+  state(g ~ rhog * g),
   fixed = list(beta = 0.99),
   start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
 )
-```
-
-Estimate by maximum likelihood on a data frame `macro` with columns
-`p` and `r`.
-
-```r
 fit <- estimate(nk, data = macro)
 summary(fit)
-```
-
-Produce impulse responses, a forecast, Kalman-smoothed states, a
-historical shock decomposition, and robust standard errors using R's
-standard interface.
-
-```r
 plot(irf(fit, periods = 20))
-plot(forecast(fit, horizon = 12))
-plot(smooth_states(fit))
 plot(shock_decomposition(fit))
-robust_vcov(fit)
 ```
 
-Estimate the same model by Bayesian methods with user-specified
-priors, then inspect the posterior and plot posterior impulse
-responses with credible bands.
+All results are S3 objects that respond to standard generics
+(`coef()`, `vcov()`, `logLik()`, `predict()`, `residuals()`,
+`summary()`, `plot()`), so that applied users can work with familiar
+R idioms.
 
-```r
-my_priors <- list(
-  kappa = prior("beta", shape1 = 30, shape2 = 70),
-  psi   = prior("gamma", shape = 184, rate = 122.7),
-  rhou  = prior("beta", shape1 = 70, shape2 = 20),
-  rhog  = prior("beta", shape1 = 70, shape2 = 20)
-)
+# Research Impact Statement
 
-fit_bayes <- bayes_dsge(nk, data = macro,
-                        priors = my_priors,
-                        chains = 2, iter = 10000, warmup = 5000)
-summary(fit_bayes)
-plot(fit_bayes, type = "trace")
-plot(fit_bayes, type = "prior_posterior")
-plot(fit_bayes, type = "irf", periods = 20)
-```
+The package has been validated on a sequence of increasingly complex
+models, culminating in a full 37-equation specification in the style
+of @smets2007, featuring external habit formation, investment
+adjustment costs, capacity utilization, Calvo price and wage setting
+with indexation, price and wage dispersion, a Taylor rule with
+interest-rate smoothing, and seven structural shocks. In
+simulated-data experiments, all structural parameters were recovered
+inside 95% posterior credible intervals, indicating that the package
+can handle realistic, policy-scale DSGE models. The package ships with
+a test suite of 570 unit and integration tests covering model
+specification, solution, estimation, smoothing, identification,
+sensitivity, perfect foresight, occasionally binding constraints, and
+Bayesian diagnostics.
 
-Nonlinear models are supported through `dsgenl_model()` with automatic
-linearization around the deterministic steady state.
+By providing a self-contained DSGE toolkit on CRAN, `dsge` lowers the
+entry cost for researchers and students who wish to work with DSGE
+models entirely in R. The most immediate applications include
+reproducible applied macroeconomic research; graduate teaching of
+rational-expectations and Bayesian econometric methods; and rapid
+prototyping of policy models at central banks, ministries of finance,
+and international organizations.
 
-```r
-rbc <- dsgenl_model(
-  "1/C = beta / C(+1) * (alpha * exp(Z) * K^(alpha-1) + 1 - delta)",
-  "K(+1) = exp(Z) * K^alpha - C + (1 - delta) * K",
-  "Z(+1) = rho * Z",
-  observed = "C",
-  endo_state = "K",
-  exo_state = "Z",
-  fixed = list(alpha = 0.33, beta = 0.99, delta = 0.025),
-  start = list(rho = 0.9),
-  ss_guess = c(C = 2, K = 30, Z = 0)
-)
-```
+# AI Usage Disclosure
 
-For more complete examples, including Bayesian estimation of a New
-Keynesian model on U.S. macroeconomic data from FRED, deterministic
-transition paths, and simulations under a zero lower bound on the
-interest rate, see the package vignette (`vignette("introduction",
-package = "dsge")`) and the example scripts under
-`system.file("examples", package = "dsge")`.
+No generative AI tools were used in the creation of the software,
+its documentation, or this paper.
 
 # Acknowledgements
 
