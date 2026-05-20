@@ -14,7 +14,8 @@ bayes_dsge(
   thin = 1L,
   proposal_scale = 0.1,
   demean = TRUE,
-  seed = NULL
+  seed = NULL,
+  n_cores = 1L
 )
 }
 \arguments{
@@ -47,6 +48,13 @@ steady state.}
 
 \item{seed}{Integer. Random seed for reproducibility. If \code{NULL}, no seed
 is set.}
+
+\item{n_cores}{Integer. Number of CPU cores for parallel chain execution.
+Set to \code{1} (default) for sequential execution.  Values greater than
+\code{chains} are silently clamped to \code{chains}.  On Windows a PSOCK cluster
+is used; on POSIX systems (\code{mclapply} is used instead.  Parallel
+execution requires the \code{dsge} package to be installed (not just loaded
+via \code{devtools::load_all()}).}
 }
 \value{
 An object of class \code{"dsge_bayes"} containing posterior draws
@@ -79,6 +87,14 @@ the resulting linear system, and (4) evaluating the Kalman filter
 likelihood. If any stage fails (e.g., steady-state non-convergence,
 Blanchard-Kahn violation), the proposal is safely rejected. This is
 computationally more expensive than linear Bayesian estimation.
+\subsection{Parallel chains}{
+
+When \code{n_cores > 1} each chain runs in its own R worker process,
+so wall-clock time scales roughly as \code{chains / min(n_cores, chains)}.
+Results are numerically identical to sequential execution given the
+same per-chain seeds.  The \code{parallel} package (part of base R) is used;
+no additional installation is required.
+}
 }
 \examples{
 \donttest{

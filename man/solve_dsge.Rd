@@ -18,9 +18,9 @@ If \code{NULL}, defaults to 1 for all shocks.}
 \item{tol}{Tolerance for classifying eigenvalues as stable (|lambda| < 1 + tol).
 Default is 1e-6.}
 
-\item{order}{Integer. Approximation order: 1 (default) for first-order,
-2 for second-order perturbation. Second-order is only available for
-nonlinear models (\code{dsgenl_model}).}
+\item{order}{Integer. Approximation order: 1 (default), 2 for second-order,
+or 3 for third-order perturbation. Orders 2 and 3 require a
+\code{dsgenl_model}.}
 }
 \value{
 An object of class \code{"dsge_solution"} containing:

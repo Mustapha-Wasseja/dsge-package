@@ -1,3 +1,20 @@
+# dsge 1.1.1
+
+## New features
+
+### Nonlinear perfect foresight
+
+* New `perfect_foresight_nonlinear()`: stacked-time Newton (LBJ) solver for
+  deterministic transition paths of nonlinear DSGE models.  Solves the full
+  nonlinear equilibrium conditions simultaneously over the entire horizon,
+  giving paths exact to Newton tolerance even for large shocks.  Uses a
+  block-bidiagonal Jacobian assembled by numerical finite differences and
+  solved by O(T n³) block back-substitution; Armijo backtracking stabilises
+  convergence.  Returns the same `dsge_perfect_foresight` class as the
+  linearized `perfect_foresight()`, so all existing `plot`, `print`, and
+  `summary` methods apply unchanged.  Reference: Juillard et al. (1998),
+  *Journal of Economic Dynamics and Control*, 22, 1291–1318.
+
 # dsge 1.1.0
 
 ## New features
