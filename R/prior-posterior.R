@@ -211,8 +211,9 @@ plot.dsge_prior_posterior <- function(x, which = NULL, ...) {
   ncols <- ceiling(sqrt(n_plot))
   nrows <- ceiling(n_plot / ncols)
 
-  old_par <- par(mfrow = c(nrows, ncols), mar = c(3, 3, 3, 1), mgp = c(2, 0.7, 0))
-  on.exit(par(old_par))
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par))
+  .dsge_par_grid(nrows, ncols)
 
   for (idx in which) {
     pname <- s$parameter[idx]
@@ -222,7 +223,7 @@ plot.dsge_prior_posterior <- function(x, which = NULL, ...) {
     # Posterior density
     dens <- stats::density(draws)
 
-    # Prior density curve — handle infinite/NA prior SD gracefully
+    # Prior density curve -- handle infinite/NA prior SD gracefully
     pr_sd <- s$prior_sd[idx]
     pr_mn <- s$prior_mean[idx]
     if (!is.finite(pr_sd) || pr_sd > 100) pr_sd <- 3 * s$post_sd[idx]
@@ -240,18 +241,31 @@ plot.dsge_prior_posterior <- function(x, which = NULL, ...) {
 
     ylim <- range(c(dens$y, prior_dens[is.finite(prior_dens)]))
 
-    # Color by update strength
+    # Posterior colour reflects update strength
     col_post <- switch(s$update[idx],
-                       strong = "steelblue",
-                       moderate = "gold3",
-                       weak = "grey60")
+                       strong   = .DSGE_INK_PRIMARY,
+                       moderate = .DSGE_WARN,
+                       weak     = .DSGE_INK_NEUTRAL,
+                       .DSGE_INK_PRIMARY)
 
-    plot(dens, main = sprintf("%s [%s]", pname, s$update[idx]),
-         xlab = "", ylab = "", col = col_post, lwd = 2,
-         xlim = x_range, ylim = ylim)
-    lines(x_seq, prior_dens, col = "red", lty = 2, lwd = 1.5)
-    legend("topright", legend = c("Posterior", "Prior"),
-           col = c(col_post, "red"), lty = c(1, 2), lwd = c(2, 1.5),
-           cex = 0.7, bty = "n")
+    graphics::plot(dens, main = sprintf("%s [%s]", pname, s$update[idx]),
+                   xlab = "Value", ylab = "Density",
+                   col = NA, xlim = x_range, ylim = ylim)
+    .dsge_grid()
+
+    # Filled posterior density
+    .dsge_band(dens$x, rep(0, length(dens$x)), dens$y,
+               fill = paste0(substr(col_post, 1, 7), "33"))
+    graphics::lines(dens$x, dens$y, col = col_post, lwd = 1.8)
+
+    # Prior curve on top
+    graphics::lines(x_seq, prior_dens,
+                    col = .DSGE_INK_NEUTRAL, lty = "dashed", lwd = 1.4)
+
+    .dsge_legend("topright",
+                 legend = c("Posterior", "Prior"),
+                 col    = c(col_post, .DSGE_INK_NEUTRAL),
+                 lty    = c("solid", "dashed"),
+                 lwd    = c(1.8, 1.4))
   }
 }

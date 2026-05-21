@@ -454,9 +454,9 @@ plot.dsge_occbin <- function(x, vars = NULL, compare = TRUE, shade = TRUE,
 
   nc <- min(3L, n_vars)
   nr <- ceiling(n_vars / nc)
-  old_par <- par(mfrow = c(nr, nc), mar = c(3, 3.5, 2.5, 1),
-                 mgp = c(2, 0.7, 0), cex = 0.8)
-  on.exit(par(old_par), add = TRUE)
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par), add = TRUE)
+  .dsge_par_grid(nr, nc)
 
   # Which variables are constrained?
   con_vars <- vapply(x$constraints, function(c) c$variable, character(1))
@@ -468,8 +468,11 @@ plot.dsge_occbin <- function(x, vars = NULL, compare = TRUE, shade = TRUE,
     ylim <- range(c(y_con, if (compare) y_unc))
     ylim <- ylim + diff(ylim) * c(-0.1, 0.1)
 
-    plot(periods, y_con, type = "n", xlab = "Period",
-         ylab = "Deviation", main = v, ylim = ylim)
+    graphics::plot(periods, y_con, type = "n",
+                   xlab = "Period", ylab = "Deviation",
+                   main = v, ylim = ylim)
+    .dsge_grid()
+    .dsge_zero_line()
 
     # Shade binding periods
     if (shade && v %in% con_vars) {
@@ -477,19 +480,21 @@ plot.dsge_occbin <- function(x, vars = NULL, compare = TRUE, shade = TRUE,
       bind_periods <- which(x$binding[, ci])
       if (length(bind_periods) > 0) {
         for (bp in bind_periods) {
-          rect(bp - 0.5, ylim[1], bp + 0.5, ylim[2],
-               col = rgb(1, 0, 0, 0.1), border = NA)
+          graphics::rect(bp - 0.5, ylim[1], bp + 0.5, ylim[2],
+                         col = .DSGE_FILL_BIND, border = NA)
         }
       }
     }
 
-    # Unconstrained path
+    # Unconstrained path (dashed, muted)
     if (compare) {
-      lines(periods, y_unc, col = "gray60", lwd = 1.5, lty = 2)
+      graphics::lines(periods, y_unc,
+                      col = .DSGE_INK_NEUTRAL, lwd = 1.2, lty = "dashed")
     }
 
-    # Constrained path
-    lines(periods, y_con, col = "steelblue", lwd = 2)
+    # Constrained path (primary)
+    graphics::lines(periods, y_con,
+                    col = .DSGE_INK_PRIMARY, lwd = 1.8)
 
     # Bound line for constrained variables
     if (v %in% con_vars) {
@@ -498,15 +503,17 @@ plot.dsge_occbin <- function(x, vars = NULL, compare = TRUE, shade = TRUE,
       if (!is.null(x$steady_state) && v %in% names(x$steady_state)) {
         bound_dev <- x$constraints[[ci]]$bound - x$steady_state[v]
       }
-      abline(h = bound_dev, col = "firebrick", lty = 3, lwd = 1.5)
+      graphics::abline(h = bound_dev,
+                       col = .DSGE_INK_SECONDARY,
+                       lty = "dotted", lwd = 1.3)
     }
 
-    abline(h = 0, lty = 1, col = "gray80")
-
     if (compare) {
-      legend("topright", c("Constrained", "Unconstrained"),
-             col = c("steelblue", "gray60"), lty = c(1, 2),
-             lwd = c(2, 1.5), cex = 0.7, bg = "white")
+      .dsge_legend("topright",
+                   legend = c("Constrained", "Unconstrained"),
+                   col    = c(.DSGE_INK_PRIMARY, .DSGE_INK_NEUTRAL),
+                   lty    = c("solid", "dashed"),
+                   lwd    = c(1.8, 1.2))
     }
   }
 

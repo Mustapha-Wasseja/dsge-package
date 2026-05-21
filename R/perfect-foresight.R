@@ -850,28 +850,33 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
     # Layout
     nc <- min(3L, n_page)
     nr <- ceiling(n_page / nc)
-    old_par <- par(mfrow = c(nr, nc), mar = c(3, 3.5, 2.5, 1),
-                   mgp = c(2, 0.7, 0), cex = 0.8)
-    on.exit(par(old_par), add = TRUE)
+    old_par <- graphics::par(no.readonly = TRUE)
+    on.exit(graphics::par(old_par), add = TRUE)
+    .dsge_par_grid(nr, nc)
 
     for (v in page_vars) {
       y <- all_data[, v]
 
       if (type == "deviation") {
-        # Plot deviation from SS
-        plot(periods, y, type = "l", lwd = 2, col = "steelblue",
-             xlab = "Period", ylab = "Deviation from SS",
-             main = v)
-        abline(h = 0, lty = 2, col = "gray50")
+        graphics::plot(periods, y, type = "n",
+                       xlab = "Period", ylab = "Deviation from SS",
+                       main = v)
+        .dsge_grid()
+        .dsge_zero_line()
+        graphics::lines(periods, y,
+                        col = .DSGE_INK_PRIMARY, lwd = 1.8)
       } else {
-        # Plot levels
         ss_val <- x$steady_state[v]
-        plot(periods, y, type = "l", lwd = 2, col = "steelblue",
-             xlab = "Period", ylab = "Level",
-             main = v)
+        graphics::plot(periods, y, type = "n",
+                       xlab = "Period", ylab = "Level",
+                       main = v)
+        .dsge_grid()
         if (!is.na(ss_val)) {
-          abline(h = ss_val, lty = 2, col = "firebrick", lwd = 1)
+          graphics::abline(h = ss_val, lty = "dotted",
+                           col = .DSGE_INK_SECONDARY, lwd = 1.0)
         }
+        graphics::lines(periods, y,
+                        col = .DSGE_INK_PRIMARY, lwd = 1.8)
       }
     }
   }

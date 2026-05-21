@@ -385,28 +385,32 @@ plot.dsge_sensitivity <- function(x, ...) {
     return(invisible(x))
   }
 
-  old_par <- par(mfrow = c(1, n_panels), mar = c(5, 8, 3, 1))
-  on.exit(par(old_par))
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par))
+  .dsge_par_grid(1L, n_panels)
+  graphics::par(mar = c(4.5, 7.5, 2.4, 0.8))
 
   if (has_ll) {
     ll <- x$loglik
     vals <- abs(ll$elasticity)
     vals[!is.finite(vals)] <- 0
     ord <- order(vals, decreasing = TRUE)
-    barplot(vals[ord], names.arg = ll$parameter[ord],
-            col = "steelblue", horiz = TRUE, las = 1,
-            main = "Likelihood Elasticity",
-            xlab = "|elasticity|")
+    graphics::barplot(vals[ord], names.arg = ll$parameter[ord],
+                      col = .DSGE_INK_PRIMARY, border = "white",
+                      horiz = TRUE, las = 1,
+                      main = "Likelihood Elasticity",
+                      xlab = "|elasticity|")
   }
 
   if (has_irf) {
     ir <- x$irf
     vals <- ir$max_sensitivity
     ord <- order(vals, decreasing = TRUE)
-    barplot(vals[ord], names.arg = ir$parameter[ord],
-            col = "coral", horiz = TRUE, las = 1,
-            main = "IRF Max Sensitivity",
-            xlab = "max |dIRF/dtheta|")
+    graphics::barplot(vals[ord], names.arg = ir$parameter[ord],
+                      col = .DSGE_INK_SECONDARY, border = "white",
+                      horiz = TRUE, las = 1,
+                      main = "IRF Max Sensitivity",
+                      xlab = "max |dIRF/dtheta|")
   }
 
   invisible(x)

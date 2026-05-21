@@ -1,5 +1,21 @@
 # dsge 1.1.1
 
+## Improvements
+
+### Publication-ready plot theme
+
+* All `plot.dsge_*` methods now use a unified visual theme: consistent
+  navy/brick/olive palette, light dotted gridlines, thin solid zero
+  reference lines, semi-transparent confidence bands, and sans-serif
+  typography.  Centralised in a new internal `R/plot-theme.R`, so the
+  look-and-feel of every figure -- IRFs, forecasts, smoothed states and
+  fit, historical shock decomposition, perfect-foresight paths,
+  occasionally-binding-constraint comparisons, identification
+  diagnostics, sensitivity tornadoes, prior-posterior overlays, MCMC
+  traces, posterior densities, running means, ACFs and posterior
+  predictive checks -- is now uniform and publication-ready.  No API
+  changes; all existing user code keeps working.
+
 ## New features
 
 ### Nonlinear perfect foresight

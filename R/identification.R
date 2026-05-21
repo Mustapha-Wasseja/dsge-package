@@ -286,28 +286,34 @@ print.dsge_identification <- function(x, ...) {
 
 #' @export
 plot.dsge_identification <- function(x, ...) {
-  old_par <- par(mfrow = c(1, 2), mar = c(5, 6, 3, 1))
-  on.exit(par(old_par))
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par))
+  .dsge_par_grid(1L, 2L)
+  graphics::par(mar = c(4.5, 5.5, 2.4, 0.8))
 
   # Panel 1: Singular values
   sv <- x$singular_values
-  cols <- ifelse(sv < 1e-6 * max(sv), "red",
-                 ifelse(sv < 0.01 * max(sv), "orange", "steelblue"))
-  barplot(sv, names.arg = seq_along(sv), col = cols,
-          main = "Singular Values of Jacobian",
-          xlab = "Index", ylab = "Singular value", las = 1)
-  abline(h = 1e-6 * max(sv), lty = 2, col = "red")
+  cols <- ifelse(sv < 1e-6 * max(sv), .DSGE_BAD,
+                 ifelse(sv < 0.01 * max(sv), .DSGE_WARN, .DSGE_INK_PRIMARY))
+  graphics::barplot(sv, names.arg = seq_along(sv), col = cols,
+                    border = "white",
+                    main = "Singular Values of Jacobian",
+                    xlab = "Index", ylab = "Singular value", las = 1)
+  graphics::abline(h = 1e-6 * max(sv),
+                   lty = "dotted", col = .DSGE_BAD, lwd = 1.0)
 
   # Panel 2: Parameter identification strength
   str <- x$strength
   ord <- order(str, decreasing = TRUE)
   str_ord <- str[ord]
   status_ord <- x$summary$status[ord]
-  cols2 <- ifelse(status_ord == "unidentified", "red",
-                  ifelse(status_ord == "weak", "orange",
-                         ifelse(status_ord == "moderate", "gold", "steelblue")))
-  barplot(str_ord, names.arg = x$param_names[ord], col = cols2,
-          main = "Identification Strength",
-          xlab = "", ylab = "Jacobian column norm",
-          las = 2, horiz = TRUE)
+  cols2 <- ifelse(status_ord == "unidentified", .DSGE_BAD,
+                  ifelse(status_ord == "weak", .DSGE_WARN,
+                         ifelse(status_ord == "moderate",
+                                "#E6B800", .DSGE_INK_PRIMARY)))
+  graphics::barplot(str_ord, names.arg = x$param_names[ord], col = cols2,
+                    border = "white",
+                    main = "Identification Strength",
+                    xlab = "Jacobian column norm", ylab = "",
+                    las = 1, horiz = TRUE)
 }

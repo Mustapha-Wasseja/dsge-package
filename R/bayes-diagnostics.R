@@ -193,8 +193,9 @@ plot.dsge_ppc <- function(x, ...) {
   n_stats <- length(x$statistics)
   n_vars <- length(x$variables)
 
-  oldpar <- par(mfrow = c(n_stats, n_vars), mar = c(3, 3, 2, 1))
-  on.exit(par(oldpar))
+  oldpar <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(oldpar))
+  .dsge_par_grid(n_stats, n_vars)
 
   for (stat in x$statistics) {
     for (j in seq_len(n_vars)) {
@@ -203,12 +204,17 @@ plot.dsge_ppc <- function(x, ...) {
       obs_val <- x$observed[[stat]][j]
 
       if (length(pred_vals) > 1) {
-        hist(pred_vals, main = paste(x$variables[j], "-", stat),
-             xlab = "", col = "lightblue", border = "white",
-             breaks = 20)
-        abline(v = obs_val, col = "red", lwd = 2, lty = 2)
-        legend("topright", "Observed", col = "red", lty = 2, lwd = 2,
-               bty = "n", cex = 0.8)
+        hist(pred_vals,
+             main = paste(x$variables[j], "-", stat),
+             xlab = "", ylab = "Frequency",
+             col = paste0(.DSGE_INK_PRIMARY, "55"),
+             border = "white", breaks = 20)
+        graphics::abline(v = obs_val,
+                         col = .DSGE_INK_SECONDARY,
+                         lwd = 1.8, lty = "dashed")
+        .dsge_legend("topright", legend = "Observed",
+                     col = .DSGE_INK_SECONDARY,
+                     lty = "dashed", lwd = 1.8)
       }
     }
   }

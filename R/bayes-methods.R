@@ -189,12 +189,7 @@ plot.dsge_bayes <- function(x, type = c("trace", "density", "prior_posterior",
 
   n_par <- length(par_names)
   n_chains <- dim(post)[3]
-  chain_colors <- if (n_chains <= 8) {
-    c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3",
-      "#FF7F00", "#A65628", "#F781BF", "#999999")[seq_len(n_chains)]
-  } else {
-    grDevices::rainbow(n_chains)
-  }
+  chain_colors <- .dsge_palette(n_chains)
 
   if (type == "trace") {
     plot_bayes_trace(post, par_names, n_par, n_chains, chain_colors)
@@ -228,24 +223,24 @@ plot_bayes_trace <- function(post, par_names, n_par, n_chains, chain_colors) {
     idx_end <- min(page * per_page, n_par)
     n_this <- idx_end - idx_start + 1L
 
-    graphics::par(mfrow = c(n_this, 1), mar = c(2, 4, 2, 1),
-                  oma = c(0, 0, 2, 0))
+    .dsge_par_grid(n_this, 1L, oma_top = 2)
+    graphics::par(mar = c(2.2, 3.8, 1.8, 0.8))
 
     for (j in idx_start:idx_end) {
       y_range <- range(post[, j, ])
-      graphics::plot(post[, j, 1], type = "l", col = chain_colors[1],
+      graphics::plot(post[, j, 1], type = "n",
                      ylim = y_range, main = par_names[j],
-                     xlab = "", ylab = "Value", cex.main = 1.1)
-      if (n_chains > 1) {
-        for (ch in 2:n_chains) {
-          graphics::lines(post[, j, ch], col = chain_colors[ch])
-        }
+                     xlab = "", ylab = "Value")
+      .dsge_grid()
+      for (ch in seq_len(n_chains)) {
+        graphics::lines(post[, j, ch],
+                        col = chain_colors[ch], lwd = 0.8)
       }
     }
 
     if (n_pages > 1) {
       graphics::mtext(sprintf("Trace plots (page %d/%d)", page, n_pages),
-                      outer = TRUE, cex = 1.0)
+                      outer = TRUE, cex = 1.0, col = .DSGE_INK_AXIS)
     }
     if (page < n_pages) {
       if (interactive()) grDevices::devAskNewPage(TRUE)
@@ -267,8 +262,8 @@ plot_bayes_density <- function(post, par_names, n_par, priors,
     idx_end <- min(page * per_page, n_par)
     n_this <- idx_end - idx_start + 1L
 
-    graphics::par(mfrow = c(n_this, 1), mar = c(4, 4, 2, 1),
-                  oma = c(0, 0, 2, 0))
+    .dsge_par_grid(n_this, 1L, oma_top = 2)
+    graphics::par(mar = c(3.8, 3.8, 1.8, 0.8))
 
     for (j in idx_start:idx_end) {
       all_draws <- as.numeric(post[, j, ])
@@ -289,38 +284,42 @@ plot_bayes_density <- function(post, par_names, n_par, priors,
 
       main_title <- par_names[j]
       if (!is.null(title_prefix)) {
-        main_title <- paste(title_prefix, "\u2014", par_names[j])
+        main_title <- paste(title_prefix, "--", par_names[j])
       }
 
       graphics::plot(d, main = main_title, xlab = "Value",
                      ylab = "Density", ylim = c(0, y_max * 1.05),
-                     cex.main = 1.1)
+                     col = NA)
+      .dsge_grid()
 
-      # Shade posterior
-      graphics::polygon(c(d$x, rev(d$x)),
-                        c(d$y, rep(0, length(d$y))),
-                        col = grDevices::rgb(0.2, 0.4, 0.8, 0.25),
-                        border = NA)
-      graphics::lines(d, lwd = 2)
+      # Shaded posterior density
+      .dsge_band(d$x, rep(0, length(d$x)), d$y,
+                 fill = .DSGE_FILL_CI)
+      graphics::lines(d$x, d$y, col = .DSGE_INK_PRIMARY, lwd = 1.8)
 
       # Add prior overlay
       if (has_prior) {
-        graphics::lines(x_seq, prior_dens, col = "red", lty = 2, lwd = 1.5)
-        graphics::legend("topright", c("Posterior", "Prior"),
-                         col = c("black", "red"), lty = c(1, 2),
-                         lwd = c(2, 1.5), bty = "n", cex = 0.9)
+        graphics::lines(x_seq, prior_dens,
+                        col = .DSGE_INK_NEUTRAL,
+                        lty = "dashed", lwd = 1.4)
+        .dsge_legend("topright",
+                     legend = c("Posterior", "Prior"),
+                     col    = c(.DSGE_INK_PRIMARY, .DSGE_INK_NEUTRAL),
+                     lty    = c("solid", "dashed"),
+                     lwd    = c(1.8, 1.4))
       }
 
       # Add posterior mean line
-      graphics::abline(v = mean(all_draws), col = "darkblue",
-                       lty = 3, lwd = 1)
+      graphics::abline(v = mean(all_draws),
+                       col = .DSGE_INK_SECONDARY,
+                       lty = "dotted", lwd = 1.0)
     }
 
     if (n_pages > 1) {
       page_label <- if (!is.null(title_prefix)) title_prefix
                     else "Posterior densities"
       graphics::mtext(sprintf("%s (page %d/%d)", page_label, page, n_pages),
-                      outer = TRUE, cex = 1.0)
+                      outer = TRUE, cex = 1.0, col = .DSGE_INK_AXIS)
     }
     if (page < n_pages) {
       if (interactive()) grDevices::devAskNewPage(TRUE)
@@ -344,8 +343,8 @@ plot_bayes_running_mean <- function(post, par_names, n_par, n_chains,
     idx_end <- min(page * per_page, n_par)
     n_this <- idx_end - idx_start + 1L
 
-    graphics::par(mfrow = c(n_this, 1), mar = c(2, 4, 2, 1),
-                  oma = c(0, 0, 2, 0))
+    .dsge_par_grid(n_this, 1L, oma_top = 2)
+    graphics::par(mar = c(2.2, 3.8, 1.8, 0.8))
 
     for (j in idx_start:idx_end) {
       # Compute cumulative mean for each chain
@@ -360,24 +359,23 @@ plot_bayes_running_mean <- function(post, par_names, n_par, n_chains,
       if (y_pad == 0) y_pad <- 0.01
       y_range <- y_range + c(-y_pad, y_pad)
 
-      graphics::plot(seq_len(n_draws), cum_means[, 1], type = "l",
-                     col = chain_colors[1], ylim = y_range,
-                     main = par_names[j], xlab = "", ylab = "Cumulative mean",
-                     cex.main = 1.1, lwd = 1.5)
-      if (n_chains > 1) {
-        for (ch in 2:n_chains) {
-          graphics::lines(seq_len(n_draws), cum_means[, ch],
-                          col = chain_colors[ch], lwd = 1.5)
-        }
-      }
-      # Add overall posterior mean as reference
+      graphics::plot(seq_len(n_draws), cum_means[, 1], type = "n",
+                     ylim = y_range, main = par_names[j],
+                     xlab = "", ylab = "Cumulative mean")
+      .dsge_grid()
+      # Overall posterior mean as reference
       overall_mean <- mean(post[, j, ])
-      graphics::abline(h = overall_mean, col = "gray30", lty = 3, lwd = 1)
+      graphics::abline(h = overall_mean,
+                       col = .DSGE_INK_REF, lty = "dotted", lwd = 0.8)
+      for (ch in seq_len(n_chains)) {
+        graphics::lines(seq_len(n_draws), cum_means[, ch],
+                        col = chain_colors[ch], lwd = 1.4)
+      }
     }
 
     if (n_pages > 1) {
       graphics::mtext(sprintf("Running mean (page %d/%d)", page, n_pages),
-                      outer = TRUE, cex = 1.0)
+                      outer = TRUE, cex = 1.0, col = .DSGE_INK_AXIS)
     }
     if (page < n_pages) {
       if (interactive()) grDevices::devAskNewPage(TRUE)
@@ -398,8 +396,8 @@ plot_bayes_acf <- function(post, par_names, n_par, n_chains) {
     idx_end <- min(page * per_page, n_par)
     n_this <- idx_end - idx_start + 1L
 
-    graphics::par(mfrow = c(n_this, 1), mar = c(4, 4, 2, 1),
-                  oma = c(0, 0, 2, 0))
+    .dsge_par_grid(n_this, 1L, oma_top = 2)
+    graphics::par(mar = c(3.8, 3.8, 1.8, 0.8))
 
     for (j in idx_start:idx_end) {
       # Pool draws across chains
@@ -407,22 +405,26 @@ plot_bayes_acf <- function(post, par_names, n_par, n_chains) {
       max_lag <- min(50L, length(all_draws) - 1L)
       acf_obj <- stats::acf(all_draws, lag.max = max_lag, plot = FALSE)
 
-      graphics::plot(acf_obj$lag[-1], acf_obj$acf[-1], type = "h",
+      graphics::plot(acf_obj$lag[-1], acf_obj$acf[-1], type = "n",
                      main = par_names[j], xlab = "Lag",
-                     ylab = "ACF", ylim = c(-0.2, 1),
-                     lwd = 2, col = "steelblue", cex.main = 1.1)
-      graphics::abline(h = 0, col = "gray40")
-
+                     ylab = "ACF", ylim = c(-0.2, 1))
+      .dsge_grid()
+      .dsge_zero_line()
       # Approximate 95% significance band
       n_eff <- length(all_draws)
       ci_bound <- 1.96 / sqrt(n_eff)
-      graphics::abline(h = c(-ci_bound, ci_bound), col = "red",
-                       lty = 2, lwd = 0.8)
+      graphics::abline(h = c(-ci_bound, ci_bound),
+                       col = .DSGE_INK_SECONDARY,
+                       lty = "dashed", lwd = 0.8)
+      # Stems on top
+      graphics::segments(acf_obj$lag[-1], 0,
+                         acf_obj$lag[-1], acf_obj$acf[-1],
+                         col = .DSGE_INK_PRIMARY, lwd = 1.6)
     }
 
     if (n_pages > 1) {
       graphics::mtext(sprintf("Autocorrelation (page %d/%d)", page, n_pages),
-                      outer = TRUE, cex = 1.0)
+                      outer = TRUE, cex = 1.0, col = .DSGE_INK_AXIS)
     }
     if (page < n_pages) {
       if (interactive()) grDevices::devAskNewPage(TRUE)
@@ -463,7 +465,8 @@ plot_bayes_pairs <- function(post, par_names, n_par) {
 
   # Custom pairs panel functions
   panel_scatter <- function(x, y, ...) {
-    graphics::points(x, y, pch = ".", col = grDevices::rgb(0.2, 0.4, 0.8, 0.3),
+    graphics::points(x, y, pch = ".",
+                     col = paste0(.DSGE_INK_PRIMARY, "55"),
                      cex = 2)
   }
 
@@ -473,7 +476,7 @@ plot_bayes_pairs <- function(post, par_names, n_par) {
     graphics::par(usr = c(0, 1, 0, 1))
     r <- stats::cor(x, y)
     txt <- sprintf("%.2f", r)
-    col <- if (abs(r) > 0.5) "red" else "black"
+    col <- if (abs(r) > 0.5) .DSGE_INK_SECONDARY else .DSGE_INK_AXIS
     cex_val <- max(0.8, min(2.5, 0.8 / graphics::strwidth(txt) * 0.4))
     graphics::text(0.5, 0.5, txt, cex = cex_val, col = col, font = 2)
   }
@@ -487,7 +490,7 @@ plot_bayes_pairs <- function(post, par_names, n_par) {
     y <- h$counts
     y <- y / max(y)
     graphics::rect(breaks[-nB], 0, breaks[-1], y,
-                   col = grDevices::rgb(0.2, 0.4, 0.8, 0.4),
+                   col = paste0(.DSGE_INK_PRIMARY, "66"),
                    border = "white")
   }
 
