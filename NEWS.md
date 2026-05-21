@@ -1,5 +1,25 @@
 # dsge 1.1.1
 
+## New features
+
+### Variance decomposition
+
+* New `variance_decomposition()` function with methods for
+  `dsge_solution`, `dsge_fit`, and `dsge_bayes`.  Computes either:
+  - the **unconditional** decomposition (default), giving each shock's
+    share of the long-run steady-state variance of every observable
+    via per-shock discrete-Lyapunov solves; or
+  - the **forecast-error variance decomposition (FEVD)** when a vector
+    of integer horizons is supplied, giving each shock's share of the
+    h-step-ahead forecast-error variance.
+* Returns a `dsge_variance_decomposition` object with both raw
+  contributions (in squared units) and percent shares; row sums equal
+  100 by construction.
+* New `plot.dsge_variance_decomposition()` draws horizontal stacked
+  bars for the unconditional case and one stacked-bar panel per
+  observable (horizons on the x-axis) for FEVD.  Uses the standard
+  Wave 1 theme palette and styling.
+
 ## Improvements
 
 ### Publication-ready plot theme

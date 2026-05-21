@@ -22,6 +22,9 @@ solving, and estimating DSGE models entirely in R. No external software
   Bayesian estimation without linearization
 - **Bayes factor model comparison** (`bayes_factor()`) with Kass-Raftery
   evidence scales and posterior model probabilities
+- **Variance decomposition** (`variance_decomposition()`) -- both
+  unconditional steady-state shares and forecast-error variance
+  decomposition at user-supplied horizons
 - **Ramsey optimal policy** via linear-quadratic regulator
   (`ramsey_policy()`, `welfare_loss()`)
 - **Second- and third-order perturbation** with pruned simulation
@@ -192,6 +195,19 @@ welfare_loss(sol, rp$F)   # evaluate welfare under the optimal rule
 bf <- bayes_factor(fit_bayes_A, fit_bayes_B,
                    prior_odds = c(0.5, 0.5))
 print(bf)   # log Bayes factor + Kass-Raftery evidence label
+```
+
+### Variance Decomposition
+
+```r
+# Unconditional decomposition (long-run shares)
+vd <- variance_decomposition(sol)
+print(vd)
+plot(vd)
+
+# Forecast-error variance decomposition at multiple horizons
+fevd <- variance_decomposition(sol, horizon = c(1, 4, 8, 20))
+plot(fevd)
 ```
 
 ### Parallel MCMC Chains
