@@ -790,13 +790,20 @@ print.dsge_perfect_foresight <- function(x, ...) {
 #' Plot Perfect Foresight Transition Paths
 #'
 #' Plot the deterministic transition paths from a \code{perfect_foresight}
-#' result.
+#' result, optionally overlaying a second path for comparison (e.g.
+#' linearized vs. nonlinear).
 #'
 #' @param x A \code{dsge_perfect_foresight} object.
 #' @param vars Character vector of variable names to plot. If \code{NULL}
 #'   (default), plots all variables with non-trivial paths.
 #' @param type Character. One of \code{"deviation"} (default) or
 #'   \code{"level"}. Controls whether to plot deviations from SS or levels.
+#' @param compare Optional second \code{dsge_perfect_foresight} object to
+#'   overlay on the same panels (e.g. pass the linearized
+#'   \code{perfect_foresight()} result alongside a
+#'   \code{perfect_foresight_nonlinear()} result to visualise the
+#'   nonlinearity premium).  Only variables common to both objects are
+#'   overlaid.
 #' @param max_panels Integer. Maximum number of panels per plot page.
 #'   Default 9.
 #' @param ... Additional arguments (currently unused).
@@ -806,6 +813,7 @@ print.dsge_perfect_foresight <- function(x, ...) {
 #'
 #' @export
 plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
+                                        compare = NULL,
                                         max_panels = 9L, ...) {
   type <- match.arg(type, c("deviation", "level"))
 
@@ -818,6 +826,19 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
   }
 
   all_names <- colnames(all_data)
+
+  # Optional comparison object
+  has_cmp <- !is.null(compare)
+  if (has_cmp) {
+    if (!inherits(compare, "dsge_perfect_foresight"))
+      stop("'compare' must be a dsge_perfect_foresight object.",
+           call. = FALSE)
+    if (type == "level" && !is.null(compare$state_levels)) {
+      cmp_data <- cbind(compare$control_levels, compare$state_levels)
+    } else {
+      cmp_data <- cbind(compare$controls, compare$states)
+    }
+  }
 
   # Select variables to plot
   if (is.null(vars)) {
@@ -841,6 +862,12 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
   n_pages <- ceiling(n_vars / max_panels)
   periods <- seq_len(x$horizon)
 
+  # Label for the primary series in the legend
+  primary_label <- if (isTRUE(x$nonlinear)) "Nonlinear" else "Linear"
+  compare_label <- if (has_cmp) {
+    if (isTRUE(compare$nonlinear)) "Nonlinear" else "Linear"
+  } else NA_character_
+
   for (page in seq_len(n_pages)) {
     idx_start <- (page - 1L) * max_panels + 1L
     idx_end <- min(page * max_panels, n_vars)
@@ -854,29 +881,55 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
     on.exit(graphics::par(old_par), add = TRUE)
     .dsge_par_grid(nr, nc)
 
-    for (v in page_vars) {
+    for (v_idx in seq_along(page_vars)) {
+      v <- page_vars[v_idx]
       y <- all_data[, v]
+      y_cmp <- if (has_cmp && v %in% colnames(cmp_data)) cmp_data[, v]
+               else NULL
 
+      # ylim accommodating both series
+      ylim <- range(y, na.rm = TRUE)
+      if (!is.null(y_cmp)) {
+        ylim <- range(c(ylim, y_cmp), na.rm = TRUE)
+      }
+      if (type == "level") {
+        ss_val <- x$steady_state[v]
+        if (!is.na(ss_val)) ylim <- range(c(ylim, ss_val))
+      }
+
+      ylab <- if (type == "deviation") "Deviation from SS" else "Level"
+      graphics::plot(periods, y, type = "n",
+                     xlab = "Period", ylab = ylab,
+                     main = v, ylim = ylim)
+      .dsge_grid()
       if (type == "deviation") {
-        graphics::plot(periods, y, type = "n",
-                       xlab = "Period", ylab = "Deviation from SS",
-                       main = v)
-        .dsge_grid()
         .dsge_zero_line()
-        graphics::lines(periods, y,
-                        col = .DSGE_INK_PRIMARY, lwd = 1.8)
       } else {
         ss_val <- x$steady_state[v]
-        graphics::plot(periods, y, type = "n",
-                       xlab = "Period", ylab = "Level",
-                       main = v)
-        .dsge_grid()
         if (!is.na(ss_val)) {
           graphics::abline(h = ss_val, lty = "dotted",
                            col = .DSGE_INK_SECONDARY, lwd = 1.0)
         }
-        graphics::lines(periods, y,
-                        col = .DSGE_INK_PRIMARY, lwd = 1.8)
+      }
+
+      # Comparison line first (so primary sits on top)
+      if (!is.null(y_cmp)) {
+        graphics::lines(periods, y_cmp,
+                        col = .DSGE_INK_NEUTRAL, lwd = 1.2,
+                        lty = "dashed")
+      }
+
+      # Primary path
+      graphics::lines(periods, y,
+                      col = .DSGE_INK_PRIMARY, lwd = 1.8)
+
+      # Legend on the first panel only
+      if (has_cmp && v_idx == 1L) {
+        .dsge_legend("topright",
+                     legend = c(primary_label, compare_label),
+                     col    = c(.DSGE_INK_PRIMARY, .DSGE_INK_NEUTRAL),
+                     lty    = c("solid", "dashed"),
+                     lwd    = c(1.8, 1.2))
       }
     }
   }

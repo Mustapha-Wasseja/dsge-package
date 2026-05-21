@@ -164,15 +164,28 @@ smooth_states_impl <- function(x) {
   colnames(smoothed_obs) <- obs_names
   colnames(residuals) <- obs_names
 
+  # Smoothed state variances (diagonals of P_smooth at each t)
+  smoothed_states_var <- NULL
+  if (!is.null(sm$smoothed_P)) {
+    smoothed_states_var <- matrix(NA_real_,
+                                  nrow = n_T, ncol = ss$n_s,
+                                  dimnames = list(NULL, state_names))
+    for (t in seq_len(n_T)) {
+      pt <- sm$smoothed_P[[t]]
+      if (!is.null(pt)) smoothed_states_var[t, ] <- diag(pt)
+    }
+  }
+
   structure(
     list(
-      smoothed_states = sm$smoothed_states,
-      filtered_states = sm$filtered_states,
-      smoothed_obs = smoothed_obs,
-      residuals = residuals,
-      state_names = state_names,
-      obs_names = obs_names,
-      steady_state = ss$steady_state
+      smoothed_states     = sm$smoothed_states,
+      smoothed_states_var = smoothed_states_var,
+      filtered_states     = sm$filtered_states,
+      smoothed_obs        = smoothed_obs,
+      residuals           = residuals,
+      state_names         = state_names,
+      obs_names           = obs_names,
+      steady_state        = ss$steady_state
     ),
     class = "dsge_smoothed"
   )
@@ -435,8 +448,10 @@ kalman_smoother_full <- function(y, G, H, M, D) {
   Q <- M %*% t(M)
 
   smoothed_states <- fwd$filtered_states
+  smoothed_P <- vector("list", n_T)
   x_smooth <- fwd$filtered_states[n_T, ]
   P_smooth <- fwd$filtered_P[[n_T]]
+  smoothed_P[[n_T]] <- P_smooth
 
   for (t in (n_T - 1):1) {
     P_filt_t <- fwd$filtered_P[[t]]
@@ -454,10 +469,12 @@ kalman_smoother_full <- function(y, G, H, M, D) {
     smoothed_states[t, ] <- x_smooth
 
     P_smooth <- P_filt_t + J_t %*% (P_smooth - P_pred_tp1) %*% t(J_t)
+    smoothed_P[[t]] <- P_smooth
   }
 
-  list(smoothed_states = smoothed_states,
-       filtered_states = fwd$filtered_states)
+  list(smoothed_states  = smoothed_states,
+       filtered_states  = fwd$filtered_states,
+       smoothed_P       = smoothed_P)
 }
 
 
@@ -542,6 +559,8 @@ plot.dsge_smoothed <- function(x, which = NULL, type = c("states", "fit"),
 #' @noRd
 plot_smoothed_states <- function(x, which = NULL, ...) {
   states <- x$smoothed_states
+  vars   <- x$smoothed_states_var
+  has_var <- !is.null(vars)
   n_s <- ncol(states)
   snames <- x$state_names
 
@@ -556,13 +575,28 @@ plot_smoothed_states <- function(x, which = NULL, ...) {
   on.exit(graphics::par(old_par))
   .dsge_par_grid(nrows, ncols)
 
+  t_idx <- seq_len(nrow(states))
+
   for (i in which) {
-    graphics::plot(states[, i], type = "n",
+    st <- states[, i]
+    if (has_var) {
+      sd_i  <- sqrt(pmax(vars[, i], 0))
+      lower <- st - 2 * sd_i
+      upper <- st + 2 * sd_i
+      ylim  <- range(c(lower, upper), na.rm = TRUE)
+    } else {
+      ylim  <- range(st, na.rm = TRUE)
+    }
+    graphics::plot(t_idx, st, type = "n",
                    main = snames[i], xlab = "Period",
-                   ylab = "Deviation from SS", ...)
+                   ylab = "Deviation from SS",
+                   ylim = ylim, ...)
     .dsge_grid()
     .dsge_zero_line()
-    graphics::lines(states[, i], col = .DSGE_INK_PRIMARY, lwd = 1.6)
+    if (has_var) {
+      .dsge_band(t_idx, lower, upper)
+    }
+    graphics::lines(t_idx, st, col = .DSGE_INK_PRIMARY, lwd = 1.6)
   }
 }
 

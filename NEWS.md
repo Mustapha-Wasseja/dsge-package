@@ -16,6 +16,34 @@
   predictive checks -- is now uniform and publication-ready.  No API
   changes; all existing user code keeps working.
 
+### Forecast fan chart + history overlay
+
+* `forecast.dsge_fit()` now also returns the **forecast standard
+  deviation** at each horizon (`sd` column in `forecasts`), computed by
+  iterating the state covariance forward analytically.  The result also
+  carries the in-sample observed data as `history`.
+* `plot.dsge_forecast()` now shows the historical series in grey,
+  followed by the point forecast in navy with three nested fan bands at
+  the 50/80/95% levels and a vertical separator at the forecast origin.
+
+### Smoothed state uncertainty bands
+
+* The Kalman smoother now propagates and stores the smoothed state
+  covariances.  `smooth_states()` returns an additional matrix
+  `smoothed_states_var` (T x n_states) with the per-period state
+  variances.
+* `plot.dsge_smoothed(..., type = "states")` automatically draws
+  semi-transparent +/- 2 sigma bands around each smoothed state when
+  the variance information is available.
+
+### Perfect-foresight comparison overlay
+
+* `plot.dsge_perfect_foresight()` gains a new `compare = ...` argument
+  that overlays a second perfect-foresight path on the same panels
+  (typical use: pass the linearized `perfect_foresight()` result
+  alongside a `perfect_foresight_nonlinear()` result to visualise the
+  nonlinearity premium for large shocks).
+
 ## New features
 
 ### Nonlinear perfect foresight

@@ -4,7 +4,7 @@
 \alias{plot.dsge_perfect_foresight}
 \title{Plot Perfect Foresight Transition Paths}
 \usage{
-\method{plot}{dsge_perfect_foresight}(x, vars = NULL, type = "deviation", max_panels = 9L, ...)
+\method{plot}{dsge_perfect_foresight}(x, vars = NULL, type = "deviation", compare = NULL, max_panels = 9L, ...)
 }
 \arguments{
 \item{x}{A \code{dsge_perfect_foresight} object.}
@@ -14,6 +14,13 @@
 
 \item{type}{Character. One of \code{"deviation"} (default) or
 \code{"level"}. Controls whether to plot deviations from SS or levels.}
+
+\item{compare}{Optional second \code{dsge_perfect_foresight} object to
+overlay on the same panels (e.g. pass the linearized
+\code{perfect_foresight()} result alongside a
+\code{perfect_foresight_nonlinear()} result to visualise the
+nonlinearity premium).  Only variables common to both objects are
+overlaid.}
 
 \item{max_panels}{Integer. Maximum number of panels per plot page.
 Default 9.}
@@ -26,5 +33,6 @@ transition path plots on the active graphics device.
 }
 \description{
 Plot the deterministic transition paths from a \code{perfect_foresight}
-result.
+result, optionally overlaying a second path for comparison (e.g.
+linearized vs. nonlinear).
 }
