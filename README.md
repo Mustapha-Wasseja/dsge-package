@@ -13,13 +13,22 @@ solving, and estimating DSGE models entirely in R. No external software
 **Key capabilities:**
 
 - **Linear models** via formula interface (`obs()`, `unobs()`, `state()`)
-- **Nonlinear models** via string-based equations with first-order
-  perturbation (`dsgenl_model()`)
+- **Nonlinear models** via string-based equations with perturbation up to
+  third order (`dsgenl_model()`, `solve_dsge(order = 1, 2, 3)`)
 - **Maximum likelihood estimation** via the Kalman filter
-- **Bayesian estimation** via adaptive RWMH (`bayes_dsge()`)
-- **Second-order perturbation** with pruned simulation
+- **Bayesian estimation** via adaptive RWMH (`bayes_dsge()`) with optional
+  parallel chain execution (`n_cores`)
+- **Particle filter and PMMH** (`bayes_particle()`) for fully nonlinear
+  Bayesian estimation without linearization
+- **Bayes factor model comparison** (`bayes_factor()`) with Kass-Raftery
+  evidence scales and posterior model probabilities
+- **Ramsey optimal policy** via linear-quadratic regulator
+  (`ramsey_policy()`, `welfare_loss()`)
+- **Second- and third-order perturbation** with pruned simulation
 - **Occasionally binding constraints** (OccBin) for ZLB and other bounds
-- **Perfect foresight** deterministic transition paths
+- **Perfect foresight** deterministic transition paths -- both linearized
+  (`perfect_foresight()`) and fully nonlinear via stacked-time Newton
+  (`perfect_foresight_nonlinear()`)
 - **Kalman smoothing** and historical shock decomposition
 - **Local identification diagnostics** and parameter sensitivity analysis
 - **Robust (sandwich) standard errors** for ML estimation
@@ -114,12 +123,15 @@ irf(sol, periods = 40) |> plot()
 
 ## Advanced Features
 
-### Second-Order Perturbation
+### Second- and Third-Order Perturbation
 
 ```r
 sol2 <- solve_dsge(rbc, params = params, shock_sd = sd, order = 2)
 simulate_2nd_order(sol2, periods = 200)
 irf_2nd_order(sol2, periods = 40)
+
+sol3 <- solve_dsge(rbc, params = params, shock_sd = sd, order = 3)
+simulate_3rd_order(sol3, periods = 200)
 ```
 
 ### Occasionally Binding Constraints
@@ -136,10 +148,59 @@ plot(obc)
 ### Perfect Foresight Paths
 
 ```r
+# Linearized perfect foresight (fast, small shocks)
 pf <- perfect_foresight(sol,
   shocks = list(Z = c(-0.05, -0.03, -0.01)),
   horizon = 60)
 plot(pf)
+
+# Fully nonlinear perfect foresight via stacked-time Newton
+# (recommended for large shocks where nonlinearities matter)
+pf_nl <- perfect_foresight_nonlinear(rbc,
+  params   = c(rho = 0.9),
+  shock_sd = c(Z = 0.01),
+  shocks   = list(Z = 0.10),
+  horizon  = 40)
+plot(pf_nl)
+```
+
+### Particle Filter and PMMH
+
+```r
+# Bootstrap particle filter likelihood for nonlinear models
+ll <- particle_filter_loglik(sol2, data = your_data, n_particles = 1000)
+
+# Particle Marginal Metropolis-Hastings -- fully nonlinear Bayesian
+fit_pmmh <- bayes_particle(rbc, data = your_data, priors = my_priors,
+                           n_particles = 500, chains = 2, iter = 5000)
+```
+
+### Ramsey Optimal Policy
+
+```r
+# Quadratic welfare loss on inflation and output gap
+rp <- ramsey_policy(sol,
+  Q_xx = diag(c(p = 1, x = 0.5)),
+  Q_yy = diag(c(r = 0.1)))
+welfare_loss(sol, rp$F)   # evaluate welfare under the optimal rule
+```
+
+### Bayes Factor Model Comparison
+
+```r
+# Compare two Bayesian fits
+bf <- bayes_factor(fit_bayes_A, fit_bayes_B,
+                   prior_odds = c(0.5, 0.5))
+print(bf)   # log Bayes factor + Kass-Raftery evidence label
+```
+
+### Parallel MCMC Chains
+
+```r
+# Run chains in parallel across cores (PSOCK on Windows, fork on POSIX)
+fit_bayes <- bayes_dsge(nk, data = your_data, priors = my_priors,
+                        chains = 4, iter = 10000, warmup = 5000,
+                        n_cores = 4)
 ```
 
 ## Feature Comparison
@@ -152,9 +213,16 @@ plot(pf)
 | Linear DSGE | Yes | Via Dynare | Yes |
 | Nonlinear DSGE | Yes | Via Dynare | Yes |
 | ML estimation | Yes | Via Dynare | Yes |
-| Bayesian estimation | Yes | Via Dynare | Yes |
+| Bayesian estimation (RWMH) | Yes | Via Dynare | Yes |
+| Particle filter / PMMH | Yes | Via Dynare | Yes |
+| Parallel MCMC chains | Yes | Via Dynare | Yes |
 | 2nd-order perturbation | Yes | Via Dynare | Yes |
+| 3rd-order perturbation | Yes | Via Dynare | Yes |
 | OccBin / ZLB | Yes | Via Dynare | Yes |
+| Linear perfect foresight | Yes | Via Dynare | Yes |
+| Nonlinear perfect foresight (LBJ) | Yes | Via Dynare | Yes |
+| Ramsey optimal policy | Yes | Via Dynare | Yes |
+| Bayes factor model comparison | Yes | No | Partial |
 | R model interface (coef, vcov, plot) | Yes | No | No |
 | Formula-based specification | Yes | No | No |
 
@@ -166,9 +234,23 @@ plot(pf)
 
 ## References
 
+- Andrieu, C., Doucet, A. and Holenstein, R. (2010). "Particle Markov
+  chain Monte Carlo methods." *Journal of the Royal Statistical Society:
+  Series B*, 72(3), 269-342.
+- Gordon, N. J., Salmond, D. J. and Smith, A. F. M. (1993). "Novel approach
+  to nonlinear/non-Gaussian Bayesian state estimation." *IEE Proceedings F*,
+  140(2), 107-113.
+- Juillard, M., Laxton, D., McAdam, P. and Pioro, H. (1998). "An algorithm
+  competition: First-order iterations versus Newton-based techniques."
+  *Journal of Economic Dynamics and Control*, 22, 1291-1318.
+- Kass, R. E. and Raftery, A. E. (1995). "Bayes factors." *Journal of the
+  American Statistical Association*, 90(430), 773-795.
 - Klein, P. (2000). "Using the generalized Schur form to solve a
   multivariate linear rational expectations model." *Journal of Economic
   Dynamics and Control*, 24(10), 1405-1423.
+- Schmitt-Grohe, S. and Uribe, M. (2004). "Solving dynamic general
+  equilibrium models using a second-order approximation to the policy
+  function." *Journal of Economic Dynamics and Control*, 28(4), 755-775.
 
 ## License
 
