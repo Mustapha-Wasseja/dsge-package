@@ -30,7 +30,14 @@ directly.}
 \code{\link{perfect_foresight}}): a named list where each element is
 a numeric vector giving the shock values for that exogenous state over
 time, or a matrix of dimension \code{horizon x n_exo} with column names
-matching exogenous state names.  Unspecified periods are zero.}
+matching exogenous state names.  Unspecified periods are zero.
+
+Supports \strong{anticipated (news) shocks}: because the nonlinear system
+is solved simultaneously over the whole horizon under perfect foresight,
+agents see the entire future shock path at \eqn{t = 1} and react in
+advance.  Place the shock value at the desired arrival period in the
+vector (e.g. \code{list(Z = c(0, 0, 0, 0.1))} for a TFP shock announced
+at \eqn{t=1} but arriving at \eqn{t=4}).}
 
 \item{initial}{Named numeric vector of initial DEVIATIONS from steady
 state for state variables.  Defaults to zero (all states start at SS).}

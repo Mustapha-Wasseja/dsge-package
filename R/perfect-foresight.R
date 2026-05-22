@@ -18,6 +18,18 @@
 #'   Shock values are in units of the shock variable (not standard deviations).
 #'   If \code{NULL} (default), no shocks are applied (useful with
 #'   \code{initial} to study convergence from displaced initial conditions).
+#'
+#'   \strong{Multi-period shock paths.}  A non-scalar vector specifies a
+#'   sequence of shocks hitting at successive periods, e.g.
+#'   \code{shocks = list(u = c(0, 0, 0, 1, 0, 0))} simulates a shock of size
+#'   1 arriving at \eqn{t = 4}.  Note that the linearized perfect-foresight
+#'   path uses the recursive policy function \eqn{x_{t+1} = H x_t + M
+#'   \varepsilon_{t+1}}, so each shock is treated as a period-by-period
+#'   surprise (agents do not react in advance).  For true \emph{anticipated /
+#'   news} shocks where agents adjust at \eqn{t = 1} in expectation of a
+#'   future shock, use \code{\link{perfect_foresight_nonlinear}()}: the
+#'   stacked-time Newton solver respects forward-looking expectations and
+#'   correctly captures anticipation.
 #' @param initial Named numeric vector of initial state deviations from steady
 #'   state. Names must match state variable names. Unspecified states default
 #'   to zero. Default is \code{NULL} (all states start at steady state).
@@ -77,6 +89,12 @@
 #' # Displaced initial condition
 #' pf2 <- perfect_foresight(sol, initial = c(x = 0.05), horizon = 40)
 #' plot(pf2)
+#'
+#' # Anticipated (news) shock: known at t=1, hits at t=5
+#' pf3 <- perfect_foresight(sol,
+#'   shocks  = list(x = c(0, 0, 0, 0, 0.01)),
+#'   horizon = 40)
+#' plot(pf3)
 #'
 #' @export
 perfect_foresight <- function(x, shocks = NULL, initial = NULL,
@@ -323,6 +341,13 @@ perfect_foresight <- function(x, shocks = NULL, initial = NULL,
 #'   a numeric vector giving the shock values for that exogenous state over
 #'   time, or a matrix of dimension \code{horizon x n_exo} with column names
 #'   matching exogenous state names.  Unspecified periods are zero.
+#'
+#'   Supports \strong{anticipated (news) shocks}: because the nonlinear system
+#'   is solved simultaneously over the whole horizon under perfect foresight,
+#'   agents see the entire future shock path at \eqn{t = 1} and react in
+#'   advance.  Place the shock value at the desired arrival period in the
+#'   vector (e.g. \code{list(Z = c(0, 0, 0, 0.1))} for a TFP shock announced
+#'   at \eqn{t=1} but arriving at \eqn{t=4}).
 #' @param initial Named numeric vector of initial DEVIATIONS from steady
 #'   state for state variables.  Defaults to zero (all states start at SS).
 #' @param horizon Integer. Number of periods to simulate.  Default 40.

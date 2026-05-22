@@ -29,7 +29,19 @@ matching shock names.
 }
 Shock values are in units of the shock variable (not standard deviations).
 If \code{NULL} (default), no shocks are applied (useful with
-\code{initial} to study convergence from displaced initial conditions).}
+\code{initial} to study convergence from displaced initial conditions).
+
+\strong{Multi-period shock paths.}  A non-scalar vector specifies a
+sequence of shocks hitting at successive periods, e.g.
+\code{shocks = list(u = c(0, 0, 0, 1, 0, 0))} simulates a shock of size
+1 arriving at \eqn{t = 4}.  Note that the linearized perfect-foresight
+path uses the recursive policy function \eqn{x_{t+1} = H x_t + M
+  \varepsilon_{t+1}}, so each shock is treated as a period-by-period
+surprise (agents do not react in advance).  For true \emph{anticipated /
+news} shocks where agents adjust at \eqn{t = 1} in expectation of a
+future shock, use \code{\link{perfect_foresight_nonlinear}()}: the
+stacked-time Newton solver respects forward-looking expectations and
+correctly captures anticipation.}
 
 \item{initial}{Named numeric vector of initial state deviations from steady
 state. Names must match state variable names. Unspecified states default
@@ -100,5 +112,11 @@ plot(pf)
 # Displaced initial condition
 pf2 <- perfect_foresight(sol, initial = c(x = 0.05), horizon = 40)
 plot(pf2)
+
+# Anticipated (news) shock: known at t=1, hits at t=5
+pf3 <- perfect_foresight(sol,
+  shocks  = list(x = c(0, 0, 0, 0, 0.01)),
+  horizon = 40)
+plot(pf3)
 
 }

@@ -25,6 +25,19 @@ solving, and estimating DSGE models entirely in R. No external software
 - **Variance decomposition** (`variance_decomposition()`) -- both
   unconditional steady-state shares and forecast-error variance
   decomposition at user-supplied horizons
+- **Optimal Simple Rules** (`osr()`) -- finds the optimal coefficients
+  in a user-specified, restricted policy rule (e.g. Taylor rule
+  coefficients) given a quadratic welfare loss
+- **Conditional forecasts** (`conditional_forecast()`) -- forecasts
+  conditional on a pre-specified path for a subset of observables
+  (Waggoner-Zha 1999 minimum-norm shocks)
+- **IRF matching estimation** (`irf_match()`) -- estimate structural
+  parameters by matching DSGE impulse responses to a user-supplied
+  target (e.g. VAR-estimated IRFs), Christiano-Eichenbaum-Evans style
+- **DSGE-VAR** (`bayes_dsge_var()`) -- Bayesian VAR with DSGE-implied
+  prior (Del Negro & Schorfheide 2004), bridging the structural DSGE
+  and unrestricted VAR via a single weight parameter lambda
+- **Anticipated / news shocks** in `perfect_foresight_nonlinear()`
 - **Ramsey optimal policy** via linear-quadratic regulator
   (`ramsey_policy()`, `welfare_loss()`)
 - **Second- and third-order perturbation** with pruned simulation
@@ -208,6 +221,63 @@ plot(vd)
 # Forecast-error variance decomposition at multiple horizons
 fevd <- variance_decomposition(sol, horizon = c(1, 4, 8, 20))
 plot(fevd)
+```
+
+### Optimal Simple Rules
+
+```r
+# Optimal Taylor-rule coefficient
+res <- osr(nk,
+  params      = c(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9),
+  shock_sd    = c(e.u = 1.0, e.g = 0.5),
+  osr_params  = c(psi = 1.5),
+  welfare_weights = list(Q_yy = c(p = 1, x = 0.5, r = 0.1)),
+  lower = 1.01, upper = 5.0)
+print(res)
+```
+
+### Conditional Forecasts
+
+```r
+# Hold the policy rate at 0.5 for the next 4 periods
+cf <- conditional_forecast(fit, horizon = 12,
+  condition = list(r = c(0.5, 0.5, 0.5, 0.5, rep(NA, 8))))
+plot(cf)
+```
+
+### IRF Matching Estimation
+
+```r
+# Match the DSGE IRF to an externally estimated target
+est <- irf_match(nk,
+  params_start   = c(kappa = 0.15, psi = 2.0, rhou = 0.6, rhog = 0.8),
+  shock_sd_start = c(e.u = 0.8, e.g = 0.7),
+  target         = target_irf_dataframe)
+```
+
+### DSGE-VAR
+
+```r
+# Bayesian VAR with DSGE-implied prior, weight lambda = 1
+fit_dv <- bayes_dsge_var(sol, data = your_data,
+                         p = 4, lambda = 1.0, n_draws = 1000)
+print(fit_dv)
+# Compare different lambdas by marginal likelihood
+sapply(c(0.5, 1, 2, 5),
+       function(l) bayes_dsge_var(sol, your_data, p=4, lambda=l,
+                                  n_draws=200)$log_marg_lik)
+```
+
+### Anticipated / News Shocks (Perfect Foresight)
+
+```r
+# Nonlinear PF correctly anticipates a future TFP shock
+pf_news <- perfect_foresight_nonlinear(rbc,
+  params   = c(rho = 0.9),
+  shock_sd = c(Z = 0.01),
+  shocks   = list(Z = c(0, 0, 0.05)),  # announced at t=1, arrives at t=3
+  horizon  = 40)
+plot(pf_news)
 ```
 
 ### Parallel MCMC Chains

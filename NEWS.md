@@ -2,6 +2,37 @@
 
 ## New features
 
+### Closing the most-cited Dynare gaps (five features)
+
+* **`osr()`** -- Optimal Simple Rules.  Finds the parameters of a
+  user-specified, restricted policy rule that minimise an unconditional
+  quadratic welfare loss subject to the model's rational-expectations
+  equilibrium.  Complements the existing fully-flexible `ramsey_policy()`.
+  Implements Dennis (2007).
+* **`conditional_forecast()`** -- forecasts conditional on a pre-specified
+  path for a subset of observables (e.g. holding the policy rate fixed
+  for k periods).  Implements the Waggoner & Zha (1999) minimum-norm
+  shock approach.  Returns a `dsge_conditional_forecast` object that
+  inherits from `dsge_forecast` so existing plot methods work.
+* **`irf_match()`** -- impulse-response matching estimation.  Estimates
+  the model's structural parameters and shock SDs by minimising the
+  weighted squared distance between model IRFs and a target IRF data
+  frame (typically from a VAR).  Follows Christiano, Eichenbaum & Evans
+  (1999).
+* **`bayes_dsge_var()`** -- Bayesian VAR with DSGE-implied prior
+  (Del Negro & Schorfheide 2004).  Combines a Bayesian VAR(p) with prior
+  moments centred on the DSGE's second-moment implications, controlled
+  by a single hyperparameter lambda.  Returns posterior draws of the
+  VAR coefficient matrix and innovation covariance and an approximate
+  log marginal likelihood for choosing lambda.
+* **Multi-period / "news-shock" paths in perfect foresight**.  Both
+  `perfect_foresight()` and `perfect_foresight_nonlinear()` already
+  accept vector-valued shock paths; documentation now explicitly calls
+  out this capability.  The nonlinear stacked-time solver correctly
+  models anticipated shocks (agents adjust at t=1 in expectation of a
+  future shock); the linearised version uses the recursive policy and
+  treats the path as a sequence of period-by-period surprises.
+
 ### Variance decomposition
 
 * New `variance_decomposition()` function with methods for
