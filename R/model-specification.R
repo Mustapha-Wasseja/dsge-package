@@ -127,6 +127,14 @@ state <- function(formula, shock = TRUE) {
 #' @param fixed Named list of parameter values to hold fixed
 #'   (constrained) during estimation.
 #' @param start Named list of starting values for free parameters.
+#' @param derived Optional function mapping a named list of primitive
+#'   parameter values to a named list of derived parameter values
+#'   (e.g. `beta_bar = beta * gamma^(-sigma_c)`).  Called by
+#'   [solve_dsge()] at every solve so derived parameters track the
+#'   current primitives during estimation.  The returned list is
+#'   concatenated with the primitives before equation coefficients are
+#'   evaluated.  Names returned by `derived()` may then appear directly
+#'   inside equation coefficients alongside primitive parameters.
 #'
 #' @return An object of class `"dsge_model"` containing:
 #'   \describe{
@@ -162,7 +170,11 @@ state <- function(formula, shock = TRUE) {
 #' )
 #'
 #' @export
-dsge_model <- function(..., fixed = list(), start = list()) {
+dsge_model <- function(..., fixed = list(), start = list(),
+                       derived = NULL) {
+  if (!is.null(derived) && !is.function(derived)) {
+    stop("`derived` must be a function (or NULL).", call. = FALSE)
+  }
   eqs <- list(...)
 
   # Validate that all arguments are dsge_equation objects
@@ -223,17 +235,60 @@ dsge_model <- function(..., fixed = list(), start = list()) {
   # Collect all parameter names from all equations
   all_params <- unique(unlist(lapply(parsed, function(p) p$parameters)))
 
-  # Validate fixed parameters exist in the model
+  # Determine derived parameter names by probing `derived()` once with the
+  # available starting values and fixed values combined.
+  derived_names <- character(0)
+  if (!is.null(derived)) {
+    probe_in <- c(start, fixed)
+    derived_out <- tryCatch(derived(probe_in),
+                            error = function(e) NULL)
+    if (is.null(derived_out) || !is.list(derived_out) ||
+        is.null(names(derived_out))) {
+      stop("`derived(start_plus_fixed)` must return a named list.",
+           call. = FALSE)
+    }
+    derived_names <- names(derived_out)
+  }
 
+  # Validate fixed parameters exist in the model.  Allow names that are
+  # only consumed by `derived()` (i.e., they don't appear in equations
+  # but the derived function references them).
   if (length(fixed) > 0) {
-    unknown_fixed <- setdiff(names(fixed), all_params)
+    unknown_fixed <- setdiff(names(fixed),
+                             c(all_params, derived_names))
+    if (length(unknown_fixed) > 0 && !is.null(derived)) {
+      # Probe derived() at start+fixed; if it succeeds, treat any extras
+      # consumed by it as legitimate primitives.
+      base_in <- c(start, fixed)
+      base_ok <- tryCatch({ derived(base_in); TRUE },
+                         error = function(e) FALSE)
+      if (base_ok) unknown_fixed <- character(0)
+    }
     if (length(unknown_fixed) > 0) {
       stop("Fixed parameter(s) not found in model equations: ",
            paste(unknown_fixed, collapse = ", "), call. = FALSE)
     }
   }
 
-  free_params <- setdiff(all_params, names(fixed))
+  # `start` may include primitive parameters whose only role is feeding
+  # `derived()` (so they don't appear directly in equations).  Detect these
+  # by probing `derived()` with the supplied start values and treating any
+  # start name referenced by `derived()` as a legitimate primitive.
+  primitive_only_in_derived <- character(0)
+  if (!is.null(derived) && length(start) > 0) {
+    extras <- setdiff(names(start), all_params)
+    if (length(extras) > 0) {
+      # Try evaluating derived() with these extras zeroed out: if removing
+      # any extra makes derived() fail, that extra is "used".
+      base_in <- c(start[extras], fixed)
+      base_ok <- tryCatch({
+        derived(base_in); TRUE
+      }, error = function(e) FALSE)
+      if (base_ok) primitive_only_in_derived <- extras
+    }
+  }
+  free_params <- unique(c(setdiff(all_params, c(names(fixed), derived_names)),
+                          primitive_only_in_derived))
 
   # Validate start parameters
   if (length(start) > 0) {
@@ -270,6 +325,8 @@ dsge_model <- function(..., fixed = list(), start = list()) {
       free_parameters = free_params,
       fixed = fixed,
       start = start,
+      derived = derived,
+      derived_names = derived_names,
       n_obs_controls = n_obs,
       n_unobs_controls = length(unobserved),
       n_exo_states = length(exo_state),

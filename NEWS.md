@@ -2,6 +2,37 @@
 
 ## New features
 
+### Derived parameters in dsge_model()
+
+* `dsge_model()` gains a new `derived = function(p) list(...)` argument
+  that maps primitive parameters to derived ones (analogue of Dynare's
+  `# macro` substitutions).  Called by `solve_dsge()` at every solve,
+  so derived parameters track the current primitives during estimation.
+  This enables encoding rich structural DSGEs (e.g. Smets-Wouters 2007)
+  that depend on derived steady-state ratios like `Rk`, `W`, `K_Y`,
+  `beta_bar`, etc.
+
+### Robust Lyapunov solver
+
+* `compute_unconditional_P()` now falls back to the doubling
+  algorithm (Smith / Anderson) when the Kronecker-form system
+  `(I - H ⊗ H)` is near-singular -- typical for medium-scale DSGEs
+  with highly persistent shocks (eigenvalues close to 1, as in
+  Smets-Wouters).  Previously the solver returned a fake fallback of
+  `diag(1e6)`, which inflated `model_covariance()` and DSGE-VAR
+  prior moments by many orders of magnitude.  Affected functions
+  (`model_covariance`, `variance_decomposition`, `bayes_dsge_var`,
+  `bayes_dsge_var_mh`) now produce sensible moments on highly
+  persistent models.
+
+### VAR stability filtering in DSGE-VAR forecasts
+
+* `forecast.dsge_dsgevar()`, `forecast.dsge_dsgevar_mh()` and the
+  matching conditional-forecast methods now drop any posterior draw
+  whose VAR companion matrix has eigenvalues outside the unit disc,
+  emitting a message reporting the number of skipped draws.  Prevents
+  occasional explosive paths when the DSGE-VAR posterior has long tails.
+
 ### Full DSGE-VAR workflow (Dynare-parity)
 
 * **`bayes_dsge_var_mh()`** -- joint Metropolis-Hastings estimation of

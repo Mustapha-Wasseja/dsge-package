@@ -134,33 +134,58 @@ kalman_filter <- function(y, G, H, M, D) {
 #' @param Q Shock covariance matrix (n_s x n_s).
 #' @return P (n_s x n_s) unconditional covariance matrix.
 #' @noRd
-compute_unconditional_P <- function(H, Q) {
+compute_unconditional_P <- function(H, Q, tol = 1e-10, max_iter = 100L) {
   n_s <- nrow(H)
+  Q <- (Q + t(Q)) / 2
 
-  # Solve: vec(P) = (I - H kron H) \ vec(Q)
-  I_nn <- diag(n_s^2)
-  HkH <- kronecker(H, H)
-
-  # Check if (I - H kron H) is invertible (stationary system)
-  A <- I_nn - HkH
-  det_A <- det(A)
-
-  if (abs(det_A) < 1e-14) {
-    # System may not be stationary; use a large diagonal initial P
+  # Bail out immediately if H is non-stationary.
+  ev <- tryCatch(abs(eigen(H, only.values = TRUE)$values),
+                 error = function(e) Inf)
+  if (max(ev) >= 1 - 1e-12) {
+    # Truly non-stationary -- fall back to a large diagonal proxy.
     return(diag(1e6, n_s))
   }
 
-  vec_P <- solve(A, as.numeric(Q))
-  P <- matrix(vec_P, n_s, n_s)
-
-  # Ensure symmetry and positive semi-definiteness
-  P <- (P + t(P)) / 2
-
-  # Check for numerical issues
-  if (any(!is.finite(P)) || any(eigen(P, only.values = TRUE)$values < -1e-10)) {
-    return(diag(1e6, n_s))
+  # ---- 1. Try direct Kronecker solve first (fast and exact for
+  # well-conditioned systems with eigenvalues moderately below 1). ----
+  HkH <- tryCatch(kronecker(H, H), error = function(e) NULL)
+  if (!is.null(HkH)) {
+    A <- diag(n_s^2) - HkH
+    rcond_A <- tryCatch(rcond(A), error = function(e) 0)
+    if (is.finite(rcond_A) && rcond_A > 1e-12) {
+      vec_P <- tryCatch(solve(A, as.numeric(Q)), error = function(e) NULL)
+      if (!is.null(vec_P)) {
+        P <- matrix(vec_P, n_s, n_s)
+        P <- (P + t(P)) / 2
+        if (all(is.finite(P)) &&
+            all(eigen(P, only.values = TRUE)$values > -1e-10)) {
+          return(P)
+        }
+      }
+    }
   }
 
+  # ---- 2. Fall back to the doubling algorithm (Smith / Anderson),
+  # which is numerically stable for H with eigenvalues near 1.
+  #
+  # Iteration:
+  #   P_{k+1}  = P_k + H_k %*% P_k %*% t(H_k)
+  #   H_{k+1}  = H_k %*% H_k
+  # Starting with P_0 = Q, H_0 = H, the limit is
+  #   sum_{k=0}^infinity H^k Q (H^k)' = unconditional variance.
+  P  <- Q
+  Hk <- H
+  for (it in seq_len(max_iter)) {
+    P_new <- P + Hk %*% P %*% t(Hk)
+    P_new <- (P_new + t(P_new)) / 2
+    Hk    <- Hk %*% Hk
+    delta <- max(abs(P_new - P))
+    P     <- P_new
+    if (delta < tol * max(1, max(abs(P)))) break
+    if (any(!is.finite(P))) break
+  }
+
+  if (any(!is.finite(P))) return(diag(1e6, n_s))
   P
 }
 

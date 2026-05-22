@@ -41,6 +41,10 @@ solving, and estimating DSGE models entirely in R. No external software
   methods support fan-chart projections and path-conditioned forecasts
   -- Dynare-parity workflow
 - **Anticipated / news shocks** in `perfect_foresight_nonlinear()`
+- **Derived parameters** in `dsge_model(derived = ...)` for encoding
+  models with Dynare-style `# macro` substitutions (e.g. Smets-Wouters
+  2007), with the doubling-algorithm Lyapunov solver handling
+  highly-persistent state dynamics robustly
 - **Ramsey optimal policy** via linear-quadratic regulator
   (`ramsey_policy()`, `welfare_loss()`)
 - **Second- and third-order perturbation** with pruned simulation

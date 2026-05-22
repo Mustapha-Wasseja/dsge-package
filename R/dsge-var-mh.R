@@ -117,7 +117,9 @@ bayes_dsge_var_mh <- function(model, data, priors,
   if (!is.null(seed)) set.seed(seed)
 
   # ---- 1. Priors ----
-  free_params <- setdiff(model$parameters, names(model$fixed))
+  # Use model$free_parameters so that primitives consumed only by
+  # derived() are also treated as free.
+  free_params <- model$free_parameters
   shock_names <- model$variables$exo_state
   n_free      <- length(free_params)
   n_shocks    <- length(shock_names)

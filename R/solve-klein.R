@@ -90,6 +90,18 @@ solve_dsge <- function(model, params = NULL, shock_sd = NULL, tol = 1e-6,
     params <- c(params, unlist(model$fixed))
   }
 
+  # Evaluate derived parameters (Dynare-style `# macro` substitution)
+  if (!is.null(model$derived)) {
+    derived_vals <- model$derived(as.list(params))
+    if (!is.list(derived_vals))
+      stop("`derived()` must return a named list.", call. = FALSE)
+    # Allow derived() to return derived param names in any order; concat
+    derived_vec <- unlist(derived_vals)
+    # Overwrite if any conflict (derived takes precedence by design)
+    params <- c(params[setdiff(names(params), names(derived_vec))],
+                derived_vec)
+  }
+
   # Check all parameters are present
   missing_params <- setdiff(model$parameters, names(params))
   if (length(missing_params) > 0) {

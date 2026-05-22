@@ -1,6 +1,34 @@
 # ==========================================================================
 # DSGE-VAR forecast methods (unconditional and conditional)
 # ==========================================================================
+
+
+#' Test VAR stability via companion-matrix eigenvalues
+#'
+#' Returns TRUE if all roots of the VAR(p) companion matrix lie inside
+#' the unit circle (with a small tolerance), FALSE otherwise.
+#' @noRd
+.var_is_stable <- function(Phi, n_y, p, include_intercept,
+                           tol = 0.999) {
+  # Lag coefficients are the first (n_y * p) rows of Phi
+  lag_block <- Phi[seq_len(n_y * p), , drop = FALSE]
+  # Build companion matrix: top row blocks = [Phi_1, Phi_2, ..., Phi_p];
+  # remaining (p-1) blocks of identity to push lags forward.
+  k <- n_y * p
+  M <- matrix(0, k, k)
+  # Companion's top n_y rows hold the lag matrices (stacked horizontally,
+  # transposed so that the resulting matrix gives y_t in terms of past y's).
+  for (j in seq_len(p)) {
+    block <- t(lag_block[((j - 1L) * n_y + 1L):(j * n_y), , drop = FALSE])
+    M[seq_len(n_y), ((j - 1L) * n_y + 1L):(j * n_y)] <- block
+  }
+  if (p > 1L) {
+    M[(n_y + 1L):k, 1:(n_y * (p - 1L))] <- diag(n_y * (p - 1L))
+  }
+  ev <- tryCatch(abs(eigen(M, only.values = TRUE)$values),
+                 error = function(e) Inf)
+  max(ev) < tol
+}
 #
 # Provides forecast() and conditional_forecast() methods for objects
 # returned by bayes_dsge_var() and bayes_dsge_var_mh().  Unconditional
@@ -74,8 +102,13 @@ forecast.dsge_dsgevar <- function(object, horizon = 12L,
   paths <- array(0, dim = c(horizon, n_y, total_paths),
                  dimnames = list(NULL, var_names, NULL))
 
+  n_skipped <- 0L
   for (d in seq_len(n_draws)) {
     Phi <- Phi_post[, , d]
+    if (!.var_is_stable(Phi, n_y, p, include_intercept)) {
+      n_skipped <- n_skipped + 1L
+      next
+    }
     Sig <- Sigma_post[, , d]
     Lsig <- tryCatch(t(chol((Sig + t(Sig)) / 2)),
                      error = function(e) {
@@ -98,6 +131,12 @@ forecast.dsge_dsgevar <- function(object, horizon = 12L,
       }
     }
   }
+  if (n_skipped > 0L)
+    message(sprintf("forecast: skipped %d/%d unstable VAR draws.",
+                    n_skipped, n_draws))
+  # Drop zero-row paths from skipped draws
+  good <- apply(paths, 3, function(M) any(M != 0))
+  paths <- paths[, , good, drop = FALSE]
 
   # Add back means
   for (h in seq_len(horizon))
@@ -218,6 +257,10 @@ forecast.dsge_dsgevar_mh <- function(object, horizon = 12L,
                           })
       Phi_d <- ps$Phi_bar + R_xx %*% Zmat %*% t(Lsig_p)
 
+      if (!.var_is_stable(Phi_d, n_y, p, include_intercept)) {
+        path_idx <- path_idx + n_paths
+        next
+      }
       for (pp in seq_len(n_paths)) {
         X <- X_init
         for (h in seq_len(horizon)) {
@@ -376,13 +419,23 @@ conditional_forecast.dsge_dsgevar_mh <- function(object, horizon = 12L,
   conditioned <- matrix(FALSE, horizon, n_y, dimnames = list(NULL, var_names))
   for (cr in constraints) conditioned[cr$period, cr$var_idx] <- TRUE
 
+  n_skipped <- 0L
   for (d in seq_len(n_draws)) {
     Phi <- Phi_post[, , d]
+    if (!.var_is_stable(Phi, n_y, p, include_intercept)) {
+      n_skipped <- n_skipped + 1L
+      next
+    }
     Sig <- Sigma_post[, , d]
     paths[, , d] <- .conditional_var_path(X_init, Phi, Sig, horizon,
                                            constraints, n_y, p, k_var,
                                            include_intercept)
   }
+  if (n_skipped > 0L)
+    message(sprintf("conditional_forecast: skipped %d/%d unstable VAR draws.",
+                    n_skipped, n_draws))
+  good <- apply(paths, 3, function(M) any(M != 0))
+  paths <- paths[, , good, drop = FALSE]
 
   for (h in seq_len(horizon)) paths[h, , ] <- paths[h, , ] + data_means
 

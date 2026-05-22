@@ -4,7 +4,7 @@
 \alias{dsge_model}
 \title{Define a Linear DSGE Model}
 \usage{
-dsge_model(..., fixed = list(), start = list())
+dsge_model(..., fixed = list(), start = list(), derived = NULL)
 }
 \arguments{
 \item{...}{Equation specifications created by \code{\link[=obs]{obs()}}, \code{\link[=unobs]{unobs()}},
@@ -14,6 +14,15 @@ and \code{\link[=state]{state()}}.}
 (constrained) during estimation.}
 
 \item{start}{Named list of starting values for free parameters.}
+
+\item{derived}{Optional function mapping a named list of primitive
+parameter values to a named list of derived parameter values
+(e.g. \code{beta_bar = beta * gamma^(-sigma_c)}).  Called by
+\code{\link[=solve_dsge]{solve_dsge()}} at every solve so derived parameters track the
+current primitives during estimation.  The returned list is
+concatenated with the primitives before equation coefficients are
+evaluated.  Names returned by \code{derived()} may then appear directly
+inside equation coefficients alongside primitive parameters.}
 }
 \value{
 An object of class \code{"dsge_model"} containing:

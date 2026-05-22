@@ -420,7 +420,14 @@ rinvwishart_internal <- function(nu, S) {
   if (nu <= p_dim - 1)
     stop("inverse-Wishart: need nu > p - 1 (have nu = ", nu,
          ", p = ", p_dim, ").", call. = FALSE)
-  S_inv <- solve(S)
+  # Symmetrise + add a small ridge for numerical stability
+  S <- (S + t(S)) / 2
+  s_diag <- diag(S)
+  ridge <- max(.Machine$double.eps * sum(abs(s_diag)) * p_dim,
+               1e-12 * max(abs(s_diag), 1))
+  S_reg <- S + diag(ridge, p_dim)
+  S_inv <- tryCatch(solve(S_reg),
+                    error = function(e) MASS_ginv_local(S_reg))
   L <- chol_safe(S_inv)
   # Bartlett decomposition for the Wishart
   A <- matrix(0, p_dim, p_dim)
@@ -432,7 +439,10 @@ rinvwishart_internal <- function(nu, S) {
   }
   W_chol <- L %*% A
   W <- W_chol %*% t(W_chol)
-  solve(W)
+  W <- (W + t(W)) / 2
+  W_reg <- W + diag(ridge, p_dim)
+  tryCatch(solve(W_reg),
+           error = function(e) MASS_ginv_local(W_reg))
 }
 
 #' Approximate DSGE-VAR log marginal likelihood
