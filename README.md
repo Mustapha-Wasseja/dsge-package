@@ -34,9 +34,12 @@ solving, and estimating DSGE models entirely in R. No external software
 - **IRF matching estimation** (`irf_match()`) -- estimate structural
   parameters by matching DSGE impulse responses to a user-supplied
   target (e.g. VAR-estimated IRFs), Christiano-Eichenbaum-Evans style
-- **DSGE-VAR** (`bayes_dsge_var()`) -- Bayesian VAR with DSGE-implied
-  prior (Del Negro & Schorfheide 2004), bridging the structural DSGE
-  and unrestricted VAR via a single weight parameter lambda
+- **DSGE-VAR** (`bayes_dsge_var()`, `bayes_dsge_var_mh()`) -- Bayesian
+  VAR with DSGE-implied prior (Del Negro & Schorfheide 2004).  The MH
+  variant jointly estimates structural parameters, shock SDs, and the
+  prior weight lambda; `forecast()` and `conditional_forecast()`
+  methods support fan-chart projections and path-conditioned forecasts
+  -- Dynare-parity workflow
 - **Anticipated / news shocks** in `perfect_foresight_nonlinear()`
 - **Ramsey optimal policy** via linear-quadratic regulator
   (`ramsey_policy()`, `welfare_loss()`)
@@ -258,7 +261,7 @@ est <- irf_match(nk,
 ### DSGE-VAR
 
 ```r
-# Bayesian VAR with DSGE-implied prior, weight lambda = 1
+# (a) Conditional-on-(theta,lambda) Bayesian VAR with DSGE prior
 fit_dv <- bayes_dsge_var(sol, data = your_data,
                          p = 4, lambda = 1.0, n_draws = 1000)
 print(fit_dv)
@@ -266,6 +269,21 @@ print(fit_dv)
 sapply(c(0.5, 1, 2, 5),
        function(l) bayes_dsge_var(sol, your_data, p=4, lambda=l,
                                   n_draws=200)$log_marg_lik)
+
+# (b) Joint MH estimation of (theta_DSGE, sigma, lambda) -- Dynare-parity
+priors <- list(kappa = prior("beta",  shape1 = 2, shape2 = 8),
+               psi   = prior("normal", mean = 1.5, sd = 0.25),
+               rhou  = prior("beta",  shape1 = 2, shape2 = 2),
+               rhog  = prior("beta",  shape1 = 8, shape2 = 2))
+fit_mh <- bayes_dsge_var_mh(nk, data = your_data, priors = priors,
+                            p = 4, chains = 2, iter = 2000)
+print(fit_mh)
+
+# Unconditional + conditional forecasts from the DSGE-VAR posterior
+fc_unc  <- forecast(fit_mh, horizon = 12)
+fc_cond <- conditional_forecast(fit_mh, horizon = 12,
+            condition = list(r = c(0.5, 0.5, 0.5, 0.5, rep(NA, 8))))
+plot(fc_unc); plot(fc_cond)
 ```
 
 ### Anticipated / News Shocks (Perfect Foresight)

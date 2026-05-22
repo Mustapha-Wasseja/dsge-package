@@ -2,6 +2,29 @@
 
 ## New features
 
+### Full DSGE-VAR workflow (Dynare-parity)
+
+* **`bayes_dsge_var_mh()`** -- joint Metropolis-Hastings estimation of
+  the DSGE structural parameters, shock standard deviations, and the
+  DSGE-prior weight \eqn{\lambda} jointly.  The VAR coefficients are
+  analytically marginalised at every iteration via the closed-form
+  Normal-inverse-Wishart conjugate posterior, so only
+  \eqn{(\theta_{\text{DSGE}}, \sigma, \lambda)} are sampled.  Reuses
+  the same adaptive RWMH sampler as `bayes_dsge()`.  This brings the
+  package to feature-parity with Dynare's `estimation(..., dsge_var)`
+  command.
+* **`forecast.dsge_dsgevar()`** and **`forecast.dsge_dsgevar_mh()`** --
+  unconditional fan-chart forecasts from a DSGE-VAR posterior.
+  Iterates the VAR forward for each posterior draw, drawing innovations
+  from \eqn{N(0, \Sigma)} and aggregating across draws to produce
+  posterior summary statistics.
+* **`conditional_forecast.dsge_dsgevar()`** and the matching
+  `_mh()` method -- DSGE-VAR conditional forecasts on a user-specified
+  path for a subset of variables.  Each posterior draw is conditioned
+  via a per-period minimum-norm innovation injection (Sigma-metric
+  minimum-norm gap closure), parallel to the Dynare
+  `Dvars_forecast.m` workflow.
+
 ### Closing the most-cited Dynare gaps (five features)
 
 * **`osr()`** -- Optimal Simple Rules.  Finds the parameters of a
