@@ -2,6 +2,49 @@
 
 ## New features
 
+### Closing 9 more Dynare-feature gaps
+
+This release adds the following capabilities, each implemented as a
+standalone function with full documentation and tests:
+
+* **`calibrated_smoother()`** -- run the Kalman smoother on a
+  calibrated (un-estimated) model.  Convenience wrapper around new
+  `smooth_states.dsge_solution()`, `smooth_shocks.dsge_solution()`,
+  `shock_decomposition.dsge_solution()` methods.
+* **`predetermined()`** -- alias for `state(..., shock = FALSE)`,
+  matching Dynare's `predetermined_variables` declaration for users
+  porting models across implementations.
+* **`perfect_foresight_expect_err()`** -- perfect-foresight simulation
+  with expectation errors: agents form subjective expectations at each
+  period and nature delivers the actual shock path (potentially
+  different).  Analogue of Dynare's
+  `perfect_foresight_with_expectation_errors_solver`.
+* **`extended_path()`** -- Fair-Taylor / Adjemian-Juillard extended-path
+  stochastic simulation.  Works on `dsge_solution` (linear) and
+  `dsgenl_model` (nonlinear) objects.
+* **`endogenous_prior()`** -- Christiano-Trabandt-Walentin endogenous
+  prior on model-implied second moments.  Plugs into `bayes_dsge()`
+  via a new `endogenous_prior` argument.
+* **`global_sensitivity()`** -- global sensitivity analysis with
+  Sobol' indices (first-order and total-effect) and Morris elementary
+  effects.  Targets include model-implied moments, IRF magnitudes, or
+  log-likelihood.  Companion to local sensitivity via
+  `parameter_sensitivity()`.
+* **`discretionary_policy()`** -- time-consistent (no-commitment)
+  optimal policy via the Soederlind / Dennis fixed-point iteration.
+  Companion to `ramsey_policy()` (commitment) and `osr()` (restricted
+  simple rules).
+* **`gmm_estimate()`** and **`smm_estimate()`** -- generalised /
+  simulated method-of-moments estimation matching empirical to model
+  moments (SDs, variances, covariances, autocorrelations, correlations).
+  Supports one-step and two-step (optimal) weighting matrices.
+* **`bayes_smc()`** -- tempered Sequential Monte Carlo sampler
+  (Chopin 2002; Herbst & Schorfheide 2014).  Robust alternative to
+  `bayes_dsge()` (RWMH) and `bayes_particle()` (PMMH), especially for
+  multimodal posteriors.  Returns a `dsge_smc` object inheriting from
+  `dsge_bayes` so all existing diagnostics and post-estimation
+  methods work.
+
 ### Derived parameters in dsge_model()
 
 * `dsge_model()` gains a new `derived = function(p) list(...)` argument

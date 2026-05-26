@@ -45,6 +45,27 @@ solving, and estimating DSGE models entirely in R. No external software
   models with Dynare-style `# macro` substitutions (e.g. Smets-Wouters
   2007), with the doubling-algorithm Lyapunov solver handling
   highly-persistent state dynamics robustly
+- **Calibrated smoother** (`calibrated_smoother()`) -- Kalman smoothing
+  on a model that has been solved but not estimated
+- **`predetermined()`** -- alias for state-variable declarations,
+  matching Dynare's `predetermined_variables`
+- **Perfect foresight with expectation errors**
+  (`perfect_foresight_expect_err()`) -- realised vs. subjective shock
+  paths with revising expectations
+- **Extended path simulation** (`extended_path()`) -- stochastic
+  simulation by solving a perfect-foresight path per period
+- **Endogenous priors** (`endogenous_prior()`) -- Christiano-Trabandt-
+  Walentin prior on model-implied second moments
+- **Global sensitivity analysis** (`global_sensitivity()`) -- Sobol'
+  indices and Morris elementary effects
+- **Discretionary optimal policy** (`discretionary_policy()`) --
+  time-consistent (no-commitment) feedback rule via the Soederlind
+  / Dennis fixed-point iteration
+- **Generalised/Simulated Method of Moments** (`gmm_estimate()`,
+  `smm_estimate()`) -- moment-matching estimators with optional
+  two-step weighting
+- **Sequential Monte Carlo sampler** (`bayes_smc()`) -- tempered SMC
+  for robust posterior sampling, especially for multimodal posteriors
 - **Ramsey optimal policy** via linear-quadratic regulator
   (`ramsey_policy()`, `welfare_loss()`)
 - **Second- and third-order perturbation** with pruned simulation

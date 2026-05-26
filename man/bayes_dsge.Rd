@@ -15,7 +15,8 @@ bayes_dsge(
   proposal_scale = 0.1,
   demean = TRUE,
   seed = NULL,
-  n_cores = 1L
+  n_cores = 1L,
+  endogenous_prior = NULL
 )
 }
 \arguments{
@@ -55,6 +56,11 @@ Set to \code{1} (default) for sequential execution.  Values greater than
 is used; on POSIX systems (\code{mclapply} is used instead.  Parallel
 execution requires the \code{dsge} package to be installed (not just loaded
 via \code{devtools::load_all()}).}
+
+\item{endogenous_prior}{Optional \code{dsge_endog_prior} object returned by
+\code{\link[=endogenous_prior]{endogenous_prior()}}.  If supplied, its log density is added to the
+parameter log-prior at every MH evaluation.  Default \code{NULL} (no
+endogenous prior, identical to the original behaviour).}
 }
 \value{
 An object of class \code{"dsge_bayes"} containing posterior draws

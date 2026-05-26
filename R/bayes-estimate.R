@@ -35,6 +35,10 @@
 #'   is used; on POSIX systems (`mclapply` is used instead.  Parallel
 #'   execution requires the `dsge` package to be installed (not just loaded
 #'   via `devtools::load_all()`).
+#' @param endogenous_prior Optional `dsge_endog_prior` object returned by
+#'   [endogenous_prior()].  If supplied, its log density is added to the
+#'   parameter log-prior at every MH evaluation.  Default `NULL` (no
+#'   endogenous prior, identical to the original behaviour).
 #'
 #' @return An object of class `"dsge_bayes"` containing posterior draws
 #'   and diagnostics. For nonlinear models, the result also includes
@@ -88,7 +92,11 @@
 bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
                        warmup = floor(iter / 2), thin = 1L,
                        proposal_scale = 0.1, demean = TRUE, seed = NULL,
-                       n_cores = 1L) {
+                       n_cores = 1L, endogenous_prior = NULL) {
+  if (!is.null(endogenous_prior) &&
+      !inherits(endogenous_prior, "dsge_endog_prior"))
+    stop("`endogenous_prior` must be a dsge_endog_prior object ",
+         "(from endogenous_prior()).", call. = FALSE)
   is_nonlinear <- inherits(model, "dsgenl_model")
   if (!inherits(model, "dsge_model") && !is_nonlinear) {
     stop("`model` must be a dsge_model or dsgenl_model object.", call. = FALSE)
@@ -171,7 +179,11 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
       }
 
       kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D)
-      kf$loglik + log_prior + log_jac
+      lp_endo <- if (!is.null(endogenous_prior))
+                   endogenous_prior$log_density(sol)
+                 else 0
+      if (!is.finite(lp_endo)) return(-Inf)
+      kf$loglik + log_prior + log_jac + lp_endo
     }, error = function(e) {
       solve_fail_count <<- solve_fail_count + 1L
       -Inf
@@ -235,7 +247,8 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
       thin           = thin,
       proposal_scale = proposal_scale,
       mode_hessian   = mode_hessian,
-      chain_seed     = chain_seeds[ch]
+      chain_seed     = chain_seeds[ch],
+      endogenous_prior = endogenous_prior
     )
   }
 
@@ -478,6 +491,8 @@ compute_rhat <- function(chain_draws) {
   mode_hessian   <- chain_args$mode_hessian
   chain_seed     <- chain_args$chain_seed
 
+  endogenous_prior <- chain_args$endogenous_prior
+
   set.seed(chain_seed)
   n_shocks <- length(shock_names)
   solve_fail_count <- 0L
@@ -519,7 +534,11 @@ compute_rhat <- function(chain_draws) {
         y_eval <- sweep(y, 2, ss_obs, "-")
       }
       kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D)
-      kf$loglik + log_prior + log_jac
+      lp_endo <- if (!is.null(endogenous_prior))
+                   endogenous_prior$log_density(sol)
+                 else 0
+      if (!is.finite(lp_endo)) return(-Inf)
+      kf$loglik + log_prior + log_jac + lp_endo
     }, error = function(e) {
       solve_fail_count <<- solve_fail_count + 1L
       -Inf
