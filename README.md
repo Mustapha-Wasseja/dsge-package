@@ -66,6 +66,15 @@ solving, and estimating DSGE models entirely in R. No external software
   two-step weighting
 - **Sequential Monte Carlo sampler** (`bayes_smc()`) -- tempered SMC
   for robust posterior sampling, especially for multimodal posteriors
+- **LaTeX model export** (`model_latex()`) -- write a model's equations
+  to compilable LaTeX, with Greek substitution and time subscripts
+- **Skewed Kalman filter** (`kalman_filter_skewed()`) -- exact
+  third-cumulant propagation for skew-normal structural shocks
+- **Markov-switching volatility** (`ms_filter()`) -- regime-switching
+  shock variances via the Kim (1994) filter, with smoothed regime
+  probabilities
+- **PAC equations** (`pac_weights()`) -- FRB/US-style polynomial
+  adjustment costs with closed-form forward-looking weights
 - **Ramsey optimal policy** via linear-quadratic regulator
   (`ramsey_policy()`, `welfare_loss()`)
 - **Second- and third-order perturbation** with pruned simulation

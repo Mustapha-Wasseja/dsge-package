@@ -2,6 +2,39 @@
 
 ## New features
 
+### Four further Dynare-feature gaps closed
+
+* **`model_latex()`** -- export a model's equations as LaTeX (the
+  analogue of Dynare's `write_latex_dynamic_model`).  Handles both
+  linear and nonlinear models, substitutes Greek-letter parameter
+  names, puts time subscripts on variables and wraps leads in a
+  conditional expectation operator.  Options cover the align/gather
+  environments, numbering, `\\label` emission and a standalone
+  compilable document.  Verified by compiling the generated output
+  with `pdflatex`.
+* **`kalman_filter_skewed()`** -- likelihood evaluation when the
+  structural shocks are skew-normal rather than Gaussian.  The Kalman
+  gain remains the optimal linear filter, and the filter additionally
+  propagates the third cumulant of the state exactly (the observation
+  equation carries no measurement error, so the update is a
+  deterministic linear projection).  The predictive density is built
+  from univariate skew-normals matched to the exact model-implied
+  marginal skewness, and reduces exactly to the Gaussian filter when
+  all skewness is zero.
+* **`ms_filter()`** -- Markov-switching shock volatility via the Kim
+  (1994) filter, with Hamilton regime probabilities, the K^2-to-K
+  collapse, the Kim backward smoother, and print/plot methods.  At
+  first order the policy functions are certainty-equivalent, so the
+  regime rescales only the shock loading and a single solve suffices.
+* **`pac_weights()`, `pac_target_loading()`, `pac_simulate()`** --
+  FRB/US-style polynomial adjustment cost equations.  Factors the
+  Euler equation's characteristic polynomial into stable and unstable
+  roots, returns the implied lag coefficients and forward weights
+  (normalised so long-run homogeneity holds exactly), and collapses
+  the infinite forward sum into closed form when the target follows a
+  linear state process.
+
+
 ### Closing 9 more Dynare-feature gaps
 
 This release adds the following capabilities, each implemented as a
