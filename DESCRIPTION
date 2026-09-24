@@ -8,7 +8,7 @@ Description: Specify, solve, and estimate dynamic stochastic general
     Supports both linear models via an equation-based formula interface
     and nonlinear models via string-based equations with perturbation up to
     third order (Schmitt-Grohe and Uribe, 2004
-    <doi:10.1016/j.jedc.2003.06.003>).
+    <doi:10.1016/S0165-1889(03)00043-5>).
     Solution uses the method of undetermined coefficients (Klein, 2000
     <doi:10.1016/S0165-1889(99)00045-7>). Likelihood evaluated via the
     Kalman filter or a bootstrap particle filter (Gordon et al., 1993).
