@@ -7,13 +7,16 @@
 solve_dsge(model, params = NULL, shock_sd = NULL, tol = 1e-06, order = 1L)
 }
 \arguments{
-\item{model}{A \code{dsge_model} or \code{dsgenl_model} object.}
+\item{model}{A \code{dsge_model} or \code{dsgenl_model} object, or a Dynare model
+imported with \code{\link[=read_dynare]{read_dynare()}}.}
 
 \item{params}{Named numeric vector of parameter values. If \code{NULL},
-uses the model's fixed and start values.}
+uses the model's fixed and start values (for an imported Dynare model,
+its calibration).}
 
 \item{shock_sd}{Named numeric vector of shock standard deviations.
-If \code{NULL}, defaults to 1 for all shocks.}
+If \code{NULL}, defaults to 1 for all shocks (for an imported Dynare model,
+the standard deviations from its \code{shocks} block).}
 
 \item{tol}{Tolerance for classifying eigenvalues as stable (|lambda| < 1 + tol).
 Default is 1e-6.}

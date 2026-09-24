@@ -12,6 +12,9 @@ solving, and estimating DSGE models entirely in R. No external software
 
 **Key capabilities:**
 
+- **Dynare model import** (`read_dynare()`) -- read a Dynare `.mod`
+  file straight into dsge, including calibration, steady state, shocks
+  and priors, and solve or estimate it without Dynare or MATLAB
 - **Linear models** via formula interface (`obs()`, `unobs()`, `state()`)
 - **Nonlinear models** via string-based equations with perturbation up to
   third order (`dsgenl_model()`, `solve_dsge(order = 1, 2, 3)`)
@@ -336,6 +339,25 @@ pf_news <- perfect_foresight_nonlinear(rbc,
 plot(pf_news)
 ```
 
+### Importing Dynare Models
+
+```r
+# Read a Dynare .mod file: model, calibration, steady state, shocks, priors
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+rbc                        # summary, auxiliary variables and any notes
+
+sol <- solve_dsge(rbc)     # solves at the file's calibration
+plot(irf(sol, periods = 40))
+
+# Estimate with the priors from the file's estimated_params block
+# fit <- bayes_dsge(my_model, data = my_data)
+```
+
+Dynare timing is handled automatically (lags become auxiliary state
+variables, so `k(-1)` capital timing needs no rewriting). Files that use
+the macro processor (`@#`) can be expanded first with
+`dynare model.mod savemacro onlymacro`.
+
 ### Parallel MCMC Chains
 
 ```r
@@ -385,6 +407,7 @@ fit_bayes <- bayes_dsge(nk, data = your_data, priors = my_priors,
 | LaTeX model export | Yes | Via Dynare | Yes |
 | R model interface (coef, vcov, plot) | Yes | No | No |
 | Formula-based specification | Yes | No | No |
+| Reads Dynare .mod files | Yes (translated to R) | Yes (runs Dynare) | Yes |
 
 ## Documentation
 
