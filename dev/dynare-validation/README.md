@@ -54,6 +54,14 @@ mode on the US data (Dynare with `lik_init = 1`, `presample = 4`):
 | Log-likelihood | -1714.061158377 | -1714.061158377 |
 | Log-prior (36 priors, incl. 7 `inv_gamma_pdf`) | -23.994069948 | -23.994069948 |
 | Log-posterior kernel | -1738.055228325 | -1738.055228325 |
+| At dsge's posterior median (600-draw `bayes_dsge()` run): log-likelihood | -1471.497498370 | -1471.497498370 |
+| At dsge's posterior median: log-prior | -31.952176636 | -31.952176636 |
+
+The short `bayes_dsge()` run (1 chain, 600 draws, 38 minutes) moved to a
+region whose posterior kernel is about 235 log points above the published
+mode under these settings (`first_obs = 1` on all 230 quarters,
+`lik_init = 1`); Dynare evaluates exactly the same values there, so the
+two programs define the same posterior.
 
 Dynare prints the log-likelihood to four decimals. The Dynare example
 files are GPL-licensed and are not included in this repository; they were
