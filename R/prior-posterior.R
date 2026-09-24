@@ -144,6 +144,13 @@ compute_prior_stats <- function(pr) {
                  sd = sqrt(p$shape) / p$rate),
     uniform = list(mean = (p$min + p$max) / 2,
                    sd = (p$max - p$min) / sqrt(12)),
+    inv_gamma1 = {
+      m <- if (p$nu > 1) {
+        sqrt(p$s / 2) * exp(lgamma((p$nu - 1) / 2) - lgamma(p$nu / 2))
+      } else Inf
+      v <- if (p$nu > 2) p$s / (p$nu - 2) - m^2 else Inf
+      list(mean = m, sd = sqrt(v))
+    },
     inv_gamma = {
       # For shape > 1: mean = scale/(shape-1), var = scale^2/((shape-1)^2*(shape-2))
       if (p$shape > 2) {

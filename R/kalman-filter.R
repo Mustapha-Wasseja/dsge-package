@@ -19,6 +19,7 @@
 #' @param H Transition matrix (n_s x n_s).
 #' @param M Shock impact matrix (n_s x n_shocks).
 #' @param D Observation selection matrix (n_obs x n_c).
+#' @param presample Number of initial periods excluded from the likelihood.
 #'
 #' @return A list with components:
 #'   \describe{
@@ -30,7 +31,7 @@
 #'     \item{predicted_obs}{Matrix of predicted observations (T x n_obs).}
 #'   }
 #' @noRd
-kalman_filter <- function(y, G, H, M, D) {
+kalman_filter <- function(y, G, H, M, D, presample = 0L) {
   y <- as.matrix(y)
   n_T <- nrow(y)
   n_obs <- ncol(y)
@@ -95,10 +96,13 @@ kalman_filter <- function(y, G, H, M, D) {
 
     F_inv <- solve(F_t)
 
-    # Log-likelihood contribution
-    loglik <- loglik - 0.5 * (n_obs * log(2 * pi) +
-                                log(det_F) +
-                                as.numeric(t(v_t) %*% F_inv %*% v_t))
+    # Log-likelihood contribution (the first `presample` periods only
+    # initialise the filter, as with Dynare's presample option)
+    if (t > presample) {
+      loglik <- loglik - 0.5 * (n_obs * log(2 * pi) +
+                                  log(det_F) +
+                                  as.numeric(t(v_t) %*% F_inv %*% v_t))
+    }
 
     # === Update step ===
     K_t <- P_pred %*% t(Z) %*% F_inv

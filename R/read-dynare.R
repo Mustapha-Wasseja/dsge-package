@@ -60,6 +60,8 @@
 #'     or `NULL`.}
 #'   \item{occbin}{Occasionally binding constraints and regime models, or
 #'     `NULL`.}
+#'   \item{estimation}{Options of the file's `estimation` command used by
+#'     [estimate()] and [bayes_dsge()] (`presample`, `first_obs`, `nobs`).}
 #'   \item{commands}{List of Dynare commands found in the file (such as
 #'     `stoch_simul` or `estimation`), recorded but not executed.}
 #'   \item{notes}{Character vector of translation notes, including
@@ -90,8 +92,10 @@
 #' solution and IRF output.
 #'
 #' **Steady state and shocks.** `steady_state_model` becomes the model's
-#' steady-state function and `initval` supplies starting values for the
-#' numerical solver. In the `shocks` block, standard deviations,
+#' steady-state function (variables it does not set keep their `initval`
+#' value, 0 by default, as in Dynare) and `initval` supplies starting
+#' values for the numerical solver. Models declared `model(linear)` are
+#' linearised with an exact Jacobian. In the `shocks` block, standard deviations,
 #' variances, covariances and correlations are supported; correlated shocks
 #' are orthogonalised by Cholesky factorisation in `varexo` order, which
 #' reproduces Dynare's impulse responses. Deterministic paths
@@ -107,13 +111,20 @@
 #' variables are dropped with a note.
 #'
 #' **Priors.** Dynare's mean/standard-deviation prior parameterisation is
-#' converted to dsge's: `normal_pdf`, `beta_pdf`, `gamma_pdf`,
-#' `uniform_pdf` and `inv_gamma2_pdf` are translated exactly.
-#' `inv_gamma_pdf` / `inv_gamma1_pdf` (a prior on a standard deviation) has
-#' no exact dsge counterpart and is approximated by an inverse gamma with
-#' the same mean and standard deviation (an infinite standard deviation
-#' maps to shape 2). Shifted or generalised priors and `weibull_pdf` are
-#' not translated and are listed in `notes`.
+#' converted to dsge's, exactly: `normal_pdf`, `beta_pdf`, `gamma_pdf`,
+#' `uniform_pdf`, `inv_gamma2_pdf`, and `inv_gamma_pdf` / `inv_gamma1_pdf`
+#' (a prior on a standard deviation, translated to the `"inv_gamma1"`
+#' distribution of [prior()] with Dynare's own parameterisation). Shape
+#' names are case-insensitive. Shifted or generalised priors and
+#' `weibull_pdf` are not translated and are listed in `notes`.
+#'
+#' **Estimation options.** `presample`, `first_obs` and `nobs` from the
+#' file's `estimation` command are stored in `estimation` and used by
+#' [estimate()] and [bayes_dsge()]: the data are restricted to the
+#' estimation sample and the first `presample` observations only
+#' initialise the Kalman filter. dsge always initialises the filter at the
+#' stationary distribution (Dynare's `lik_init = 1`); other `lik_init`
+#' values are reported in `notes`.
 #'
 #' **Optimal policy.** With `planner_objective` and `ramsey_model` or
 #' `ramsey_policy`, the planner's first-order conditions are derived
@@ -828,12 +839,14 @@ dyn_build <- function(p, observed = NULL) {
   ss_guess <- fill_aux(base_guess)
 
   ss_function <- NULL
+  ss_defaults <- stats::setNames(numeric(length(endo)), endo)
+  for (v in intersect(names(init_vals), endo)) ss_defaults[v] <- init_vals[[v]]
   if (!is.null(p$blocks$steady_state_model)) {
     if (length(mults) > 0L) {
       # Ramsey: the file's steady state only covers the original variables;
       # use it as the starting guess for the augmented system.
       ssf <- dyn_ss_function(p$blocks$steady_state_model, cal_env, endo,
-                             exo_ss, function(v) v)
+                             exo_ss, function(v) v, defaults = ss_defaults)
       guess <- tryCatch(ssf(params), error = function(e) NULL)
       if (!is.null(guess)) {
         base_guess[endo] <- guess[endo]
@@ -841,7 +854,8 @@ dyn_build <- function(p, observed = NULL) {
       }
     } else {
       ss_function <- dyn_ss_function(p$blocks$steady_state_model, cal_env,
-                                     endo, exo_ss, fill_aux)
+                                     endo, exo_ss, fill_aux,
+                                     defaults = ss_defaults)
     }
   }
 
@@ -908,6 +922,7 @@ dyn_build <- function(p, observed = NULL) {
   fixed <- as.list(params[fixed_names])
 
   model <- make_model(all_eqs, fixed, start)
+  model$linear <- p$model_linear
   if (length(ss_links) > 0L) {
     ss_eqs <- vapply(all_eqs, function(eq) {
       dyn_rewrite_ids(eq, function(name, lag, has_index) {
@@ -981,6 +996,10 @@ dyn_build <- function(p, observed = NULL) {
                              "to solve_dsge() to simulate."))
   }
 
+  estimation <- dyn_estimation_options(p$commands, cal_env)
+  notes <- c(notes, estimation$notes)
+  estimation$notes <- NULL
+
   policy <- dyn_policy_info(p, cal_env, endo, params, spec = spec,
                             extra = policy_extra)
   notes <- c(notes, policy$notes)
@@ -1012,6 +1031,7 @@ dyn_build <- function(p, observed = NULL) {
     aux = aux,
     policy = policy$policy,
     occbin = occbin,
+    estimation = estimation,
     commands = p$commands,
     notes = unique(notes)
   )
@@ -1169,7 +1189,8 @@ format_num <- function(x) {
 
 #' Build a steady-state function from a steady_state_model block
 #' @noRd
-dyn_ss_function <- function(statements, cal_env, endo, exo_ss, fill_aux) {
+dyn_ss_function <- function(statements, cal_env, endo, exo_ss, fill_aux,
+                            defaults = NULL) {
   assigns <- lapply(statements, function(st) {
     if (!grepl("^[A-Za-z_][A-Za-z0-9_]*\\s*=[^=]", st)) {
       stop("Unsupported statement in steady_state_model: ", st,
@@ -1178,12 +1199,10 @@ dyn_ss_function <- function(statements, cal_env, endo, exo_ss, fill_aux) {
     list(name = trimws(sub("=.*$", "", st)),
          expr = parse(text = dyn_translate_math(sub("^[^=]*=", "", st))))
   })
-  defined <- vapply(assigns, `[[`, "", "name")
-  missing_v <- setdiff(endo, defined)
-  if (length(missing_v) > 0L) {
-    stop("steady_state_model does not define: ",
-         paste(missing_v, collapse = ", "), call. = FALSE)
-  }
+  # As in Dynare, variables not set in steady_state_model keep their
+  # initval value (0 by default).
+  if (is.null(defaults)) defaults <- stats::setNames(numeric(length(endo)), endo)
+  force(defaults)
   force(cal_env)
   force(exo_ss)
   force(fill_aux)
@@ -1192,6 +1211,7 @@ dyn_ss_function <- function(statements, cal_env, endo, exo_ss, fill_aux) {
     for (nm in ls(cal_env)) assign(nm, get(nm, envir = cal_env), envir = env)
     for (nm in names(exo_ss)) assign(nm, exo_ss[[nm]], envir = env)
     for (nm in names(params)) assign(nm, params[[nm]], envir = env)
+    for (nm in endo) assign(nm, defaults[[nm]], envir = env)
     for (a in assigns) {
       assign(a$name, eval(a$expr, envir = env), envir = env)
     }
@@ -1438,7 +1458,7 @@ dyn_parse_estimated <- function(statements, init_statements, params, exo,
     fields <- dyn_split_commas(st)
     tg <- target(fields, st)
     rest <- tg$rest
-    shape_pos <- which(rest %in% names(dyn_prior_shapes))
+    shape_pos <- which(tolower(rest) %in% names(dyn_prior_shapes))
     init <- lower <- upper <- mean <- sd <- NA_real_
     shape <- NA_character_
     p3 <- p4 <- NA_real_
@@ -1455,7 +1475,7 @@ dyn_parse_estimated <- function(statements, init_statements, params, exo,
         lower <- num(pre[2], what)
         upper <- num(pre[3], what)
       }
-      shape <- dyn_prior_shapes[[rest[sp]]]
+      shape <- dyn_prior_shapes[[tolower(rest[sp])]]
       post <- rest[-seq_len(sp)]
       mean <- num(post[1], what)
       sd <- num(post[2], what)
@@ -1571,15 +1591,18 @@ dyn_translate_prior <- function(shape, mean, sd, p3, p4) {
                                mean / sd^2)
     return(out)
   }
-  # Inverse gamma: dsge density x^-(a+1) exp(-b/x); moment matching.
+  if (shape == "inv_gamma1") {
+    ig <- inv_gamma1_from_moments(mean, sd)
+    out$prior <- prior("inv_gamma1", s = ig$s, nu = ig$nu)
+    out$translation <- sprintf("inv_gamma1(s = %g, nu = %g)", ig$s, ig$nu)
+    return(out)
+  }
+  # inv_gamma2_pdf: inverse gamma on the parameter itself, dsge density
+  # x^-(a+1) exp(-b/x), with the same moment matching as Dynare.
   a <- if (is.finite(sd)) 2 + mean^2 / sd^2 else 2
   b <- mean * (a - 1)
   out$prior <- prior("inv_gamma", shape = a, scale = b)
   out$translation <- sprintf("inv_gamma(shape = %g, scale = %g)", a, b)
-  if (shape == "inv_gamma1") {
-    out$note <- paste0("inv_gamma_pdf approximated by an inverse gamma with ",
-                       "the same mean and sd")
-  }
   out
 }
 
@@ -1603,6 +1626,63 @@ dyn_unfix <- function(model, nms) {
   model$fixed[nms] <- NULL
   model$free_parameters <- union(model$free_parameters, nms)
   model
+}
+
+#' Options of the file's estimation command used by dsge's estimators
+#' @noRd
+dyn_estimation_options <- function(commands, cal_env) {
+  est <- Filter(function(cm) cm$name == "estimation", commands)
+  out <- list(presample = 0L, first_obs = 1L, nobs = NA_integer_,
+              datafile = NULL, notes = character(0))
+  if (length(est) == 0L) return(out)
+  opts <- dyn_split_commas(est[[length(est)]]$options)
+  kv <- list()
+  for (o in opts) {
+    if (!grepl("=", o)) next
+    kv[[tolower(trimws(sub("=.*$", "", o)))]] <- trimws(sub("^[^=]*=", "", o))
+  }
+  int_opt <- function(key, default) {
+    if (is.null(kv[[key]]) || grepl("^\\[", kv[[key]])) return(default)
+    as.integer(dyn_eval(kv[[key]], cal_env, paste0("estimation option ", key)))
+  }
+  out$presample <- int_opt("presample", 0L)
+  out$first_obs <- int_opt("first_obs", 1L)
+  out$nobs <- int_opt("nobs", NA_integer_)
+  out$datafile <- kv$datafile
+  lik_init <- int_opt("lik_init", 1L)
+  if (lik_init != 1L) {
+    out$notes <- c(out$notes, paste0(
+      "estimation uses lik_init = ", lik_init, "; dsge initialises the ",
+      "Kalman filter at the stationary distribution (Dynare's lik_init = 1)."))
+  }
+  if (int_opt("prefilter", 0L) != 0L) {
+    out$notes <- c(out$notes, paste0(
+      "estimation uses prefilter = 1 (demeaned data); pass demeaned data ",
+      "or remove the constants to reproduce it."))
+  }
+  out
+}
+
+#' @noRd
+dyn_estimation_option <- function(x, key) {
+  v <- x$estimation[[key]]
+  if (is.null(v)) 0L else v
+}
+
+#' Restrict data to the file's first_obs / nobs sample
+#' @noRd
+dyn_estimation_sample <- function(x, data) {
+  est <- x$estimation
+  if (is.null(est)) return(data)
+  first <- if (is.null(est$first_obs)) 1L else est$first_obs
+  n <- nrow(data)
+  last <- if (is.null(est$nobs) || is.na(est$nobs)) n else first + est$nobs - 1L
+  if (first == 1L && last == n) return(data)
+  if (last > n) {
+    stop("The data have ", n, " rows but the estimation command asks for ",
+         "observations ", first, " to ", last, ".", call. = FALSE)
+  }
+  data[first:last, , drop = FALSE]
 }
 
 #' Rename data columns for observed variables with measurement error
