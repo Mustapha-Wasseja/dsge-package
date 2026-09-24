@@ -13,8 +13,10 @@ solving, and estimating DSGE models entirely in R. No external software
 **Key capabilities:**
 
 - **Dynare model import** (`read_dynare()`) -- read a Dynare `.mod`
-  file straight into dsge, including calibration, steady state, shocks
-  and priors, and solve or estimate it without Dynare or MATLAB
+  file straight into dsge (macro directives, calibration, steady state,
+  shocks, measurement errors, priors, Ramsey/discretionary/OSR policy
+  and OccBin constraints), and solve or estimate it without Dynare or
+  MATLAB
 - **Linear models** via formula interface (`obs()`, `unobs()`, `state()`)
 - **Nonlinear models** via string-based equations with perturbation up to
   third order (`dsgenl_model()`, `solve_dsge(order = 1, 2, 3)`)
@@ -349,14 +351,20 @@ rbc                        # summary, auxiliary variables and any notes
 sol <- solve_dsge(rbc)     # solves at the file's calibration
 plot(irf(sol, periods = 40))
 
-# Estimate with the priors from the file's estimated_params block
-# fit <- bayes_dsge(my_model, data = my_data)
+# Files with estimated_params / varobs estimate directly, using the
+# translated priors (data columns named as in Dynare)
+# fit <- bayes_dsge(read_dynare("model.mod"), data = my_data)
+
+# Optimal policy and occasionally binding constraints declared in the file
+# ram <- solve_dsge(read_dynare("ramsey.mod"))       # ramsey_model
+# opt <- osr(read_dynare("osr.mod"))                  # osr_params, optim_weights
+# zlb <- simulate_occbin(read_dynare("zlb.mod"))      # occbin_constraints
 ```
 
 Dynare timing is handled automatically (lags become auxiliary state
-variables, so `k(-1)` capital timing needs no rewriting). Files that use
-the macro processor (`@#`) can be expanded first with
-`dynare model.mod savemacro onlymacro`.
+variables, so `k(-1)` capital timing needs no rewriting), and macro
+directives (`@#define`, `@#for`, `@#if`, ...) are expanded in R. Results
+have been checked against Dynare 6.0 (see `dev/dynare-validation/`).
 
 ### Parallel MCMC Chains
 
