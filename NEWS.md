@@ -1,44 +1,109 @@
-# dsge 1.1.1
+# dsge 1.2.0
+
+This release collects the additions made between May and August 2026,
+which were previously listed under 1.1.1.  Dates are taken from the git
+history.  Entries within each section are in chronological order.
 
 ## New features
 
-### Four further Dynare-feature gaps closed
+### Nonlinear perfect foresight (2026-05-20)
 
-* **`model_latex()`** -- export a model's equations as LaTeX (the
-  analogue of Dynare's `write_latex_dynamic_model`).  Handles both
-  linear and nonlinear models, substitutes Greek-letter parameter
-  names, puts time subscripts on variables and wraps leads in a
-  conditional expectation operator.  Options cover the align/gather
-  environments, numbering, `\\label` emission and a standalone
-  compilable document.  Verified by compiling the generated output
-  with `pdflatex`.
-* **`kalman_filter_skewed()`** -- likelihood evaluation when the
-  structural shocks are skew-normal rather than Gaussian.  The Kalman
-  gain remains the optimal linear filter, and the filter additionally
-  propagates the third cumulant of the state exactly (the observation
-  equation carries no measurement error, so the update is a
-  deterministic linear projection).  The predictive density is built
-  from univariate skew-normals matched to the exact model-implied
-  marginal skewness, and reduces exactly to the Gaussian filter when
-  all skewness is zero.
-* **`ms_filter()`** -- Markov-switching shock volatility via the Kim
-  (1994) filter, with Hamilton regime probabilities, the K^2-to-K
-  collapse, the Kim backward smoother, and print/plot methods.  At
-  first order the policy functions are certainty-equivalent, so the
-  regime rescales only the shock loading and a single solve suffices.
-* **`pac_weights()`, `pac_target_loading()`, `pac_simulate()`** --
-  FRB/US-style polynomial adjustment cost equations.  Factors the
-  Euler equation's characteristic polynomial into stable and unstable
-  roots, returns the implied lag coefficients and forward weights
-  (normalised so long-run homogeneity holds exactly), and collapses
-  the infinite forward sum into closed form when the target follows a
-  linear state process.
+* New `perfect_foresight_nonlinear()`: stacked-time Newton (LBJ) solver for
+  deterministic transition paths of nonlinear DSGE models.  Solves the full
+  nonlinear equilibrium conditions simultaneously over the entire horizon,
+  giving paths exact to Newton tolerance even for large shocks.  Uses a
+  block-bidiagonal Jacobian assembled by numerical finite differences and
+  solved by O(T n³) block back-substitution; Armijo backtracking stabilises
+  convergence.  Returns the same `dsge_perfect_foresight` class as the
+  linearized `perfect_foresight()`, so all existing `plot`, `print`, and
+  `summary` methods apply unchanged.  Reference: Juillard et al. (1998),
+  *Journal of Economic Dynamics and Control*, 22, 1291–1318.
 
+### Variance decomposition (2026-05-21)
 
-### Closing 9 more Dynare-feature gaps
+* New `variance_decomposition()` function with methods for
+  `dsge_solution`, `dsge_fit`, and `dsge_bayes`.  Computes either:
+  - the **unconditional** decomposition (default), giving each shock's
+    share of the long-run steady-state variance of every observable
+    via per-shock discrete-Lyapunov solves; or
+  - the **forecast-error variance decomposition (FEVD)** when a vector
+    of integer horizons is supplied, giving each shock's share of the
+    h-step-ahead forecast-error variance.
+* Returns a `dsge_variance_decomposition` object with both raw
+  contributions (in squared units) and percent shares; row sums equal
+  100 by construction.
+* New `plot.dsge_variance_decomposition()` draws horizontal stacked
+  bars for the unconditional case and one stacked-bar panel per
+  observable (horizons on the x-axis) for FEVD.  Uses the standard
+  package theme palette and styling.
 
-This release adds the following capabilities, each implemented as a
-standalone function with full documentation and tests:
+### Closing the most-cited Dynare gaps: five features (2026-05-21)
+
+* **`osr()`** -- Optimal Simple Rules.  Finds the parameters of a
+  user-specified, restricted policy rule that minimise an unconditional
+  quadratic welfare loss subject to the model's rational-expectations
+  equilibrium.  Complements the existing fully-flexible `ramsey_policy()`.
+  Implements Dennis (2007).
+* **`conditional_forecast()`** -- forecasts conditional on a pre-specified
+  path for a subset of observables (e.g. holding the policy rate fixed
+  for k periods).  Implements the Waggoner & Zha (1999) minimum-norm
+  shock approach.  Returns a `dsge_conditional_forecast` object that
+  inherits from `dsge_forecast` so existing plot methods work.
+* **`irf_match()`** -- impulse-response matching estimation.  Estimates
+  the model's structural parameters and shock SDs by minimising the
+  weighted squared distance between model IRFs and a target IRF data
+  frame (typically from a VAR).  Follows Christiano, Eichenbaum & Evans
+  (1999).
+* **`bayes_dsge_var()`** -- Bayesian VAR with DSGE-implied prior
+  (Del Negro & Schorfheide 2004).  Combines a Bayesian VAR(p) with prior
+  moments centred on the DSGE's second-moment implications, controlled
+  by a single hyperparameter lambda.  Returns posterior draws of the
+  VAR coefficient matrix and innovation covariance and an approximate
+  log marginal likelihood for choosing lambda.
+* **Multi-period / "news-shock" paths in perfect foresight**.  Both
+  `perfect_foresight()` and `perfect_foresight_nonlinear()` already
+  accept vector-valued shock paths; documentation now explicitly calls
+  out this capability.  The nonlinear stacked-time solver correctly
+  models anticipated shocks (agents adjust at t=1 in expectation of a
+  future shock); the linearised version uses the recursive policy and
+  treats the path as a sequence of period-by-period surprises.
+
+### Full DSGE-VAR workflow, Dynare parity (2026-05-21)
+
+* **`bayes_dsge_var_mh()`** -- joint Metropolis-Hastings estimation of
+  the DSGE structural parameters, shock standard deviations, and the
+  DSGE-prior weight lambda jointly.  The VAR coefficients are
+  analytically marginalised at every iteration via the closed-form
+  Normal-inverse-Wishart conjugate posterior, so only
+  (theta_DSGE, sigma, lambda) are sampled.  Reuses the same adaptive
+  RWMH sampler as `bayes_dsge()`.  This brings the package to
+  feature-parity with Dynare's `estimation(..., dsge_var)` command.
+* **`forecast.dsge_dsgevar()`** and **`forecast.dsge_dsgevar_mh()`** --
+  unconditional fan-chart forecasts from a DSGE-VAR posterior.
+  Iterates the VAR forward for each posterior draw, drawing innovations
+  from N(0, Sigma) and aggregating across draws to produce posterior
+  summary statistics.
+* **`conditional_forecast.dsge_dsgevar()`** and the matching
+  `_mh()` method -- DSGE-VAR conditional forecasts on a user-specified
+  path for a subset of variables.  Each posterior draw is conditioned
+  via a per-period minimum-norm innovation injection (Sigma-metric
+  minimum-norm gap closure), parallel to the Dynare
+  `Dvars_forecast.m` workflow.
+
+### Derived parameters in dsge_model() (2026-05-22)
+
+* `dsge_model()` gains a new `derived = function(p) list(...)` argument
+  that maps primitive parameters to derived ones (analogue of Dynare's
+  `# macro` substitutions).  Called by `solve_dsge()` at every solve,
+  so derived parameters track the current primitives during estimation.
+  This enables encoding rich structural DSGEs (e.g. Smets-Wouters 2007)
+  that depend on derived steady-state ratios like `Rk`, `W`, `K_Y`,
+  `beta_bar`, etc.
+
+### Closing 9 more Dynare-feature gaps (2026-05-26)
+
+Each is implemented as a standalone function with full documentation
+and tests:
 
 * **`calibrated_smoother()`** -- run the Kalman smoother on a
   calibrated (un-estimated) model.  Convenience wrapper around new
@@ -78,112 +143,41 @@ standalone function with full documentation and tests:
   `dsge_bayes` so all existing diagnostics and post-estimation
   methods work.
 
-### Derived parameters in dsge_model()
+### Four further Dynare-feature gaps closed (2026-08-20)
 
-* `dsge_model()` gains a new `derived = function(p) list(...)` argument
-  that maps primitive parameters to derived ones (analogue of Dynare's
-  `# macro` substitutions).  Called by `solve_dsge()` at every solve,
-  so derived parameters track the current primitives during estimation.
-  This enables encoding rich structural DSGEs (e.g. Smets-Wouters 2007)
-  that depend on derived steady-state ratios like `Rk`, `W`, `K_Y`,
-  `beta_bar`, etc.
-
-### Robust Lyapunov solver
-
-* `compute_unconditional_P()` now falls back to the doubling
-  algorithm (Smith / Anderson) when the Kronecker-form system
-  `(I - H ⊗ H)` is near-singular -- typical for medium-scale DSGEs
-  with highly persistent shocks (eigenvalues close to 1, as in
-  Smets-Wouters).  Previously the solver returned a fake fallback of
-  `diag(1e6)`, which inflated `model_covariance()` and DSGE-VAR
-  prior moments by many orders of magnitude.  Affected functions
-  (`model_covariance`, `variance_decomposition`, `bayes_dsge_var`,
-  `bayes_dsge_var_mh`) now produce sensible moments on highly
-  persistent models.
-
-### VAR stability filtering in DSGE-VAR forecasts
-
-* `forecast.dsge_dsgevar()`, `forecast.dsge_dsgevar_mh()` and the
-  matching conditional-forecast methods now drop any posterior draw
-  whose VAR companion matrix has eigenvalues outside the unit disc,
-  emitting a message reporting the number of skipped draws.  Prevents
-  occasional explosive paths when the DSGE-VAR posterior has long tails.
-
-### Full DSGE-VAR workflow (Dynare-parity)
-
-* **`bayes_dsge_var_mh()`** -- joint Metropolis-Hastings estimation of
-  the DSGE structural parameters, shock standard deviations, and the
-  DSGE-prior weight \eqn{\lambda} jointly.  The VAR coefficients are
-  analytically marginalised at every iteration via the closed-form
-  Normal-inverse-Wishart conjugate posterior, so only
-  \eqn{(\theta_{\text{DSGE}}, \sigma, \lambda)} are sampled.  Reuses
-  the same adaptive RWMH sampler as `bayes_dsge()`.  This brings the
-  package to feature-parity with Dynare's `estimation(..., dsge_var)`
-  command.
-* **`forecast.dsge_dsgevar()`** and **`forecast.dsge_dsgevar_mh()`** --
-  unconditional fan-chart forecasts from a DSGE-VAR posterior.
-  Iterates the VAR forward for each posterior draw, drawing innovations
-  from \eqn{N(0, \Sigma)} and aggregating across draws to produce
-  posterior summary statistics.
-* **`conditional_forecast.dsge_dsgevar()`** and the matching
-  `_mh()` method -- DSGE-VAR conditional forecasts on a user-specified
-  path for a subset of variables.  Each posterior draw is conditioned
-  via a per-period minimum-norm innovation injection (Sigma-metric
-  minimum-norm gap closure), parallel to the Dynare
-  `Dvars_forecast.m` workflow.
-
-### Closing the most-cited Dynare gaps (five features)
-
-* **`osr()`** -- Optimal Simple Rules.  Finds the parameters of a
-  user-specified, restricted policy rule that minimise an unconditional
-  quadratic welfare loss subject to the model's rational-expectations
-  equilibrium.  Complements the existing fully-flexible `ramsey_policy()`.
-  Implements Dennis (2007).
-* **`conditional_forecast()`** -- forecasts conditional on a pre-specified
-  path for a subset of observables (e.g. holding the policy rate fixed
-  for k periods).  Implements the Waggoner & Zha (1999) minimum-norm
-  shock approach.  Returns a `dsge_conditional_forecast` object that
-  inherits from `dsge_forecast` so existing plot methods work.
-* **`irf_match()`** -- impulse-response matching estimation.  Estimates
-  the model's structural parameters and shock SDs by minimising the
-  weighted squared distance between model IRFs and a target IRF data
-  frame (typically from a VAR).  Follows Christiano, Eichenbaum & Evans
-  (1999).
-* **`bayes_dsge_var()`** -- Bayesian VAR with DSGE-implied prior
-  (Del Negro & Schorfheide 2004).  Combines a Bayesian VAR(p) with prior
-  moments centred on the DSGE's second-moment implications, controlled
-  by a single hyperparameter lambda.  Returns posterior draws of the
-  VAR coefficient matrix and innovation covariance and an approximate
-  log marginal likelihood for choosing lambda.
-* **Multi-period / "news-shock" paths in perfect foresight**.  Both
-  `perfect_foresight()` and `perfect_foresight_nonlinear()` already
-  accept vector-valued shock paths; documentation now explicitly calls
-  out this capability.  The nonlinear stacked-time solver correctly
-  models anticipated shocks (agents adjust at t=1 in expectation of a
-  future shock); the linearised version uses the recursive policy and
-  treats the path as a sequence of period-by-period surprises.
-
-### Variance decomposition
-
-* New `variance_decomposition()` function with methods for
-  `dsge_solution`, `dsge_fit`, and `dsge_bayes`.  Computes either:
-  - the **unconditional** decomposition (default), giving each shock's
-    share of the long-run steady-state variance of every observable
-    via per-shock discrete-Lyapunov solves; or
-  - the **forecast-error variance decomposition (FEVD)** when a vector
-    of integer horizons is supplied, giving each shock's share of the
-    h-step-ahead forecast-error variance.
-* Returns a `dsge_variance_decomposition` object with both raw
-  contributions (in squared units) and percent shares; row sums equal
-  100 by construction.
-* New `plot.dsge_variance_decomposition()` draws horizontal stacked
-  bars for the unconditional case and one stacked-bar panel per
-  observable (horizons on the x-axis) for FEVD.  Uses the standard
-  Wave 1 theme palette and styling.
+* **`model_latex()`** -- export a model's equations as LaTeX (the
+  analogue of Dynare's `write_latex_dynamic_model`).  Handles both
+  linear and nonlinear models, substitutes Greek-letter parameter
+  names, puts time subscripts on variables and wraps leads in a
+  conditional expectation operator.  Options cover the align/gather
+  environments, numbering, `\label` emission and a standalone
+  compilable document.  Verified by compiling the generated output
+  with `pdflatex`.
+* **`kalman_filter_skewed()`** -- likelihood evaluation when the
+  structural shocks are skew-normal rather than Gaussian.  The Kalman
+  gain remains the optimal linear filter, and the filter additionally
+  propagates the third cumulant of the state exactly (the observation
+  equation carries no measurement error, so the update is a
+  deterministic linear projection).  The predictive density is built
+  from univariate skew-normals matched to the exact model-implied
+  marginal skewness, and reduces exactly to the Gaussian filter when
+  all skewness is zero.
+* **`ms_filter()`** -- Markov-switching shock volatility via the Kim
+  (1994) filter, with Hamilton regime probabilities, the K^2-to-K
+  collapse, the Kim backward smoother, and print/plot methods.  At
+  first order the policy functions are certainty-equivalent, so the
+  regime rescales only the shock loading and a single solve suffices.
+* **`pac_weights()`, `pac_target_loading()`, `pac_simulate()`** --
+  FRB/US-style polynomial adjustment cost equations.  Factors the
+  Euler equation's characteristic polynomial into stable and unstable
+  roots, returns the implied lag coefficients and forward weights
+  (normalised so long-run homogeneity holds exactly), and collapses
+  the infinite forward sum into closed form when the target follows a
+  linear state process.
 
 ## Improvements
 
-### Publication-ready plot theme
+### Publication-ready plot theme (2026-05-21)
 
 * All `plot.dsge_*` methods now use a unified visual theme: consistent
   navy/brick/olive palette, light dotted gridlines, thin solid zero
@@ -197,7 +191,7 @@ standalone function with full documentation and tests:
   predictive checks -- is now uniform and publication-ready.  No API
   changes; all existing user code keeps working.
 
-### Forecast fan chart + history overlay
+### Forecast fan chart + history overlay (2026-05-21)
 
 * `forecast.dsge_fit()` now also returns the **forecast standard
   deviation** at each horizon (`sd` column in `forecasts`), computed by
@@ -207,7 +201,7 @@ standalone function with full documentation and tests:
   followed by the point forecast in navy with three nested fan bands at
   the 50/80/95% levels and a vertical separator at the forecast origin.
 
-### Smoothed state uncertainty bands
+### Smoothed state uncertainty bands (2026-05-21)
 
 * The Kalman smoother now propagates and stores the smoothed state
   covariances.  `smooth_states()` returns an additional matrix
@@ -217,7 +211,7 @@ standalone function with full documentation and tests:
   semi-transparent +/- 2 sigma bands around each smoothed state when
   the variance information is available.
 
-### Perfect-foresight comparison overlay
+### Perfect-foresight comparison overlay (2026-05-21)
 
 * `plot.dsge_perfect_foresight()` gains a new `compare = ...` argument
   that overlays a second perfect-foresight path on the same panels
@@ -225,20 +219,33 @@ standalone function with full documentation and tests:
   alongside a `perfect_foresight_nonlinear()` result to visualise the
   nonlinearity premium for large shocks).
 
-## New features
+## Bug fixes
 
-### Nonlinear perfect foresight
+### Robust Lyapunov solver (2026-05-22)
 
-* New `perfect_foresight_nonlinear()`: stacked-time Newton (LBJ) solver for
-  deterministic transition paths of nonlinear DSGE models.  Solves the full
-  nonlinear equilibrium conditions simultaneously over the entire horizon,
-  giving paths exact to Newton tolerance even for large shocks.  Uses a
-  block-bidiagonal Jacobian assembled by numerical finite differences and
-  solved by O(T n³) block back-substitution; Armijo backtracking stabilises
-  convergence.  Returns the same `dsge_perfect_foresight` class as the
-  linearized `perfect_foresight()`, so all existing `plot`, `print`, and
-  `summary` methods apply unchanged.  Reference: Juillard et al. (1998),
-  *Journal of Economic Dynamics and Control*, 22, 1291–1318.
+* `compute_unconditional_P()` now falls back to the doubling
+  algorithm (Smith / Anderson) when the Kronecker-form system
+  `(I - H ⊗ H)` is near-singular -- typical for medium-scale DSGEs
+  with highly persistent shocks (eigenvalues close to 1, as in
+  Smets-Wouters).  Previously the solver returned a fake fallback of
+  `diag(1e6)`, which inflated `model_covariance()` and DSGE-VAR
+  prior moments by many orders of magnitude.  Affected functions
+  (`model_covariance`, `variance_decomposition`, `bayes_dsge_var`,
+  `bayes_dsge_var_mh`) now produce sensible moments on highly
+  persistent models.
+
+### VAR stability filtering in DSGE-VAR forecasts (2026-05-22)
+
+* `forecast.dsge_dsgevar()`, `forecast.dsge_dsgevar_mh()` and the
+  matching conditional-forecast methods now drop any posterior draw
+  whose VAR companion matrix has eigenvalues outside the unit disc,
+  emitting a message reporting the number of skipped draws.  Prevents
+  occasional explosive paths when the DSGE-VAR posterior has long tails.
+
+## Package maintenance
+
+* `.claude/` (local Claude Code settings) added to `.Rbuildignore` so
+  it is never bundled into the source tarball.
 
 # dsge 1.1.0
 
