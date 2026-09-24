@@ -26,8 +26,10 @@ run_dynare_irfs <- function(mod) {
   src <- readLines(mod)
   # Replace any stoch_simul with our own, covering all variables
   src <- src[!grepl("^\\s*stoch_simul", src)]
-  src <- c(src, sprintf("stoch_simul(order = 1, irf = %d, nograph, noprint);",
-                        horizon))
+  if (!any(grepl("^\\s*discretionary_policy", src))) {
+    src <- c(src, sprintf("stoch_simul(order = 1, irf = %d, nograph, noprint);",
+                          horizon))
+  }
   writeLines(src, file.path(work, paste0(base, ".mod")))
   writeLines(c(
     sprintf("addpath('%s');", dynare_path),
