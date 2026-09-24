@@ -1,8 +1,9 @@
 ## Submission summary
 
-This is an update of the dsge package (version 1.2.0).  It adds new
-functionality and fixes bugs; no function exported in 1.0.0 has been
-removed.  See NEWS.md for details.
+This is an update of the dsge package from 1.0.0 (the version on CRAN)
+to 1.2.0; version 1.1.0 was not submitted. It adds new functionality and
+fixes bugs; no function exported in 1.0.0 has been removed. See NEWS.md
+for details.
 Highlights:
 
 - `read_dynare()` imports Dynare `.mod` model files into R, including
@@ -14,6 +15,9 @@ Highlights:
   were checked against Dynare 6.0 during development; the comparison
   scripts are in the GitHub repository and excluded from the package
   build.
+- From 1.1.0: Bayes factor model comparison, parallel MCMC chains,
+  third-order perturbation, a bootstrap particle filter with particle
+  marginal Metropolis-Hastings, and Ramsey optimal policy.
 - Nonlinear perfect foresight via a stacked-time Newton solver.
 - Variance decomposition (unconditional and forecast-error).
 - Optimal simple rules, discretionary policy, conditional forecasts,
@@ -43,6 +47,7 @@ Highlights:
 
 ## Reverse dependencies
 
-TODO before submitting: run `revdepcheck::revdep_check()` (or
-`tools::package_dependencies("dsge", reverse = TRUE)`) and record the
-result here.
+There are currently no reverse dependencies: no CRAN package depends on,
+imports, links to or suggests dsge
+(`tools::package_dependencies("dsge", reverse = TRUE, which = "all")`,
+checked 2026-09-24).
