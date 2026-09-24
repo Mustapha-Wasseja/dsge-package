@@ -47,6 +47,8 @@ and measurement errors.}
 or \code{NULL}.}
 \item{occbin}{Occasionally binding constraints and regime models, or
 \code{NULL}.}
+\item{estimation}{Options of the file's \code{estimation} command used by
+\code{\link[=estimate]{estimate()}} and \code{\link[=bayes_dsge]{bayes_dsge()}} (\code{presample}, \code{first_obs}, \code{nobs}).}
 \item{commands}{List of Dynare commands found in the file (such as
 \code{stoch_simul} or \code{estimation}), recorded but not executed.}
 \item{notes}{Character vector of translation notes, including
@@ -84,8 +86,10 @@ same timing as in Dynare. The auxiliary variables also appear in
 solution and IRF output.
 
 \strong{Steady state and shocks.} \code{steady_state_model} becomes the model's
-steady-state function and \code{initval} supplies starting values for the
-numerical solver. In the \code{shocks} block, standard deviations,
+steady-state function (variables it does not set keep their \code{initval}
+value, 0 by default, as in Dynare) and \code{initval} supplies starting
+values for the numerical solver. Models declared \code{model(linear)} are
+linearised with an exact Jacobian. In the \code{shocks} block, standard deviations,
 variances, covariances and correlations are supported; correlated shocks
 are orthogonalised by Cholesky factorisation in \code{varexo} order, which
 reproduces Dynare's impulse responses. Deterministic paths
@@ -101,13 +105,20 @@ measurement errors, the likelihood would be singular, so the extra
 variables are dropped with a note.
 
 \strong{Priors.} Dynare's mean/standard-deviation prior parameterisation is
-converted to dsge's: \code{normal_pdf}, \code{beta_pdf}, \code{gamma_pdf},
-\code{uniform_pdf} and \code{inv_gamma2_pdf} are translated exactly.
-\code{inv_gamma_pdf} / \code{inv_gamma1_pdf} (a prior on a standard deviation) has
-no exact dsge counterpart and is approximated by an inverse gamma with
-the same mean and standard deviation (an infinite standard deviation
-maps to shape 2). Shifted or generalised priors and \code{weibull_pdf} are
-not translated and are listed in \code{notes}.
+converted to dsge's, exactly: \code{normal_pdf}, \code{beta_pdf}, \code{gamma_pdf},
+\code{uniform_pdf}, \code{inv_gamma2_pdf}, and \code{inv_gamma_pdf} / \code{inv_gamma1_pdf}
+(a prior on a standard deviation, translated to the \code{"inv_gamma1"}
+distribution of \code{\link[=prior]{prior()}} with Dynare's own parameterisation). Shape
+names are case-insensitive. Shifted or generalised priors and
+\code{weibull_pdf} are not translated and are listed in \code{notes}.
+
+\strong{Estimation options.} \code{presample}, \code{first_obs} and \code{nobs} from the
+file's \code{estimation} command are stored in \code{estimation} and used by
+\code{\link[=estimate]{estimate()}} and \code{\link[=bayes_dsge]{bayes_dsge()}}: the data are restricted to the
+estimation sample and the first \code{presample} observations only
+initialise the Kalman filter. dsge always initialises the filter at the
+stationary distribution (Dynare's \code{lik_init = 1}); other \code{lik_init}
+values are reported in \code{notes}.
 
 \strong{Optimal policy.} With \code{planner_objective} and \code{ramsey_model} or
 \code{ramsey_policy}, the planner's first-order conditions are derived

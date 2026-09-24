@@ -13,7 +13,8 @@ estimate(
   control = list(),
   shock_start = NULL,
   demean = TRUE,
-  hessian = TRUE
+  hessian = TRUE,
+  presample = 0L
 )
 }
 \arguments{
@@ -44,6 +45,11 @@ demeaned before estimation.}
 
 \item{hessian}{Logical. If \code{TRUE} (default), the Hessian is computed
 at the solution for standard errors.}
+
+\item{presample}{Integer. Number of initial observations used only to
+initialise the Kalman filter and excluded from the likelihood (as
+Dynare's \code{presample} option). Default 0; for a model imported with
+\code{\link[=read_dynare]{read_dynare()}}, the value in the file's \code{estimation} command.}
 }
 \value{
 An object of class \code{"dsge_fit"}.

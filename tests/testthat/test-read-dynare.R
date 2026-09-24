@@ -249,7 +249,8 @@ test_that("estimated_params are translated into dsge priors", {
   expect_equal(pr$phi$params$shape, 1.5^2 / 0.25^2)
   expect_equal(pr$phi$params$rate, 1.5 / 0.25^2)
   expect_equal(pr$kappa$params, list(mean = 0.2, sd = 0.05))
-  expect_equal(pr[["sd_e.e"]]$params, list(shape = 2, scale = 0.01))
+  expect_equal(pr[["sd_e.e"]]$distribution, "inv_gamma1")
+  expect_equal(pr[["sd_e.e"]]$params, list(s = 2 * 0.01^2 / pi, nu = 2))
   a <- 2 + 0.02^2 / 0.01^2
   expect_equal(pr[["sd_e.u"]]$params, list(shape = a, scale = 0.02 * (a - 1)))
   expect_equal(pr$sig$params, list(min = 0, max = 2))
@@ -261,7 +262,6 @@ test_that("estimated_params are translated into dsge priors", {
   expect_equal(m$model$start$phi, 1.4)
   expect_equal(m$model$start$tau, 0.5)
   expect_true(any(grepl("tau", m$notes)))
-  expect_true(any(grepl("approximated", m$notes)))
 
   # Shock with no declared variance but an estimated stderr gets its mean
   expect_equal(unname(m$shock_sd["u"]), 0.02)
@@ -581,4 +581,113 @@ test_that("STEADY_STATE() refers to the steady state at current parameters", {
   expect_equal(irf_path(sol, "y", "e", 0L), 2 * 2 * 0.1, tolerance = 1e-6)
   sol3 <- solve_dsge(m, params = c(a = 3, rho = 0.5))
   expect_equal(irf_path(sol3, "y", "e", 0L), 3 * 3 * 0.1, tolerance = 1e-6)
+})
+
+
+test_that("steady_state_model may leave variables unassigned (default 0)", {
+  m <- read_dynare(text = "
+    var y dy;
+    varexo e;
+    parameters g rho;
+    g = 0.5; rho = 0.9;
+    model(linear);
+      y = rho * y(-1) + e;
+      dy = g + y - y(-1);
+    end;
+    steady_state_model;
+      dy = g;
+    end;
+    shocks; var e; stderr 1; end;
+  ")
+  sol <- solve_dsge(m)
+  expect_equal(unname(sol$steady_state[c("y", "dy")]), c(0, 0.5))
+  expect_true(isTRUE(m$model$linear))
+})
+
+
+test_that("linear models use an exact Jacobian with the same solution", {
+  m <- read_dynare(text = "
+    var y pi r;
+    varexo e u;
+    parameters beta kappa phi rho;
+    beta = 0.99; kappa = 0.1; phi = 1.5; rho = 0.7;
+    model(linear);
+      y = y(+1) - (r - pi(+1)) + e;
+      pi = beta * pi(+1) + kappa * y + u;
+      r = rho * r(-1) + (1 - rho) * phi * pi;
+    end;
+    shocks; var e; stderr 1; var u; stderr 1; end;
+  ")
+  s_exact <- solve_dsge(m)
+  m$model$linear <- FALSE
+  s_numderiv <- solve_dsge(m)
+  expect_equal(s_exact$G, s_numderiv$G, tolerance = 1e-8)
+  expect_equal(s_exact$H, s_numderiv$H, tolerance = 1e-8)
+})
+
+
+test_that("prior shapes are matched case-insensitively; inv_gamma is exact", {
+  m <- read_dynare(text = "
+    var y;
+    varexo e;
+    parameters rho;
+    rho = 0.5;
+    model(linear); y = rho * y(-1) + e; end;
+    shocks; var e; stderr 1; end;
+    estimated_params;
+      stderr e, 0.5, 0.01, 3, INV_GAMMA_PDF, 0.1, 2;
+      rho, .5, .01, .99, BETA_PDF, 0.5, 0.2;
+    end;
+    varobs y;
+    estimation(datafile = d, first_obs = 3, nobs = 50, presample = 4,
+               lik_init = 2, mode_compute = 0);
+  ")
+  expect_equal(m$priors$rho$distribution, "beta")
+  pe <- m$priors[["sd_e.e"]]
+  expect_equal(pe$distribution, "inv_gamma1")
+  # Dynare's inverse_gamma_specification: E[x^2] = s / (nu - 2)
+  expect_equal(pe$params$s / (pe$params$nu - 2), 0.1^2 + 2^2,
+               tolerance = 1e-8)
+  expect_false(any(grepl("approximated", m$notes)))
+  expect_equal(m$estimation$presample, 4L)
+  expect_equal(m$estimation$first_obs, 3L)
+  expect_equal(m$estimation$nobs, 50L)
+  expect_true(any(grepl("lik_init", m$notes)))
+  d <- data.frame(y = seq_len(60))
+  expect_equal(dsge:::dyn_estimation_sample(m, d)$y, 3:52)
+})
+
+
+test_that("inv_gamma1 prior matches Dynare's type-1 inverse gamma", {
+  p <- prior("inv_gamma1", s = 0.5, nu = 6)
+  dens <- function(x) exp(vapply(x, function(z) dsge:::dprior(p, z), 0))
+  expect_equal(stats::integrate(dens, 0, Inf)$value, 1, tolerance = 1e-6)
+  m1 <- stats::integrate(function(x) x * dens(x), 0, Inf)$value
+  mom <- dsge:::compute_prior_stats(p)
+  expect_equal(mom$mean, m1, tolerance = 1e-6)
+  # Construction from moments, including an infinite sd (nu = 2)
+  q <- prior("inv_gamma1", mean = 0.2, sd = Inf)
+  expect_equal(q$params$nu, 2)
+  expect_equal(q$params$s, 2 * 0.2^2 / pi, tolerance = 1e-12)
+  r <- prior("inv_gamma1", mean = 0.3, sd = 0.1)
+  expect_equal(dsge:::compute_prior_stats(r)$mean, 0.3, tolerance = 1e-8)
+  expect_equal(dsge:::compute_prior_stats(r)$sd, 0.1, tolerance = 1e-8)
+  set.seed(1)
+  draws <- dsge:::rprior(r, 2e5)
+  expect_equal(mean(draws), 0.3, tolerance = 0.01)
+})
+
+
+test_that("presample excludes initial periods from the likelihood", {
+  m <- read_dynare(text = ar1_text, observed = "y")
+  sol <- solve_dsge(m)
+  set.seed(3)
+  y <- matrix(stats::rnorm(40, sd = 0.02), ncol = 1)
+  full <- dsge:::kalman_filter(y, sol$G, sol$H, sol$M, sol$D)
+  pre <- dsge:::kalman_filter(y, sol$G, sol$H, sol$M, sol$D, presample = 5)
+  ll_t <- vapply(1:5, function(t) {
+    F <- full$innovation_var[[t]]; v <- full$prediction_errors[t, ]
+    -0.5 * (log(2 * pi) + log(det(F)) + sum(v * solve(F, v)))
+  }, 0)
+  expect_equal(pre$loglik, full$loglik - sum(ll_t), tolerance = 1e-10)
 })

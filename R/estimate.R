@@ -25,6 +25,10 @@
 #'   variability.
 #' @param demean Logical. If `TRUE` (default), observed variables are
 #'   demeaned before estimation.
+#' @param presample Integer. Number of initial observations used only to
+#'   initialise the Kalman filter and excluded from the likelihood (as
+#'   Dynare's `presample` option). Default 0; for a model imported with
+#'   [read_dynare()], the value in the file's `estimation` command.
 #' @param hessian Logical. If `TRUE` (default), the Hessian is computed
 #'   at the solution for standard errors.
 #'
@@ -62,16 +66,20 @@
 estimate <- function(model, data, start = NULL, fixed = NULL,
                      method = "BFGS", control = list(),
                      shock_start = NULL,
-                     demean = TRUE, hessian = TRUE) {
-  data <- dyn_map_data(model, data)
+                     demean = TRUE, hessian = TRUE, presample = 0L) {
+  if (inherits(model, "dsge_dynare")) {
+    if (missing(presample)) presample <- dyn_estimation_option(model, "presample")
+    data <- dyn_estimation_sample(model, dyn_map_data(model, data))
+  }
   model <- unwrap_dynare(model)
+  presample <- as.integer(presample)
 
   # Dispatch to nonlinear estimator if needed
   if (inherits(model, "dsgenl_model")) {
     return(estimate_dsgenl(model, data = data, start = start, fixed = fixed,
                            method = method, control = control,
                            shock_start = shock_start,
-                           hessian = hessian))
+                           hessian = hessian, presample = presample))
   }
 
   if (!inherits(model, "dsge_model")) {
@@ -114,7 +122,7 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
 
       if (!sol$stable) return(Inf)
 
-      kf <- kalman_filter(y, sol$G, sol$H, sol$M, sol$D)
+      kf <- kalman_filter(y, sol$G, sol$H, sol$M, sol$D, presample = presample)
       -kf$loglik
     }, error = function(e) Inf)
   }
@@ -138,7 +146,7 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
   sol <- solve_dsge(model, params = params_final$structural,
                     shock_sd = params_final$shock_sd)
 
-  kf <- kalman_filter(y, sol$G, sol$H, sol$M, sol$D)
+  kf <- kalman_filter(y, sol$G, sol$H, sol$M, sol$D, presample = presample)
 
   # Build coefficient vector (structural params + shock SDs)
   coefs <- c(params_final$structural, params_final$shock_sd)
@@ -329,7 +337,8 @@ unpack_theta <- function(theta, free_params, fixed, n_shocks, shock_names) {
 #' @noRd
 estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
                             method = "BFGS", control = list(),
-                            shock_start = NULL, hessian = TRUE) {
+                            shock_start = NULL, hessian = TRUE,
+                            presample = 0L) {
   all_fixed <- model$fixed
   if (!is.null(fixed)) all_fixed[names(fixed)] <- fixed
 
@@ -362,7 +371,8 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
       obs_ss <- sol$steady_state[obs_vars]
       y_dev <- sweep(y_raw, 2, obs_ss)
 
-      kf <- kalman_filter(y_dev, sol$G, sol$H, sol$M, sol$D)
+      kf <- kalman_filter(y_dev, sol$G, sol$H, sol$M, sol$D,
+                        presample = presample)
       -kf$loglik
     }, error = function(e) Inf)
   }
@@ -381,7 +391,8 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
 
   obs_ss <- sol$steady_state[obs_vars]
   y_dev <- sweep(y_raw, 2, obs_ss)
-  kf <- kalman_filter(y_dev, sol$G, sol$H, sol$M, sol$D)
+  kf <- kalman_filter(y_dev, sol$G, sol$H, sol$M, sol$D,
+                        presample = presample)
 
   # Build coefficient vector
   coefs <- c(params_final$structural, params_final$shock_sd)

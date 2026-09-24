@@ -38,6 +38,14 @@
 #'   is used; on POSIX systems (`mclapply` is used instead.  Parallel
 #'   execution requires the `dsge` package to be installed (not just loaded
 #'   via `devtools::load_all()`).
+#' @param presample Integer. Number of initial observations used only to
+#'   initialise the Kalman filter and excluded from the likelihood (as
+#'   Dynare's `presample` option). Default 0; for a model imported with
+#'   [read_dynare()], the value in the file's `estimation` command.
+#' @param shock_start Optional named numeric vector of starting values for
+#'   the shock standard deviations (names as the shocks). Defaults to the
+#'   standard deviation of the data; for a model imported with
+#'   [read_dynare()], the shock standard deviations from the file.
 #' @param endogenous_prior Optional `dsge_endog_prior` object returned by
 #'   [endogenous_prior()].  If supplied, its log density is added to the
 #'   parameter log-prior at every MH evaluation.  Default `NULL` (no
@@ -95,16 +103,20 @@
 bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
                        warmup = floor(iter / 2), thin = 1L,
                        proposal_scale = 0.1, demean = TRUE, seed = NULL,
-                       n_cores = 1L, endogenous_prior = NULL) {
+                       n_cores = 1L, endogenous_prior = NULL,
+                       presample = 0L, shock_start = NULL) {
   if (!is.null(endogenous_prior) &&
       !inherits(endogenous_prior, "dsge_endog_prior"))
     stop("`endogenous_prior` must be a dsge_endog_prior object ",
          "(from endogenous_prior()).", call. = FALSE)
   if (inherits(model, "dsge_dynare")) {
     if (missing(priors)) priors <- model$priors
-    data <- dyn_map_data(model, data)
+    if (missing(presample)) presample <- dyn_estimation_option(model, "presample")
+    if (is.null(shock_start)) shock_start <- model$shock_sd
+    data <- dyn_estimation_sample(model, dyn_map_data(model, data))
     model <- model$model
   }
+  presample <- as.integer(presample)
   is_nonlinear <- inherits(model, "dsgenl_model")
   if (!inherits(model, "dsge_model") && !is_nonlinear) {
     stop("`model` must be a dsge_model or dsgenl_model object.", call. = FALSE)
@@ -186,7 +198,8 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
         y_eval <- sweep(y, 2, ss_obs, "-")
       }
 
-      kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D)
+      kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D,
+                          presample = presample)
       lp_endo <- if (!is.null(endogenous_prior))
                    endogenous_prior$log_density(sol)
                  else 0
@@ -212,10 +225,11 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
       init_nat[k] <- 0.5
     }
   }
-  # Initialize shock SDs from data
+  # Initialize shock SDs from `shock_start` where given, else from the data
   data_sd <- apply(y, 2, stats::sd)
   for (k in seq_len(n_shocks)) {
-    init_nat[n_free + k] <- mean(data_sd)
+    s0 <- if (!is.null(shock_start)) shock_start[shock_names[k]] else NA
+    init_nat[n_free + k] <- if (!is.na(s0) && s0 > 0) s0 else mean(data_sd)
   }
   init_u <- mapply(to_unconstrained, init_nat, prior_list)
 
@@ -256,7 +270,8 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
       proposal_scale = proposal_scale,
       mode_hessian   = mode_hessian,
       chain_seed     = chain_seeds[ch],
-      endogenous_prior = endogenous_prior
+      endogenous_prior = endogenous_prior,
+      presample      = presample
     )
   }
 
@@ -498,6 +513,7 @@ compute_rhat <- function(chain_draws) {
   proposal_scale <- chain_args$proposal_scale
   mode_hessian   <- chain_args$mode_hessian
   chain_seed     <- chain_args$chain_seed
+  presample      <- if (is.null(chain_args$presample)) 0L else chain_args$presample
 
   endogenous_prior <- chain_args$endogenous_prior
 
@@ -541,7 +557,8 @@ compute_rhat <- function(chain_draws) {
         ss_obs <- sol$steady_state[obs_vars]
         y_eval <- sweep(y, 2, ss_obs, "-")
       }
-      kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D)
+      kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D,
+                          presample = presample)
       lp_endo <- if (!is.null(endogenous_prior))
                    endogenous_prior$log_density(sol)
                  else 0
