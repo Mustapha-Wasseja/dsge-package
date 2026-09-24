@@ -100,18 +100,33 @@ kernel <- function(theta) {
                       init = m$model$kalman_init)$loglik
   ll + lp
 }
-dyn_mode <- stats::setNames(post$mode, c(params, paste0("sd_e.", shocks)))
-dyn_mode <- dyn_mode[theta_names]
+dyn_key <- ifelse(post$name %in% shocks, paste0("sd_e.", post$name), post$name)
+dyn_mode <- stats::setNames(post$mode, dyn_key)[theta_names]
 k_dsge <- kernel(dyn_mode)
 
-opt <- stats::optim(dyn_mode * 0.9, function(th) -kernel(th), method = "L-BFGS-B",
-                    lower = rep(1e-4, length(dyn_mode)),
-                    upper = c(rep(0.9999, length(params)), rep(Inf, length(shocks))),
-                    control = list(factr = 1e2, pgtol = 1e-10, maxit = 1000))
+# posterior mode, started from the prior means (not Dynare's mode); rho's
+# on the logit scale and standard deviations on the log scale
+is_rho <- theta_names %in% params
+to_nat <- function(z) ifelse(is_rho, stats::plogis(z), exp(z))
+start <- vapply(theta_names, function(nm) {
+  p <- m$priors[[nm]]
+  if (!is.null(p$mean)) p$mean else mean(stats::na.omit(dyn_mode[nm]))
+}, 0)
+z0 <- ifelse(is_rho, stats::qlogis(start), log(start))
+negk <- function(z) {
+  v <- -kernel(to_nat(z))
+  if (is.finite(v)) v else 1e10
+}
+opt <- stats::optim(z0, negk, method = "Nelder-Mead",
+                    control = list(maxit = 4000, reltol = 1e-12))
+opt <- stats::optim(opt$par, negk, method = "BFGS",
+                    control = list(maxit = 1000, reltol = 1e-14))
+opt$par <- to_nat(opt$par)
 mode_dsge <- stats::setNames(opt$par, theta_names)
 
 t0 <- Sys.time()
-fit <- bayes_dsge(m, data = dat, chains = 2L, iter = mh + mh %/% 4L,
+fit_file <- file.path(work, "dsge_fit.rds")
+fit <- if (nzchar(reuse) && file.exists(fit_file)) readRDS(fit_file) else bayes_dsge(m, data = dat, chains = 2L, iter = mh + mh %/% 4L,
                   warmup = mh %/% 4L, seed = 1, n_cores = 2L)
 t_dsge <- as.numeric(Sys.time() - t0, units = "mins")
 saveRDS(fit, file.path(work, "dsge_fit.rds"))
