@@ -149,4 +149,26 @@ error accumulates the most there (about 2e-5 relative to the response).
 
 ## Full Bayesian estimation (`extra/validate_estimation.R`)
 
-RESULTS_EST
+Johannes Pfeifer's `RBC_baseline_first_diff_bayesian.mod` (GPL, not
+included): a nonlinear RBC model estimated on 200 simulated observations
+of output and consumption growth, with two autocorrelations (beta priors)
+and two shock standard deviations (inverse gamma priors). Dynare simulates
+the data, finds the posterior mode (`mode_compute = 4`) and runs two
+Metropolis-Hastings chains of 20,000 draws; dsge imports the unchanged
+file, finds the mode itself (starting from the prior means) and runs
+`bayes_dsge()` with two chains of 20,000 draws after 5,000 warm-up draws.
+
+| Parameter | Mode, Dynare | Mode, dsge | Mean, Dynare | Mean, dsge | SD, Dynare | SD, dsge |
+|---|---|---|---|---|---|---|
+| `rhog` | 0.973716 | 0.973716 | 0.9714 | 0.9712 | 0.00890 | 0.00874 |
+| `rhoz` | 0.870117 | 0.870021 | 0.8272 | 0.8247 | 0.0707 | 0.0686 |
+| sd `eps_z` | 0.0136848 | 0.0136921 | 0.01615 | 0.01631 | 0.00401 | 0.00393 |
+| sd `eps_g` | 0.0098530 | 0.0098535 | 0.009926 | 0.009932 | 0.000502 | 0.000492 |
+
+The log posterior kernel at Dynare's mode is 1443.965124076 in Dynare and
+1443.965124075 in dsge; at dsge's mode it is 1443.965127854, marginally
+higher (Dynare's optimiser stops slightly earlier; the small mode
+differences in the flat `rhoz`/`eps_z` direction reflect this). Posterior
+means and standard deviations agree to within Monte Carlo error. Dynare's
+log marginal density is 1425.13 (Laplace) / 1425.30 (modified harmonic
+mean). Run time: Dynare 9.4 minutes (Octave), dsge 25 minutes.
