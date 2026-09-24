@@ -16,16 +16,21 @@ bayes_dsge(
   demean = TRUE,
   seed = NULL,
   n_cores = 1L,
-  endogenous_prior = NULL
+  endogenous_prior = NULL,
+  presample = 0L,
+  shock_start = NULL
 )
 }
 \arguments{
-\item{model}{A \code{dsge_model} or \code{dsgenl_model} object.}
+\item{model}{A \code{dsge_model} or \code{dsgenl_model} object, or a Dynare model
+imported with \code{\link[=read_dynare]{read_dynare()}}.}
 
 \item{data}{A data frame, matrix, or \code{ts} object containing the observed
 variables.}
 
 \item{priors}{Named list of \code{dsge_prior} objects (one per free parameter).
+For a model imported with \code{\link[=read_dynare]{read_dynare()}}, defaults to the priors
+translated from its \code{estimated_params} block.
 Shock standard deviations get default \code{inv_gamma(0.01, 0.01)} priors
 unless overridden (names: \code{"sd_e.shock_name"}).}
 
@@ -61,6 +66,16 @@ via \code{devtools::load_all()}).}
 \code{\link[=endogenous_prior]{endogenous_prior()}}.  If supplied, its log density is added to the
 parameter log-prior at every MH evaluation.  Default \code{NULL} (no
 endogenous prior, identical to the original behaviour).}
+
+\item{presample}{Integer. Number of initial observations used only to
+initialise the Kalman filter and excluded from the likelihood (as
+Dynare's \code{presample} option). Default 0; for a model imported with
+\code{\link[=read_dynare]{read_dynare()}}, the value in the file's \code{estimation} command.}
+
+\item{shock_start}{Optional named numeric vector of starting values for
+the shock standard deviations (names as the shocks). Defaults to the
+standard deviation of the data; for a model imported with
+\code{\link[=read_dynare]{read_dynare()}}, the shock standard deviations from the file.}
 }
 \value{
 An object of class \code{"dsge_bayes"} containing posterior draws

@@ -16,8 +16,9 @@
 #' @param unobserved Character vector of unobserved control variable names.
 #'   Default is `character(0)`.
 #' @param exo_state Character vector of exogenous state variable names.
-#'   These have shocks attached. The number of exogenous states must equal
-#'   the number of observed controls.
+#'   These have shocks attached. There must be at least as many exogenous
+#'   states as observed controls (more observables than shocks would make
+#'   the likelihood singular).
 #' @param endo_state Character vector of endogenous (predetermined) state
 #'   variable names. These have no shocks. Default is `character(0)`.
 #' @param fixed Named list of parameter values to hold fixed during estimation.
@@ -114,10 +115,11 @@ dsgenl_model <- function(..., observed = character(0),
          length(state_eq_idx), ".", call. = FALSE)
   }
 
-  # Check observability condition
-  if (n_obs != n_exo) {
+  # Check observability condition: no more observables than shocks,
+  # otherwise the likelihood is stochastically singular
+  if (n_obs > n_exo) {
     stop("Number of observed controls (", n_obs,
-         ") must equal number of exogenous states (", n_exo, ").",
+         ") must not exceed the number of exogenous states (", n_exo, ").",
          call. = FALSE)
   }
 

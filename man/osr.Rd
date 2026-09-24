@@ -18,7 +18,11 @@ osr(
 )
 }
 \arguments{
-\item{model}{A \code{dsge_model} object.}
+\item{model}{A \code{dsge_model} or \code{dsgenl_model} object, or a
+Dynare model imported with \code{\link{read_dynare}} that declares
+\code{osr_params} and \code{optim_weights} (then \code{params},
+\code{shock_sd}, \code{osr_params}, \code{welfare_weights} and the
+bounds default to the values in the file).}
 
 \item{params}{Named numeric vector of model parameter values.  Must
 contain entries for every free parameter and structural parameter
