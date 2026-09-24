@@ -21,8 +21,8 @@ mh <- if (length(args) > 1L) as.integer(args[2]) else 20000L
 dynare_path <- Sys.getenv("DYNARE_MATLAB", "/usr/lib/dynare/matlab")
 mod <- file.path(src_dir, "RBC_baseline_first_diff_bayesian.mod")
 
-work <- tempfile("est")
-dir.create(work)
+work <- Sys.getenv("EST_WORK", tempfile("est"))
+dir.create(work, showWarnings = FALSE)
 lines <- readLines(mod, warn = FALSE)
 cut <- grep("^estimation\\(", lines)
 tail_end <- cut + grep(";", lines[cut:length(lines)])[1] - 1L
@@ -53,15 +53,21 @@ writeLines(c(
   "fval = dsge_likelihood(xparam1, dataset_, dataset_info, options_, M_, estim_params_, bayestopt_, prior_bounds(bayestopt_, options_.prior_trunc), oo_.dr, oo_.steady_state, oo_.exo_steady_state, oo_.exo_det_steady_state);",
   "lnprior = priordens(xparam1, bayestopt_.pshape, bayestopt_.p6, bayestopt_.p7, bayestopt_.p3, bayestopt_.p4);",
   "fid = fopen('kernel.csv', 'w'); fprintf(fid, '%.12f,%.12f\\n', -fval - lnprior, lnprior); fclose(fid);",
-  "fid = fopen('mdd.csv', 'w'); fprintf(fid, '%.8f,%.8f\\n', oo_.MarginalDensity.LaplaceApproximation, oo_.MarginalDensity.ModifiedHarmonicMean); fclose(fid);",
-  "fid = fopen('accept.csv', 'w'); fprintf(fid, '%.4f\\n', mean(oo_.posterior.metropolis.AcceptanceRatio)); fclose(fid);"
+  "fid = fopen('mdd.csv', 'w'); fprintf(fid, '%.8f,%.8f\\n', oo_.MarginalDensity.LaplaceApproximation, oo_.MarginalDensity.ModifiedHarmonicMean); fclose(fid);"
 ), file.path(work, "run.m"))
-old <- setwd(work)
-t0 <- Sys.time()
-system2("octave", c("--no-gui", "--quiet", "run.m"), stdout = "octave.log",
-        stderr = "octave.log")
-t_dynare <- as.numeric(Sys.time() - t0, units = "mins")
-setwd(old)
+# DYNARE_WORK=<dir> reuses the output of an earlier Dynare run
+reuse <- Sys.getenv("DYNARE_WORK")
+t_dynare <- NA_real_
+if (nzchar(reuse)) {
+  work <- reuse
+} else {
+  old <- setwd(work)
+  t0 <- Sys.time()
+  system2("octave", c("--no-gui", "--quiet", "run.m"), stdout = "octave.log",
+          stderr = "octave.log")
+  t_dynare <- as.numeric(Sys.time() - t0, units = "mins")
+  setwd(old)
+}
 if (!file.exists(file.path(work, "post.csv"))) {
   cat(utils::tail(readLines(file.path(work, "octave.log")), 30), sep = "\n")
   stop("Dynare failed")
@@ -108,9 +114,12 @@ t0 <- Sys.time()
 fit <- bayes_dsge(m, data = dat, chains = 2L, iter = mh + mh %/% 4L,
                   warmup = mh %/% 4L, seed = 1, n_cores = 2L)
 t_dsge <- as.numeric(Sys.time() - t0, units = "mins")
-draws <- do.call(rbind, lapply(seq_len(dim(fit$posterior)[2]), function(ch) {
-  fit$posterior[, ch, ]
+saveRDS(fit, file.path(work, "dsge_fit.rds"))
+# posterior: draws x parameters x chains
+draws <- do.call(rbind, lapply(seq_len(dim(fit$posterior)[3]), function(ch) {
+  fit$posterior[, , ch]
 }))
+colnames(draws) <- dimnames(fit$posterior)[[2]]
 
 tab <- data.frame(
   parameter = theta_names,

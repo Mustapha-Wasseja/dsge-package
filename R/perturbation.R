@@ -68,7 +68,12 @@
     C <- hx
     if (k >= 2L) for (m in 2:k) C <- kronecker(hx, C)
     big <- kronecker(diag(nk), A) + kronecker(t(C), B)
-    x <- solve(big, as.vector(D))
+    x <- tryCatch(solve(big, as.vector(D)), error = function(e) {
+      # singular (e.g. a unit root): minimum-norm least-squares solution
+      warning("Higher-order perturbation: singular system (unit root?); ",
+              "using the minimum-norm solution.", call. = FALSE)
+      dyn_lstsq(big, as.vector(D))
+    })
     return(matrix(x, n_eq, nk))
   }
   Ai <- solve(A)
