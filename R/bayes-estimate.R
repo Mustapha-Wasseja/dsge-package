@@ -102,6 +102,7 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
          "(from endogenous_prior()).", call. = FALSE)
   if (inherits(model, "dsge_dynare")) {
     if (missing(priors)) priors <- model$priors
+    data <- dyn_map_data(model, data)
     model <- model$model
   }
   is_nonlinear <- inherits(model, "dsgenl_model")

@@ -63,6 +63,7 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
                      method = "BFGS", control = list(),
                      shock_start = NULL,
                      demean = TRUE, hessian = TRUE) {
+  data <- dyn_map_data(model, data)
   model <- unwrap_dynare(model)
 
   # Dispatch to nonlinear estimator if needed
