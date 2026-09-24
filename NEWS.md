@@ -180,35 +180,60 @@ and tests:
 
 * New **`read_dynare()`** reads a Dynare `.mod` file (or model code passed
   as text) and translates it into a `dsgenl_model`, together with the
-  calibration, shock standard deviations and priors it declares.  No
-  Dynare, MATLAB or Octave installation is needed.  `solve_dsge()`,
-  `estimate()` and `bayes_dsge()` accept the imported object directly,
-  using its calibration, `shocks` block and translated priors by default.
-* Supports `var`, `varexo`, `parameters`, `predetermined_variables`,
-  `varobs`, parameter assignments, the `model` block (including
-  `model(linear)`, equation tags and `#` model-local variables), leads
-  and lags of any length, `initval`, `steady_state_model`, the `shocks`
-  block (including correlated shocks, orthogonalised by Cholesky
-  factorisation in declaration order as in Dynare's impulse responses)
-  and `estimated_params` / `estimated_params_init`.
-* Dynare timing needs no manual re-timing: lags become auxiliary state
-  variables (`x_lag1`, ...), leads beyond one period become auxiliary
-  controls (`x_lead1`, ...), and each shock becomes an exogenous state
-  holding the current innovation, the same approach Dynare uses
-  internally.
-* Dynare's mean/standard-deviation priors are converted to dsge's
-  parameterisation: exactly for `normal_pdf`, `beta_pdf`, `gamma_pdf`,
-  `uniform_pdf` and `inv_gamma2_pdf`, and by moment matching for
-  `inv_gamma_pdf`.  Anything not translated (macro directives, shifted
-  priors, `weibull_pdf`, deterministic shock paths, other blocks) is
-  reported, never silently dropped.
-* Validated against Dynare 6.0: first-order impulse responses of 8
-  models (134 responses, including Dynare's `example1`/`example2`, the
-  macro-expanded `bkk` and `agtrend` examples, and models with
-  two-period leads and lags, lagged shocks, correlated shocks and
-  `predetermined_variables`) agree to within 2e-6, and to within 1e-7
-  for all but `bkk`.  The validation script is in
-  `dev/dynare-validation/`.
+  calibration, shock standard deviations, measurement errors, priors,
+  optimal-policy problem and occasionally binding constraints it
+  declares.  No Dynare, MATLAB or Octave installation is needed.
+  `solve_dsge()`, `estimate()`, `bayes_dsge()`, `osr()` and
+  `simulate_occbin()` accept the imported object directly.
+* **Model and timing:** `var`, `varexo`, `varexo_det`, `parameters`,
+  `predetermined_variables`, `varobs`, parameter assignments, the `model`
+  block (`model(linear)`, equation tags, `#` model-local variables), leads
+  and lags of any length on variables and shocks, and `STEADY_STATE()`.
+  Lags become auxiliary state variables (`x_lag1`, ...), leads beyond one
+  period become auxiliary controls (`x_lead1`, ...), and each shock
+  becomes an exogenous state holding the current innovation, the same
+  approach Dynare uses internally, so no manual re-timing is needed.
+* **Macro processor:** `@#define`, `@#if`/`@#elseif`/`@#else`,
+  `@#ifdef`/`@#ifndef`, `@#for` (arrays, ranges, tuples, `when`),
+  `@#include`, `@#echo`/`@#error`, macro functions and `@{...}` are
+  expanded in R (a `defines` argument plays the role of Dynare's `-D`).
+  Dynare's own `bkk` and `agtrend` macro examples expand to exactly the
+  equations Dynare generates.
+* **Steady state and shocks:** `steady_state_model`, `initval`, shock
+  standard deviations, variances, covariances and correlations
+  (correlated shocks are orthogonalised by Cholesky factorisation in
+  declaration order, as in Dynare's impulse responses) and deterministic
+  shock paths.
+* **Observables and measurement errors:** models may now have fewer
+  observed variables than shocks (`dsgenl_model()` previously required
+  equal numbers).  A `stderr` on an observed variable is a measurement
+  error: `y` is observed as `y_obs = y + y_me`, and `estimate()` /
+  `bayes_dsge()` map a data column `y` to `y_obs` automatically.
+* **Priors:** Dynare's mean/standard-deviation priors are converted to
+  dsge's parameterisation: exactly for `normal_pdf`, `beta_pdf`,
+  `gamma_pdf`, `uniform_pdf` and `inv_gamma2_pdf`, and by moment matching
+  for `inv_gamma_pdf`.  Anything not translated is reported.
+* **Optimal policy:** `ramsey_model` / `ramsey_policy` add the planner's
+  first-order conditions (derived symbolically) and Lagrange multipliers,
+  with the Ramsey steady state found by concentrating out the
+  multipliers; `discretionary_policy` closes a linear model with the
+  time-consistent rule from the Dennis (2007) algorithm; `osr_params`,
+  `osr_params_bounds` and `optim_weights` are passed to `osr()`, which
+  now also accepts `dsgenl_model` objects.
+* **OccBin:** `occbin_constraints` with `bind`/`relax`-tagged equations are
+  solved by `simulate_occbin()` with the piecewise-linear
+  Guerrieri-Iacoviello (2015) algorithm used by Dynare's `occbin_solver`
+  (anticipated regime durations, surprise shocks).
+* `solve_dsge()` on an imported model honours values supplied in `params`
+  for parameters that are otherwise fixed.
+* **Validated against Dynare 6.0** (scripts in `dev/dynare-validation/`):
+  first-order impulse responses of 12 models (160 responses, including
+  Dynare's `example1`, `example2`, `agtrend` and `bkk`, Ramsey, discretion,
+  `STEADY_STATE()`, shock leads, long leads/lags and correlated shocks)
+  agree to within 2e-6, and to within 5e-8 for all but `bkk`;
+  log-likelihoods with measurement errors and with fewer observables than
+  shocks agree to Dynare's printed precision; OSR optimum and loss agree
+  (loss to 1e-13); OccBin paths agree to 3e-13.
 * New example file `inst/examples/rbc.mod`.
 
 ## Improvements
