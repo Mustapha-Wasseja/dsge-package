@@ -65,12 +65,16 @@ solve_dsge <- function(model, params = NULL, shock_sd = NULL, tol = 1e-6,
 
   # Imported Dynare model: solve at its calibration by default
   if (inherits(model, "dsge_dynare")) {
+    cal <- model$params[intersect(names(model$params),
+                                  model$model$parameters)]
     if (is.null(params)) {
-      params <- model$params[intersect(names(model$params),
-                                       model$model$parameters)]
+      params <- cal
+    } else {
+      supplied <- names(params)
+      params <- c(params, cal[setdiff(names(cal), supplied)])
     }
     if (is.null(shock_sd)) shock_sd <- model$shock_sd
-    model <- model$model
+    model <- dyn_unfix(model$model, names(params))
   }
 
   # Dispatch to nonlinear solver if needed

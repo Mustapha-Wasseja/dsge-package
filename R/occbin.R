@@ -61,7 +61,15 @@ obc_constraint <- function(variable, type = ">=", bound = 0, shock = NULL) {
 #' occasionally binding constraints using an iterative shadow-shock method.
 #'
 #' @param x A solved DSGE model object (\code{dsge_solution}, \code{dsge_fit},
-#'   or \code{dsge_bayes}).
+#'   or \code{dsge_bayes}), or a Dynare model imported with
+#'   \code{\link{read_dynare}} that has an \code{occbin_constraints} block.
+#'   For an imported model the constraints come from the file and the
+#'   model is solved with the piecewise-linear regime algorithm of
+#'   Guerrieri and Iacoviello (2015), as in Dynare's \code{occbin_solver};
+#'   \code{shocks} are raw innovations (default: the file's
+#'   \code{shocks(surprise)} block) treated as surprises, and
+#'   \code{constraints}, \code{initial}, \code{tol} and \code{in_sd} are
+#'   not used.
 #' @param constraints A list of constraints. Each element can be:
 #'   \itemize{
 #'     \item An \code{obc_constraint} object (from \code{obc_constraint()})
@@ -130,6 +138,11 @@ obc_constraint <- function(variable, type = ">=", bound = 0, shock = NULL) {
 simulate_occbin <- function(x, constraints, shocks = NULL, initial = NULL,
                             horizon = 40L, max_iter = 100L, tol = 1e-8,
                             in_sd = FALSE) {
+  # Imported Dynare model with occbin_constraints: piecewise-linear solver
+  if (inherits(x, "dsge_dynare")) {
+    return(dyn_occbin_simulate(x, shocks = shocks, horizon = horizon,
+                               max_iter = max_iter))
+  }
   horizon <- as.integer(horizon)
   if (horizon < 1L) stop("horizon must be at least 1.", call. = FALSE)
 

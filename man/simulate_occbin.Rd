@@ -17,7 +17,15 @@ simulate_occbin(
 }
 \arguments{
 \item{x}{A solved DSGE model object (\code{dsge_solution}, \code{dsge_fit},
-or \code{dsge_bayes}).}
+or \code{dsge_bayes}), or a Dynare model imported with
+\code{\link{read_dynare}} that has an \code{occbin_constraints} block.
+For an imported model the constraints come from the file and the
+model is solved with the piecewise-linear regime algorithm of
+Guerrieri and Iacoviello (2015), as in Dynare's \code{occbin_solver};
+\code{shocks} are raw innovations (default: the file's
+\code{shocks(surprise)} block) treated as surprises, and
+\code{constraints}, \code{initial}, \code{tol} and \code{in_sd} are
+not used.}
 
 \item{constraints}{A list of constraints. Each element can be:
 \itemize{

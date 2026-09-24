@@ -27,7 +27,8 @@ test_that("a simple AR(1) is imported with Dynare timing", {
   expect_equal(m$shocks, "e")
   expect_equal(m$shock_sd, c(e = 0.01))
   expect_equal(m$aux$name, "y_lag1")
-  expect_equal(m$observed, "y")
+  expect_equal(m$observed, character(0))
+  expect_true(any(grepl("No varobs", m$notes)))
 
   sol <- solve_dsge(m)
   expect_equal(irf_path(sol, "y", "e", 5L), 0.01 * 0.9^(0:5),
@@ -289,7 +290,7 @@ test_that("Dynare math functions are translated", {
 })
 
 
-test_that("observed variables follow varobs, an override, or a default", {
+test_that("observed variables follow varobs or an override", {
   base <- "
     var a b c;
     varexo e1 e2;
@@ -302,15 +303,24 @@ test_that("observed variables follow varobs, an override, or a default", {
     end;
   "
   m <- read_dynare(text = base)
-  expect_equal(m$observed, c("a", "b"))
+  expect_equal(m$observed, character(0))
+  expect_equal(m$model$variables$observed, character(0))
   expect_true(any(grepl("No varobs", m$notes)))
+  expect_s3_class(solve_dsge(m, shock_sd = c(e1 = 1, e2 = 1)),
+                  "dsge_solution")
 
   m <- read_dynare(text = paste(base, "varobs c a;"))
   expect_equal(m$observed, c("c", "a"))
 
+  # Fewer observed variables than shocks is allowed
   m <- read_dynare(text = paste(base, "varobs c;"))
-  expect_equal(m$observed, c("c", "a"))
-  expect_true(any(grepl("needs equal numbers", m$notes)))
+  expect_equal(m$observed, "c")
+  expect_equal(m$model$variables$observed, "c")
+
+  # More observed variables than shocks is truncated with a note
+  m <- read_dynare(text = paste(base, "varobs a b c;"))
+  expect_equal(m$observed, c("a", "b"))
+  expect_true(any(grepl("singular", m$notes)))
 
   m <- read_dynare(text = base, observed = c("b", "c"))
   expect_equal(m$observed, c("b", "c"))
@@ -336,7 +346,8 @@ test_that("constants and undeclared assignments are usable in later blocks", {
 
 
 test_that("unsupported input fails with informative errors", {
-  expect_error(read_dynare(text = "@#define N = 2\nvar y;"), "macro")
+  expect_error(read_dynare(text = "@#if 1\nvar y;"), "not closed")
+  expect_error(read_dynare(text = "@#foo x\nvar y;"), "Unsupported macro")
   expect_error(read_dynare(text = "var y; varexo e; model; y = e"),
                "missing ';'")
   expect_error(read_dynare(text = "var y; varexo e; model; y = e;"),
@@ -345,13 +356,12 @@ test_that("unsupported input fails with informative errors", {
     var y; varexo e; parameters a; a = 1;
     model; y = a * y(-1) + b + e; end;"), "Undeclared name")
   expect_error(read_dynare(text = "
-    var y; varexo e; model; y = e(+1); end;"), "Lead of shock")
-  expect_error(read_dynare(text = "
     var y; varexo e; parameters a;
     model; y = a * y(-1) + e; end;"), "No value assigned")
   expect_error(read_dynare(text = "
-    var y; varexo e; model; y = STEADY_STATE(y) + e; end;"), "STEADY_STATE")
-  expect_error(read_dynare(text = "varexo_det d; var y;"), "varexo_det")
+    var y; varexo e; model; y = EXPECTATION(-1)(y) + e; end;"), "EXPECTATION")
+  expect_error(read_dynare(text = "trend_var(growth_factor = g) A; var y;"),
+               "trend_var")
   expect_error(read_dynare("no/such/file.mod"), "File not found")
 })
 
@@ -426,4 +436,149 @@ test_that("edge cases: element-wise operators, reserved names, unused priors", {
 
   expect_error(read_dynare(text = "var in; varexo e; model; in = e; end;"),
                "reserved in R")
+})
+
+
+test_that("macro directives are expanded", {
+  m <- read_dynare(text = "
+    @#define N = 3
+    @#define names = [\"a\", \"b\", \"c\"]
+    @#define linear = true
+    var @{names[1]}
+    @#for i in 2:N
+      @{names[i]}
+    @#endfor
+    ;
+    varexo e;
+    parameters rho;
+    rho = 0.5;
+    @#if linear
+    model(linear);
+    @#else
+    model;
+    @#endif
+      a = rho * a(-1) + e;
+    @#for (v, w) in [(\"b\", \"a\"), (\"c\", \"b\")]
+      @{v} = 0.5 * @{w}(-1);
+    @#endfor
+    end;
+    @#ifdef extra
+    varobs a;
+    @#endif
+    shocks; var e; stderr 1; end;
+  ")
+  expect_equal(m$variables, c("a", "b", "c"))
+  expect_equal(m$observed, character(0))
+  sol <- solve_dsge(m)
+  expect_equal(irf_path(sol, "c", "e", 3L), c(0, 0, 0.25, 0.125),
+               tolerance = 1e-8)
+
+  m2 <- read_dynare(text = "
+    var y; varexo e; parameters r;
+    @#ifndef r_value
+    @#define r_value = 0.9
+    @#endif
+    r = @{r_value};
+    model; y = r * y(-1) + e; end;
+  ", defines = list(r_value = 0.4))
+  expect_equal(unname(m2$params["r"]), 0.4)
+})
+
+
+test_that("measurement errors become observation shocks", {
+  m <- read_dynare(text = "
+    var y x;
+    varexo e;
+    parameters rho;
+    rho = 0.9;
+    model(linear);
+      y = rho * y(-1) + e;
+      x = 2 * y;
+    end;
+    shocks;
+      var e; stderr 1;
+      var x; stderr 0.3;
+    end;
+    varobs y x;
+    estimated_params;
+      rho, beta_pdf, 0.8, 0.1;
+      stderr e, inv_gamma_pdf, 1, inf;
+      stderr y, inv_gamma_pdf, 0.2, inf;
+    end;
+  ")
+  expect_equal(m$measurement_errors, c("y", "x"))
+  expect_equal(m$observed, c("y", "x"))
+  expect_equal(m$model$variables$observed, c("y_obs", "x_obs"))
+  expect_setequal(m$model$variables$exo_state, c("e", "y_me", "x_me"))
+  expect_equal(unname(m$shock_sd[c("e", "y_me", "x_me")]), c(1, 0.2, 0.3))
+  expect_setequal(names(m$priors), c("rho", "sd_e.e", "sd_e.y_me"))
+  expect_equal(m$data_map, c(y = "y_obs", x = "x_obs"))
+
+  sol <- solve_dsge(m)
+  expect_equal(irf_path(sol, "x_obs", "x_me", 0L), 0.3, tolerance = 1e-10)
+  expect_equal(irf_path(sol, "x", "x_me", 0L), 0, tolerance = 1e-10)
+  expect_equal(irf_path(sol, "x_obs", "e", 2L), irf_path(sol, "x", "e", 2L),
+               tolerance = 1e-10)
+
+  skip_on_cran()
+  set.seed(2)
+  y <- as.numeric(stats::arima.sim(list(ar = 0.9), n = 120))
+  dat <- data.frame(y = y + stats::rnorm(120, sd = 0.2),
+                    x = 2 * y + stats::rnorm(120, sd = 0.3))
+  fit <- bayes_dsge(m, data = dat, chains = 1L, iter = 300L,
+                    warmup = 150L, seed = 1)
+  expect_s3_class(fit, "dsge_bayes")
+})
+
+
+test_that("varexo_det and leads of shocks are supported", {
+  m <- read_dynare(text = "
+    var y;
+    varexo e;
+    varexo_det d;
+    parameters rho;
+    rho = 0.5;
+    model(linear);
+      y = rho * y(-1) + e + e(+1) + d;
+    end;
+    shocks;
+      var e; stderr 1;
+      var d; periods 1:2 4; values 0.5 0.25;
+    end;
+  ")
+  expect_equal(m$shocks, "e")
+  expect_equal(m$shocks_det, "d")
+  expect_equal(unname(m$shock_sd["d"]), 0)
+  expect_equal(unname(m$shock_paths[, "d"]), c(0.5, 0.5, 0, 0.25))
+  sol <- solve_dsge(m)
+  # E_t e(+1) = 0, so the IRF is that of the AR(1)
+  expect_equal(irf_path(sol, "y", "e", 3L), 0.5^(0:3), tolerance = 1e-8)
+})
+
+
+test_that("STEADY_STATE() refers to the steady state at current parameters", {
+  txt <- "
+    var y z;
+    varexo e;
+    parameters a rho;
+    a = 2; rho = 0.5;
+    model;
+      z = rho * z(-1) + e;
+      y = STEADY_STATE(y) * exp(z) + 0 * (y - STEADY_STATE(y));
+    end;
+    initval; y = 1; z = 0; end;
+    steady_state_model; z = 0; y = a; end;
+    shocks; var e; stderr 0.1; end;
+  "
+  expect_error(read_dynare(text = txt), NA)
+  m <- read_dynare(text = sub("y = STEADY_STATE(y) * exp(z) + 0 * (y - STEADY_STATE(y));",
+                              "log(y) = log(a) + z * STEADY_STATE(y);", txt,
+                              fixed = TRUE))
+  expect_equal(unname(m$model$ss_links), "y")
+  sol <- solve_dsge(m)
+  expect_equal(unname(sol$steady_state["y"]), 2, tolerance = 1e-8)
+  # d log(y) / d z = STEADY_STATE(y) = a, so dy = y_ss * a * dz
+  expect_equal(irf_path(sol, "y", "e", 0L), 2 * 2 * 0.1, tolerance = 1e-6)
+  sol3 <- solve_dsge(m, params = c(a = 3, rho = 0.5))
+  expect_equal(irf_path(sol3, "y", "e", 0L), 3 * 3 * 0.1, tolerance = 1e-6)
 })
