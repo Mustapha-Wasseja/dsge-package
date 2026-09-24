@@ -35,7 +35,11 @@
 #' an unconditional quadratic welfare loss, subject to the model's rational
 #' expectations equilibrium.
 #'
-#' @param model A \code{dsge_model} object.
+#' @param model A \code{dsge_model} or \code{dsgenl_model} object, or a
+#'   Dynare model imported with \code{\link{read_dynare}} that declares
+#'   \code{osr_params} and \code{optim_weights} (then \code{params},
+#'   \code{shock_sd}, \code{osr_params}, \code{welfare_weights} and the
+#'   bounds default to the values in the file).
 #' @param params Named numeric vector of model parameter values.  Must
 #'   contain entries for every free parameter and structural parameter
 #'   that \code{\link{solve_dsge}} requires.  Values for any parameters
@@ -119,9 +123,34 @@ osr <- function(model, params, shock_sd, osr_params, welfare_weights,
                 control = list(),
                 penalty = 1e10) {
 
+  # Imported Dynare model: take the OSR problem declared in the file
+  if (inherits(model, "dsge_dynare")) {
+    pol <- model$policy
+    if (is.null(pol) || !identical(pol$type, "osr")) {
+      stop("The imported model does not declare an OSR problem ",
+           "(osr_params / optim_weights).", call. = FALSE)
+    }
+    if (missing(params)) {
+      params <- model$params[intersect(names(model$params),
+                                       model$model$parameters)]
+    }
+    if (missing(shock_sd)) shock_sd <- model$shock_sd
+    if (missing(osr_params)) osr_params <- pol$osr_params
+    if (missing(welfare_weights)) {
+      W <- pol$weights
+      ctrl <- model$model$controls
+      Q_yy <- matrix(0, length(ctrl), length(ctrl), dimnames = list(ctrl, ctrl))
+      Q_yy[rownames(W), colnames(W)] <- W
+      welfare_weights <- list(Q_yy = Q_yy)
+    }
+    if (is.null(lower)) lower <- unname(pol$lower[names(osr_params)])
+    if (is.null(upper)) upper <- unname(pol$upper[names(osr_params)])
+    model <- dyn_unfix(model$model, names(osr_params))
+  }
+
   # ---- 1. Validate inputs ----
-  if (!inherits(model, "dsge_model"))
-    stop("'model' must be a dsge_model object.", call. = FALSE)
+  if (!inherits(model, c("dsge_model", "dsgenl_model")))
+    stop("'model' must be a dsge_model or dsgenl_model object.", call. = FALSE)
   if (is.null(names(params)))
     stop("'params' must be a named numeric vector.", call. = FALSE)
   if (is.null(names(osr_params)))

@@ -64,8 +64,20 @@ linearize <- function(model, steady_state, params = NULL) {
     model$eval_fn(eval_vec)
   }
 
-  # Full Jacobian at steady state
-  J <- numDeriv::jacobian(full_fn, timed_ss)
+  # Full Jacobian at steady state. For models declared linear (e.g.
+  # imported from a Dynare model(linear) block) a unit perturbation of
+  # each argument is exact and far cheaper than Richardson extrapolation.
+  if (isTRUE(model$linear)) {
+    f0 <- full_fn(timed_ss)
+    J <- vapply(seq_along(timed_ss), function(k) {
+      z <- timed_ss
+      z[k] <- z[k] + 1
+      full_fn(z) - f0
+    }, numeric(length(f0)))
+    J <- matrix(J, nrow = length(f0))
+  } else {
+    J <- numDeriv::jacobian(full_fn, timed_ss)
+  }
 
   # Column indices
   idx_y  <- seq_len(n_c)

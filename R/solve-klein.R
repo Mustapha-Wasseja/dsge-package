@@ -19,11 +19,14 @@
 #' nonlinear models (`dsgenl_model`). For nonlinear models, the steady
 #' state is computed and the model is linearized automatically.
 #'
-#' @param model A `dsge_model` or `dsgenl_model` object.
+#' @param model A `dsge_model` or `dsgenl_model` object, or a Dynare model
+#'   imported with [read_dynare()].
 #' @param params Named numeric vector of parameter values. If `NULL`,
-#'   uses the model's fixed and start values.
+#'   uses the model's fixed and start values (for an imported Dynare model,
+#'   its calibration).
 #' @param shock_sd Named numeric vector of shock standard deviations.
-#'   If `NULL`, defaults to 1 for all shocks.
+#'   If `NULL`, defaults to 1 for all shocks (for an imported Dynare model,
+#'   the standard deviations from its `shocks` block).
 #' @param tol Tolerance for classifying eigenvalues as stable (|lambda| < 1 + tol).
 #'   Default is 1e-6.
 #'
@@ -59,6 +62,20 @@ solve_dsge <- function(model, params = NULL, shock_sd = NULL, tol = 1e-6,
   order <- as.integer(order)
   if (!order %in% c(1L, 2L, 3L))
     stop("order must be 1, 2, or 3.", call. = FALSE)
+
+  # Imported Dynare model: solve at its calibration by default
+  if (inherits(model, "dsge_dynare")) {
+    cal <- model$params[intersect(names(model$params),
+                                  model$model$parameters)]
+    if (is.null(params)) {
+      params <- cal
+    } else {
+      supplied <- names(params)
+      params <- c(params, cal[setdiff(names(cal), supplied)])
+    }
+    if (is.null(shock_sd)) shock_sd <- model$shock_sd
+    model <- dyn_unfix(model$model, names(params))
+  }
 
   # Dispatch to nonlinear solver if needed
   if (inherits(model, "dsgenl_model")) {

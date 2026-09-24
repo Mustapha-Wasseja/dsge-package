@@ -8,7 +8,8 @@ prior(distribution, ...)
 }
 \arguments{
 \item{distribution}{Character string specifying the distribution family.
-One of \code{"normal"}, \code{"beta"}, \code{"gamma"}, \code{"uniform"}, \code{"inv_gamma"}.}
+One of \code{"normal"}, \code{"beta"}, \code{"gamma"}, \code{"uniform"}, \code{"inv_gamma"},
+\code{"inv_gamma1"}.}
 
 \item{...}{Distribution parameters (see Details).}
 }
@@ -27,11 +28,17 @@ Distribution parameterizations:
 \item{uniform}{\code{min}, \code{max}}
 \item{inv_gamma}{\code{shape}, \code{scale} — density:
 \eqn{p(x) \propto x^{-(shape+1)} \exp(-scale/x)}}
+\item{inv_gamma1}{\code{s}, \code{nu} — inverse gamma of type 1, a prior on a
+standard deviation whose square is inverse gamma (Dynare's
+\code{inv_gamma_pdf}): \eqn{p(x) \propto x^{-(nu+1)} \exp(-s/(2x^2))}.
+Alternatively give \code{mean} and \code{sd} (use \code{sd = Inf} for an infinite
+variance) and \code{s}, \code{nu} are derived as in Dynare.}
 }
 }
 \examples{
 prior("normal", mean = 0, sd = 1)
 prior("beta", shape1 = 2, shape2 = 2)
 prior("inv_gamma", shape = 0.01, scale = 0.01)
+prior("inv_gamma1", mean = 0.1, sd = 2)
 
 }

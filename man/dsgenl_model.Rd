@@ -26,8 +26,9 @@ Use \code{VAR(+1)} to denote the one-period-ahead value of variable \code{VAR}.}
 Default is \code{character(0)}.}
 
 \item{exo_state}{Character vector of exogenous state variable names.
-These have shocks attached. The number of exogenous states must equal
-the number of observed controls.}
+These have shocks attached. There must be at least as many exogenous
+states as observed controls (more observables than shocks would make
+the likelihood singular).}
 
 \item{endo_state}{Character vector of endogenous (predetermined) state
 variable names. These have no shocks. Default is \code{character(0)}.}

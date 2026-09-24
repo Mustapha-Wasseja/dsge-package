@@ -245,6 +245,8 @@ global_sensitivity <- function(model, priors, target,
     uniform   = stats::qunif(u, pars$min,   pars$max),
     inv_gamma = 1 / stats::qgamma(1 - u, shape = pars$shape,
                                        scale = pars$scale),
+    inv_gamma1 = sqrt(1 / stats::qgamma(1 - u, shape = pars$nu / 2,
+                                        rate = pars$s / 2)),
     # Fallback: rough normal approximation around 0.5
     stats::qnorm(u))
 }
