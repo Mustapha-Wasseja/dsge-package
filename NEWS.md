@@ -249,6 +249,40 @@ and tests:
   (loss to 1e-13); OccBin paths agree to 3e-13.
 * New example file `inst/examples/rbc.mod`.
 
+### Closer to Dynare on real-world files (2026-09-24)
+
+* **MATLAB code in `.mod` files and `_steadystate.m` files:** a built-in
+  MATLAB interpreter (matrices, cell arrays, structures, indexing, control
+  flow, subfunctions, anonymous functions, `eval`, `fsolve`, `csolve`,
+  `fzero`, ...) runs the MATLAB statements of a `.mod` file (calibrations
+  such as `sigma = sqrt(V(1, 1))`, `verbatim` blocks, `set_param_value()`)
+  and a `<model>_steadystate.m` file, including helper functions in other
+  `.m` files of the model's folder.  Parameters that a steady-state file or
+  `steady_state_model` sets are recomputed from the other parameters
+  whenever the model is solved, as in Dynare.  Parameters take the values
+  they have at the file's first computing command.
+* **`lik_init = 2`:** the Kalman filter can start, as Dynare does, from a
+  covariance of 10 times the identity on Dynare's state vector (observed
+  and predetermined variables).  Smets & Wouters (2007) with its original
+  `lik_init = 2` now reproduces Dynare's log-likelihood
+  (-1738.513893160) to all printed decimals.
+* **Leads of two or more periods inside nonlinear terms** become auxiliary
+  variables as in Dynare (exact at every order of approximation).
+* Parsing: `%` inside MATLAB strings is no longer taken for a comment;
+  MATLAB statements without a semicolon, multi-line matrices, time
+  indices on parameters, `steady_state()` in lower case and vector values
+  of deterministic shocks are handled; discretionary policy is imposed
+  through the planner's targeting rule, which is determinate where the
+  instrument's reaction to shocks alone was not.
+* **Validated on Johannes Pfeifer's DSGE_mod collection** (68 files,
+  `dev/dynare-validation/extra/batch_dsge_mod.R`): 67 import unchanged;
+  the first-order impulse responses of all 53 stochastic models Dynare
+  6.0 runs in Octave agree with Dynare's (52 to within 1e-6 relative, one
+  with linearly dependent states to 7e-5).  Second- and third-order decision
+  rules of 21 nonlinear models agree with Dynare's to within 1e-6
+  (relative), most to 1e-9 or better
+  (`dev/dynare-validation/extra/validate_higher_order.R`).
+
 ## Improvements
 
 ### Publication-ready plot theme (2026-05-21)
@@ -294,6 +328,27 @@ and tests:
   nonlinearity premium for large shocks).
 
 ## Bug fixes
+
+### Second- and third-order perturbation (2026-09-24)
+
+* The second-order risk correction (`g_ss`, `h_ss`) left out the
+  curvature of the equations in next-period variables and added a
+  spurious `h_xx` term, so it could have the wrong sign and size; the
+  third-order terms `g_xxx`, `g_xss` and `g_sss` were also wrong.  Both
+  orders are now computed following Schmitt-Grohe and Uribe (2004) and
+  Andreasen (2012), with exact symbolic derivatives of the model
+  equations and generalized Sylvester solvers that scale to large models
+  (the previous dense system grew with the fourth power of the number of
+  states).  Solutions now match Dynare's to about 1e-10 on standard
+  models.
+
+### More robust first-order solver (2026-09-24)
+
+* `solve_dsge()` now solves linearised models by cyclic reduction and,
+  failing that, an inverse-free spectral divide (Bai, Demmel and Gu 1997)
+  instead of only a fixed-point iteration, which diverged on several
+  standard models (e.g. Hansen 1985, Kiyotaki-Moore 1997, Schmitt-Grohe
+  and Uribe 2003).  Unit roots are allowed, as in Dynare.
 
 ### Robust Lyapunov solver (2026-05-22)
 

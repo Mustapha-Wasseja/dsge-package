@@ -12,7 +12,9 @@
 #   * a lag x(-k) becomes an auxiliary state x_lagk, with
 #     x_lag1(+1) = x and x_lagj(+1) = x_lag(j-1);
 #   * a lead x(+k), k >= 2, becomes x_lead(k-1)(+1), with auxiliary
-#     controls x_lead1 = x(+1) and x_leadj = x_lead(j-1)(+1);
+#     controls x_lead1 = x(+1) and x_leadj = x_lead(j-1)(+1); nonlinear
+#     terms containing such leads first become auxiliary variables
+#     (aux_lead_k = term(-1)), exactly as in Dynare;
 #   * every varexo e becomes an exogenous state with e(+1) = 0, so that
 #     e_t is the period-t innovation and carries the shock.
 
@@ -77,6 +79,17 @@
 #' which always equals the steady state of `x` at the current parameter
 #' values.
 #'
+#' **MATLAB code.** Dynare passes MATLAB statements in a `.mod` file
+#' through to MATLAB; `read_dynare()` runs them with a built-in MATLAB
+#' interpreter (matrices, cell arrays, structures, indexing, loops,
+#' functions, `eval`, `fsolve`, `fzero`, `csolve`, ...), so calibrations
+#' computed in MATLAB (e.g. `sigma = sqrt(V(1, 1))`, `verbatim` blocks or
+#' `set_param_value()`) are reproduced. Parameters take the values they
+#' have when the file first solves, simulates or estimates the model
+#' (the first `stoch_simul`, `estimation`, ...); later assignments and
+#' MATLAB code that post-processes results (plots, tables) are skipped and
+#' listed in `notes`.
+#'
 #' **Macro processor.** `@#define`, `@#if`/`@#elseif`/`@#else`/`@#endif`,
 #' `@#ifdef`, `@#ifndef`, `@#for` (over arrays, ranges and tuples, with
 #' optional `when` filters), `@#include`, `@#includepath`, `@#echo`,
@@ -94,7 +107,12 @@
 #' **Steady state and shocks.** `steady_state_model` becomes the model's
 #' steady-state function (variables it does not set keep their `initval`
 #' value, 0 by default, as in Dynare) and `initval` supplies starting
-#' values for the numerical solver. Models declared `model(linear)` are
+#' values for the numerical solver. A MATLAB steady-state file
+#' `<model>_steadystate.m` next to the `.mod` file is run with the MATLAB
+#' interpreter instead, including helper functions in other `.m` files of
+#' the same folder. Parameters that `steady_state_model` or the
+#' steady-state file set (calibrated to targets) are recomputed from the
+#' other parameters whenever the model is solved, as in Dynare. Models declared `model(linear)` are
 #' linearised with an exact Jacobian. In the `shocks` block, standard deviations,
 #' variances, covariances and correlations are supported; correlated shocks
 #' are orthogonalised by Cholesky factorisation in `varexo` order, which
@@ -122,9 +140,12 @@
 #' file's `estimation` command are stored in `estimation` and used by
 #' [estimate()] and [bayes_dsge()]: the data are restricted to the
 #' estimation sample and the first `presample` observations only
-#' initialise the Kalman filter. dsge always initialises the filter at the
-#' stationary distribution (Dynare's `lik_init = 1`); other `lik_init`
-#' values are reported in `notes`.
+#' initialise the Kalman filter. The filter starts from the stationary
+#' distribution (Dynare's `lik_init = 1`, the default) or, with
+#' `lik_init = 2`, from Dynare's covariance of 10 times the identity on its
+#' state vector (the observed and predetermined variables); other
+#' `lik_init` values are reported in `notes`. Set `x$model$kalman_init`
+#' to `NULL` to use the stationary initialisation instead.
 #'
 #' **Optimal policy.** With `planner_objective` and `ramsey_model` or
 #' `ramsey_policy`, the planner's first-order conditions are derived
@@ -133,7 +154,8 @@
 #' equilibrium; the steady state is found with the multipliers concentrated
 #' out. With `discretionary_policy` (linear models), the time-consistent
 #' rule is computed with the Dennis (2007) algorithm at the calibrated
-#' parameters and the model is closed with it. With `osr_params`,
+#' parameters and the model is closed with the planner's time-consistent
+#' targeting rule. With `osr_params`,
 #' `osr_params_bounds` and `optim_weights`, [osr()] can be called directly
 #' on the imported model.
 #'
@@ -146,7 +168,8 @@
 #'
 #' **Not supported:** `external_function`, `trend_var`, `EXPECTATION()`,
 #' `diff()`, `adl()`, PAC and VAR expectation operators; these raise an
-#' error. Other blocks and commands are recorded but not run.
+#' error. Other blocks and commands are recorded but not run. MATLAB code
+#' that reads data files (`load`, `xlsread`) cannot be run.
 #'
 #' @references
 #' Dennis, R. (2007). Optimal policy in rational expectations models: new
@@ -212,6 +235,7 @@ read_dynare <- function(file, text = NULL, observed = NULL, defines = NULL) {
   statements <- dyn_split_statements(src)
 
   parsed <- dyn_parse_statements(statements)
+  if (is.null(text)) parsed$source_file <- normalizePath(file)
   build <- dyn_build(parsed, observed = observed)
   build$file <- source_name
   structure(build, class = "dsge_dynare")
@@ -249,51 +273,251 @@ print.dsge_dynare <- function(x, ...) {
 # Lexing
 # ---------------------------------------------------------------------------
 
+#' Remove comments, leaving quoted strings (e.g. '%f' in fprintf) intact
+#'
+#' A quote directly after a name, a closing bracket or another quote is
+#' MATLAB's transpose operator, not the start of a string.
 #' @noRd
 dyn_strip_comments <- function(src) {
-  src <- gsub("(?s)/\\*.*?\\*/", " ", src, perl = TRUE)
-  src <- gsub("//[^\n]*", "", src, perl = TRUE)
-  src <- gsub("%[^\n]*", "", src, perl = TRUE)
+  pat <- paste0("(?<![A-Za-z0-9_)\\]}.'])'(?:[^'\n]|'')*'",
+                "|\"(?:[^\"\n\\\\]|\\\\.)*\"",
+                "|(?s:/\\*.*?\\*/)|//[^\n]*|%[^\n]*")
+  m <- gregexpr(pat, src, perl = TRUE)
+  hits <- regmatches(src, m)[[1]]
+  if (length(hits) == 0L) return(src)
+  is_comment <- !substr(hits, 1L, 1L) %in% c("'", "\"")
+  hits[is_comment] <- ifelse(startsWith(hits[is_comment], "/*"), " ", "")
+  regmatches(src, m) <- list(hits)
   src
 }
 
-#' Split source text on ';' outside quotes
+# First words of MATLAB statements that Dynare passes through unchanged.
+# Outside a block, such a line is a statement on its own (it need not end
+# in ';'); if/for/while/switch/try blocks run to their matching 'end'.
+dyn_matlab_control <- c("if", "for", "while", "switch", "try", "parfor",
+                        "function")
+dyn_matlab_heads <- c(
+  dyn_matlab_control, "end", "else", "elseif", "case", "otherwise", "catch",
+  "return", "break", "continue", "fprintf", "disp", "display", "sprintf",
+  "figure", "subplot", "plot", "hold", "title", "xlabel", "ylabel", "legend",
+  "axis", "grid", "close", "clear", "clc", "save", "load", "print", "saveas",
+  "warning", "error", "addpath", "rmpath", "rng", "tic", "toc", "eval",
+  "assert", "fopen", "fclose", "set", "drawnow", "pause", "keyboard",
+  "format", "cd", "mkdir", "delete", "movefile", "copyfile", "exist",
+  "set_dynare_seed", "set_param_value", "global", "persistent", "orient",
+  "axes", "text", "line", "bar", "area", "fill", "semilogy", "semilogx",
+  "loglog", "histogram", "hist", "surf", "mesh", "colorbar", "colormap",
+  "annotation", "sgtitle", "suptitle", "xlim", "ylim", "zlim", "box", "gca",
+  "gcf", "linkaxes", "tiledlayout", "nexttile", "dlmwrite", "csvwrite",
+  "writematrix", "writetable", "xlswrite", "fwrite", "fflush", "diary",
+  "more", "beep", "datestr", "num2str", "mat2str", "int2str", "struct",
+  "cellfun", "arrayfun", "structfun", "isfield", "isempty", "numel",
+  "length", "size", "zeros", "ones", "eye", "rand", "randn", "strcmp",
+  "strmatch", "strrep", "regexprep", "upper", "lower", "horzcat", "vertcat",
+  "cat", "repmat", "reshape", "max", "min", "sum", "mean", "std", "var_",
+  "cumsum", "cumprod", "abs", "round", "floor", "ceil", "find", "any", "all",
+  "sort", "unique", "ismember", "hpfilter", "filter", "detrend", "inv",
+  "chol", "eig", "kron", "trace", "det", "diag", "fieldnames",
+  "dynare_version", "verbatim_", "options_", "oo_", "M_", "estim_params_",
+  "bayestopt_", "dataset_", "estimation_info", "exo_simul")
+
+#' Split source text into statements
+#'
+#' Statements end with ';' outside quotes. At the top level (outside a
+#' block), a line starting with MATLAB code is a native statement ending at
+#' the end of the line (or at the matching 'end' for control flow), as in
+#' Dynare's preprocessor. Native statements are returned with the prefix
+#' "%native% ".
 #' @noRd
 dyn_split_statements <- function(src) {
-  if (!grepl("['\"]", src)) {
-    parts <- strsplit(src, ";", fixed = TRUE)[[1]]
-    if (!grepl(";\\s*$", src) && nzchar(trimws(parts[length(parts)]))) {
-      stop("Unterminated statement at end of file (missing ';'): ",
-           substr(trimws(parts[length(parts)]), 1L, 60L), call. = FALSE)
-    }
-    parts <- trimws(gsub("\\s+", " ", parts))
-    return(parts[nzchar(parts)])
-  }
-  chars <- strsplit(src, "", fixed = TRUE)[[1]]
+  lines <- strsplit(src, "\n", fixed = TRUE)[[1]]
   out <- character(0)
-  buf <- character(0)
-  quote <- ""
-  for (ch in chars) {
-    if (nzchar(quote)) {
-      if (ch == quote) quote <- ""
-      buf <- c(buf, ch)
-    } else if (ch == "'" || ch == "\"") {
-      quote <- ch
-      buf <- c(buf, ch)
-    } else if (ch == ";") {
-      out <- c(out, paste(buf, collapse = ""))
-      buf <- character(0)
-    } else {
-      buf <- c(buf, ch)
+  buf <- ""
+  in_block <- FALSE
+  ctl_depth <- 0L
+  head_re <- "^\\s*(\\[|[A-Za-z_][A-Za-z0-9_]*)"
+  finish <- function(st) {
+    if (grepl("[", st, fixed = TRUE) && grepl("\n", st, fixed = TRUE)) {
+      st <- dyn_matrix_rows(st)
+    }
+    st <- trimws(gsub("\\s+", " ", st))
+    if (!nzchar(st)) return(invisible())
+    if (!in_block && tolower(st) == "verbatim") {
+      verbatim <<- TRUE
+      return(invisible())
+    }
+    out <<- c(out, st)
+    kw <- tolower(sub("^([A-Za-z_][A-Za-z0-9_]*).*$", "\\1", st))
+    if (!in_block && kw %in% dyn_block_names &&
+        grepl("^[A-Za-z_][A-Za-z0-9_]*\\s*(\\(.*\\))?$", st)) {
+      in_block <<- TRUE
+    } else if (in_block && tolower(st) == "end") {
+      in_block <<- FALSE
     }
   }
-  rest <- trimws(paste(buf, collapse = ""))
-  if (nzchar(rest)) {
-    stop("Unterminated statement at end of file (missing ';'): ",
-         substr(rest, 1L, 60L), call. = FALSE)
+  verbatim <- FALSE
+  i <- 1L
+  while (i <= length(lines)) {
+    line <- lines[i]
+    i <- i + 1L
+    if (verbatim) {
+      # verbatim; ... end; holds MATLAB code, run as is
+      code <- character(0)
+      if (nzchar(trimws(buf))) code <- buf
+      buf <- ""
+      i <- i - 1L
+      while (i <= length(lines) && !grepl("^\\s*end\\s*;\\s*$", lines[i])) {
+        code <- c(code, lines[i])
+        i <- i + 1L
+      }
+      i <- i + 1L
+      verbatim <- FALSE
+      code <- trimws(paste(code, collapse = "\n"))
+      if (nzchar(code)) out <- c(out, paste("%native%", code))
+      next
+    }
+    if (!in_block && !nzchar(trimws(buf)) && grepl(head_re, line)) {
+      head <- sub(paste0(head_re, ".*$"), "\\1", line)
+      rest <- sub(paste0(head_re), "", line)
+      is_native <- ctl_depth > 0L ||
+        (head %in% dyn_matlab_heads &&
+           !grepl("^\\s*=[^=]", rest)) ||
+        head == "[" ||
+        (grepl("^\\s*[.{]", rest) && !grepl("^\\s*\\.\\.\\.", rest)) ||
+        (grepl("^\\s*\\(", rest) && grepl("\\)\\s*=[^=]", line)) ||
+        (!grepl("^\\s*(=[^=]|;|$)", rest) &&
+           !tolower(head) %in% dyn_known_commands &&
+           !tolower(head) %in% dyn_block_names) ||
+        (grepl("^\\s*=[^=]", rest) &&
+           dyn_line_is_unterminated(line, lines[i:length(lines)]))
+      if (head == "end" && ctl_depth == 0L) is_native <- TRUE
+      if (is_native) {
+        stmt <- line
+        while (grepl("\\.\\.\\.\\s*$", stmt) && i <= length(lines)) {
+          stmt <- paste(sub("\\.\\.\\.\\s*$", "", stmt), lines[i])
+          i <- i + 1L
+        }
+        words <- regmatches(stmt, gregexpr("(?<![A-Za-z0-9_.])[A-Za-z_]+\\b",
+                                           dyn_blank_strings(stmt),
+                                           perl = TRUE))[[1]]
+        was_nested <- ctl_depth > 0L
+        ctl_depth <- max(0L, ctl_depth + sum(words %in% dyn_matlab_control) -
+                           sum(words == "end"))
+        stmt <- trimws(gsub("[ \t]+", " ", stmt))
+        if (was_nested) {
+          # control-flow blocks are kept whole (one native statement)
+          out[length(out)] <- paste(out[length(out)], stmt, sep = "\n")
+        } else {
+          out <- c(out, paste("%native%", stmt))
+        }
+        next
+      }
+    }
+    parts <- dyn_split_line(line)
+    if (length(parts) == 1L) {
+      buf <- paste(buf, parts, sep = "\n")
+    } else {
+      finish(paste(buf, parts[1], sep = "\n"))
+      for (pp in parts[-c(1L, length(parts))]) finish(pp)
+      buf <- parts[length(parts)]
+    }
   }
-  out <- trimws(gsub("\\s+", " ", out))
-  out[nzchar(out)]
+  if (nzchar(trimws(buf))) {
+    stop("Unterminated statement at end of file (missing ';'): ",
+         substr(trimws(buf), 1L, 60L), call. = FALSE)
+  }
+  out
+}
+
+# Commands that solve, simulate or estimate the model.
+dyn_compute_cmds <- c(
+  "stoch_simul", "estimation", "steady", "check", "simul",
+  "perfect_foresight_setup", "perfect_foresight_solver",
+  "perfect_foresight_with_expectation_errors_setup", "identification", "osr",
+  "ramsey_policy", "discretionary_policy", "dynare_sensitivity",
+  "calib_smoother", "extended_path", "occbin_solver", "method_of_moments")
+
+# Dynare statements (commands and declarations) that may start a line.
+dyn_known_commands <- c(
+  "var", "varexo", "varexo_det", "parameters", "predetermined_variables",
+  "varobs", "model_local_variable", "trend_var", "log_trend_var",
+  "change_type", "external_function", "stoch_simul", "estimation", "steady",
+  "check", "resid", "simul", "perfect_foresight_setup",
+  "perfect_foresight_solver", "perfect_foresight_with_expectation_errors_setup",
+  "perfect_foresight_with_expectation_errors_solver", "shock_decomposition",
+  "realtime_shock_decomposition", "plot_shock_decomposition",
+  "initial_condition_decomposition", "squeeze_shock_decomposition",
+  "identification", "osr", "ramsey_model", "ramsey_policy",
+  "discretionary_policy", "evaluate_planner_objective", "planner_objective",
+  "dynare_sensitivity", "forecast", "conditional_forecast",
+  "plot_conditional_forecast", "calib_smoother", "extended_path",
+  "occbin_setup", "occbin_solver", "occbin_write_regimes", "occbin_graph",
+  "method_of_moments", "write_latex_dynamic_model",
+  "write_latex_static_model", "write_latex_original_model",
+  "write_latex_parameter_table", "write_latex_prior_table",
+  "write_latex_definitions", "write_latex_steady_state_model",
+  "collect_latex_files", "model_diagnostics", "model_info", "sbvar",
+  "ms_estimation", "ms_simulation", "ms_compute_mdd",
+  "ms_compute_probabilities", "ms_irf", "ms_forecast",
+  "ms_variance_decomposition", "bvar_density", "bvar_forecast",
+  "histval_file", "initval_file", "load_params_and_steady_state",
+  "save_params_and_steady_state", "smoother2histval", "dsample", "periods",
+  "prior", "prior_function", "posterior_function", "generate_trace_plots",
+  "trace_plot", "data", "var_estimation", "det_cond_forecast",
+  "unit_root_vars", "markov_switching", "svar", "model_comparison",
+  "dynatype", "dynasave", "compilation_setup", "matched_irfs",
+  "model_remove", "var_remove", "native", "set_time", "subsamples",
+  "estimated_params_remove", "optim_weights", "osr_params",
+  "ramsey_constraints", "irf_calibration", "moment_calibration",
+  "sensitivity", "static_model_diagnostics", "write_latex_dynamic_model")
+
+#' Is this a native line with no ';' (e.g. `x = mean(y)` in a plot script)?
+#' @noRd
+dyn_line_is_unterminated <- function(line, following) {
+  b <- dyn_blank_strings(line)
+  if (grepl(";", b, fixed = TRUE)) return(FALSE)
+  # an open bracket continues on the next line (e.g. a matrix)
+  opens <- lengths(regmatches(b, gregexpr("[[({]", b)))
+  closes <- lengths(regmatches(b, gregexpr("[])}]", b)))
+  if (opens > closes) return(FALSE)
+  if (grepl("(\\.\\.\\.|[-+*/^,(=\\[{&|<>])\\s*$", b)) return(FALSE)
+  nxt <- following[nzchar(trimws(following))]
+  if (length(nxt) == 0L) return(TRUE)
+  !grepl("^\\s*[-+*/^;)\\]},&|<>]", nxt[1])
+}
+
+#' Line breaks inside [...] separate matrix rows (MATLAB)
+#' @noRd
+dyn_matrix_rows <- function(st) {
+  st <- gsub("\\.\\.\\.[^\n]*\n", " ", st)
+  ch <- strsplit(st, "", fixed = TRUE)[[1]]
+  depth <- 0L
+  for (k in seq_along(ch)) {
+    if (ch[k] == "[") depth <- depth + 1L
+    else if (ch[k] == "]") depth <- max(0L, depth - 1L)
+    else if (ch[k] == "\n" && depth > 0L) ch[k] <- ";"
+  }
+  paste(ch, collapse = "")
+}
+
+#' Split one line on ';' outside quoted strings
+#' @noRd
+dyn_split_line <- function(line) {
+  blanked <- if (grepl("['\"]", line)) dyn_blank_strings(line) else line
+  pos <- gregexpr(";", blanked, fixed = TRUE)[[1]]
+  if (pos[1] < 0) return(line)
+  substring(line, c(1L, pos + 1L), c(pos - 1L, nchar(line)))
+}
+
+#' Replace the contents of quoted strings by blanks (same length)
+#' @noRd
+dyn_blank_strings <- function(s) {
+  pat <- "(?<![A-Za-z0-9_)\\]}.'])'(?:[^'\n]|'')*'|\"(?:[^\"\n\\\\]|\\\\.)*\""
+  m <- gregexpr(pat, s, perl = TRUE)
+  h <- regmatches(s, m)[[1]]
+  if (length(h) == 0L) return(s)
+  regmatches(s, m) <- list(vapply(h, function(x) strrep("_", nchar(x)), ""))
+  s
 }
 
 #' Split on commas that are not inside parentheses
@@ -345,8 +569,30 @@ dyn_parse_statements <- function(statements) {
 
   i <- 1L
   n <- length(statements)
+  computed <- FALSE
   while (i <= n) {
     st <- statements[i]
+    if (startsWith(st, "%native% ")) {
+      st <- sub("^%native% ", "", st)
+      spv <- regmatches(st, regexec(
+        "^set_param_value\\s*\\(\\s*['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]\\s*,(.*)\\)\\s*;?$",
+        st))[[1]]
+      if (computed) {
+        p$notes <- c(p$notes, paste0(
+          "MATLAB code after the first computing command ignored: ",
+          substr(gsub("\n", " ", st), 1L, 60L)))
+      } else if (length(spv) == 3L) {
+        p$param_exprs[[length(p$param_exprs) + 1L]] <-
+          list(name = spv[2], expr = trimws(spv[3]))
+      } else if (!grepl("^(set_dynare_seed|fprintf|disp|display|figure|close|plot|hold|title|xlabel|ylabel|legend|subplot|warning|addpath|rng|tic|toc|print|saveas|clc|format)\\b", st)) {
+        p$param_exprs[[length(p$param_exprs) + 1L]] <- list(native = st)
+      } else {
+        p$notes <- c(p$notes, paste0("Ignored MATLAB statement: ",
+                                     substr(st, 1L, 60L)))
+      }
+      i <- i + 1L
+      next
+    }
     kw <- tolower(sub("^([A-Za-z_][A-Za-z0-9_]*).*$", "\\1", st))
     head_only <- grepl("^[A-Za-z_][A-Za-z0-9_]*\\s*(\\(.*\\))?$", st)
 
@@ -411,6 +657,14 @@ dyn_parse_statements <- function(statements) {
     if (grepl("^[A-Za-z_][A-Za-z0-9_]*\\s*=[^=]", st)) {
       lhs <- trimws(sub("=.*$", "", st))
       rhs <- trimws(sub("^[^=]*=", "", st))
+      if (computed && lhs %in% p$params) {
+        # The model is imported as Dynare first solves or estimates it.
+        p$notes <- c(p$notes, paste0(
+          "Assignment after the first computing command ignored: ",
+          substr(st, 1L, 60L)))
+        i <- i + 1L
+        next
+      }
       # Assignments to undeclared names are plain MATLAB variables in
       # Dynare; keep them as constants usable in later expressions.
       p$param_exprs[[length(p$param_exprs) + 1L]] <- list(name = lhs,
@@ -435,6 +689,7 @@ dyn_parse_statements <- function(statements) {
     }
     p$commands[[length(p$commands) + 1L]] <- list(name = kw, options = opts,
                                                   statement = st)
+    if (kw %in% dyn_compute_cmds) computed <- TRUE
     i <- i + 1L
   }
 
@@ -446,8 +701,7 @@ dyn_parse_statements <- function(statements) {
   }
   all_names <- c(p$endo, p$exo, p$exo_det, p$params)
   reserved <- c("if", "else", "repeat", "while", "function", "for", "next",
-                "break", "TRUE", "FALSE", "NULL", "Inf", "NaN", "NA", "in",
-                "T", "F")
+                "break", "TRUE", "FALSE", "NULL", "Inf", "NaN", "NA", "in")
   bad <- intersect(all_names, reserved)
   if (length(bad) > 0L) {
     stop("Name(s) reserved in R cannot be imported; rename them in the ",
@@ -566,16 +820,67 @@ dyn_translate_math <- function(s) {
 
 #' Evaluate a Dynare expression in an environment
 #' @noRd
-dyn_eval <- function(expr, env, what) {
+dyn_eval <- function(expr, env, what, matlab = TRUE) {
   if (!nzchar(trimws(expr))) return(NA_real_)
   val <- tryCatch(
     eval(parse(text = dyn_translate_math(expr)), envir = env),
     error = function(e) {
+      if (!matlab) stop(e)
+      # MATLAB expressions (indexing, matrices, MATLAB functions, ...)
+      alt <- tryCatch(dyn_eval_matlab(expr, env), error = function(e2) NULL)
+      if (!is.null(alt)) return(alt)
       stop("Cannot evaluate ", what, ": ", expr, "\n  ", conditionMessage(e),
            call. = FALSE)
     }
   )
   as.numeric(val)
+}
+
+#' Evaluate an expression with the MATLAB interpreter, seeing the MATLAB
+#' variables of the calibration and the numbers visible from `env`
+#' @noRd
+dyn_eval_matlab <- function(expr, env) {
+  mctx <- get0(".matlab_ctx", envir = env, inherits = TRUE)
+  ctx <- mat_new_ctx()
+  if (!is.null(mctx)) {
+    for (nm in ls(mctx$vars, all.names = TRUE)) {
+      assign(nm, get(nm, envir = mctx$vars), envir = ctx$vars)
+    }
+    ctx$funs <- mctx$funs
+  }
+  e <- env
+  chain <- list()
+  while (!identical(e, emptyenv()) && !identical(e, baseenv()) &&
+         !identical(e, globalenv())) {
+    chain <- c(list(e), chain)
+    e <- parent.env(e)
+  }
+  for (ce in chain) {
+    for (nm in ls(ce)) {
+      v <- get(nm, envir = ce)
+      if (is.numeric(v) || is.logical(v)) {
+        assign(nm, if (is.null(dim(v))) matrix(v, nrow = 1L) else v,
+               envir = ctx$vars)
+      }
+    }
+  }
+  prog <- mat_parse(paste0("dyn_eval_result__ = ", expr, ";"))
+  mat_run_block(prog$script, ctx)
+  as.numeric(mat_m(get("dyn_eval_result__", envir = ctx$vars)))
+}
+
+#' Copy numeric scalars set by MATLAB code into the calibration
+#' @noRd
+dyn_matlab_sync <- function(mctx, cal_env) {
+  for (nm in ls(mctx$vars)) {
+    v <- get(nm, envir = mctx$vars)
+    if ((is.numeric(v) || is.logical(v)) && !mat_is_cell(v) &&
+        length(v) == 1L) {
+      assign(nm, as.numeric(v), envir = cal_env)
+    } else if (exists(nm, envir = cal_env, inherits = FALSE)) {
+      rm(list = nm, envir = cal_env)
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -591,14 +896,77 @@ dyn_build <- function(p, observed = NULL) {
 
   # --- calibration --------------------------------------------------------
   cal_env <- new.env(parent = baseenv())
+  mctx <- mat_new_ctx()
+  assign(".matlab_ctx", mctx, envir = cal_env)
   for (pe in p$param_exprs) {
-    assign(pe$name, dyn_eval(pe$expr, cal_env,
-                             paste0("parameter '", pe$name, "'")),
-           envir = cal_env)
+    if (!is.null(pe$native)) {
+      # MATLAB code in the .mod file (vectors, structures, loops, ...)
+      ok <- tryCatch({
+        mat_run_script(pe$native, mctx)
+        TRUE
+      }, error = function(e) {
+        notes <<- c(notes, paste0(
+          "MATLAB statement not run (", substr(conditionMessage(e), 1L, 60L),
+          "): ", substr(gsub("\n", " ", pe$native), 1L, 60L)))
+        FALSE
+      })
+      if (ok) dyn_matlab_sync(mctx, cal_env)
+      next
+    }
+    val <- tryCatch(suppressWarnings(
+      dyn_eval(pe$expr, cal_env, paste0("parameter '", pe$name, "'"),
+               matlab = FALSE)),
+      error = function(e) e)
+    if (inherits(val, "error") || length(val) != 1L || is.na(val)) {
+      # MATLAB semantics (matrices, indexing, MATLAB functions)
+      r_err <- val
+      val <- tryCatch({
+        mat_run_script(paste0(pe$name, " = ", pe$expr, ";"), mctx)
+        get(pe$name, envir = mctx$vars)
+      }, error = function(e) {
+        simpleError(paste0("Cannot evaluate '", pe$name, " = ", pe$expr,
+                           "': ", conditionMessage(e)))
+      })
+      if (!inherits(val, "error")) {
+        dyn_matlab_sync(mctx, cal_env)
+        if (pe$name %in% p$params &&
+            !(is.numeric(val) || is.logical(val)) || length(val) != 1L) {
+          if (pe$name %in% p$params) {
+            stop("Parameter '", pe$name, "' is not assigned a number: ",
+                 pe$expr, call. = FALSE)
+          }
+          next
+        }
+        val <- as.numeric(val)
+      }
+    }
+    if (inherits(val, "error")) {
+      # Other assignments are MATLAB code (plots, tables, ...) as far as
+      # the model is concerned.
+      if (pe$name %in% p$params) stop(val)
+      if (exists(pe$name, envir = cal_env, inherits = FALSE)) {
+        rm(list = pe$name, envir = cal_env)
+      }
+      notes <- c(notes, paste0("Ignored MATLAB assignment: ", pe$name, " = ",
+                               substr(pe$expr, 1L, 40L)))
+      next
+    }
+    assign(pe$name, val, envir = cal_env)
+    assign(pe$name, matrix(val), envir = mctx$vars)
   }
   params <- unlist(mget(intersect(p$params, ls(cal_env)), envir = cal_env))
   if (is.null(params)) params <- numeric(0)
   params <- params[intersect(p$params, names(params))]
+  # Parameters set in steady_state_model, at the calibration (needed early,
+  # e.g. by optimal policy)
+  if (!is.null(p$blocks$steady_state_model)) {
+    early <- tryCatch({
+      f <- dyn_ss_function(p$blocks$steady_state_model, cal_env, p$endo,
+                           numeric(0), function(v) v, derived = p$params)
+      attr(f, "derive")(params)
+    }, error = function(e) NULL)
+    if (length(early) > 0L) params[names(early)] <- early
+  }
 
   # --- model block --------------------------------------------------------
   meq <- dyn_model_equations(p$model, p$predetermined, endo, exo)
@@ -668,11 +1036,18 @@ dyn_build <- function(p, observed = NULL) {
     eqs <- c(eqs, dyn_rule_equations(rule, endo, exo))
     policy_extra$rule <- rule
     notes <- c(notes, paste0(
-      "Discretionary policy: the model is closed with the time-consistent ",
-      "rule for ", paste(spec$instruments, collapse = ", "), ", computed at ",
+      "Discretionary policy: the model is closed with the planner's ",
+      "time-consistent targeting rule for ",
+      paste(spec$instruments, collapse = ", "), ", computed at ",
       "the calibrated parameters (Dennis 2007)."))
   }
-  endo_model <- c(endo, mults)
+  # --- leads of two or more periods inside nonlinear terms ---------------
+  # As in Dynare, such terms become auxiliary variables (exact at every
+  # order of approximation, by the law of iterated expectations).
+  lead_sub <- dyn_substitute_leads(eqs, c(endo, mults), exo)
+  eqs <- lead_sub$equations
+  lead_aux <- names(lead_sub$defs)
+  endo_model <- c(endo, mults, lead_aux)
 
   # --- estimated parameters and priors -----------------------------------
   est <- dyn_parse_estimated(p$blocks$estimated_params,
@@ -706,6 +1081,7 @@ dyn_build <- function(p, observed = NULL) {
       if (lag > 1L) return(paste0(lead_name(name, lag - 1L), "(+1)"))
       return(lag_name(name, -lag))
     }
+    if (has_index && name %in% p$params) return(name)  # parameters are constant
     if (has_index && !exists(name, envir = baseenv(), mode = "function")) {
       stop("Time index on '", name, "', which is not a declared variable.",
            call. = FALSE)
@@ -839,6 +1215,7 @@ dyn_build <- function(p, observed = NULL) {
   ss_guess <- fill_aux(base_guess)
 
   ss_function <- NULL
+  derive_fn <- NULL
   ss_defaults <- stats::setNames(numeric(length(endo)), endo)
   for (v in intersect(names(init_vals), endo)) ss_defaults[v] <- init_vals[[v]]
   if (!is.null(p$blocks$steady_state_model)) {
@@ -846,7 +1223,9 @@ dyn_build <- function(p, observed = NULL) {
       # Ramsey: the file's steady state only covers the original variables;
       # use it as the starting guess for the augmented system.
       ssf <- dyn_ss_function(p$blocks$steady_state_model, cal_env, endo,
-                             exo_ss, function(v) v, defaults = ss_defaults)
+                             exo_ss, function(v) v, defaults = ss_defaults,
+                             derived = p$params)
+      derive_fn <- attr(ssf, "derive")
       guess <- tryCatch(ssf(params), error = function(e) NULL)
       if (!is.null(guess)) {
         base_guess[endo] <- guess[endo]
@@ -855,7 +1234,60 @@ dyn_build <- function(p, observed = NULL) {
     } else {
       ss_function <- dyn_ss_function(p$blocks$steady_state_model, cal_env,
                                      endo, exo_ss, fill_aux,
-                                     defaults = ss_defaults)
+                                     defaults = ss_defaults,
+                                     derived = p$params)
+      derive_fn <- attr(ss_function, "derive")
+    }
+  }
+  ss_file <- NULL
+  if (!is.null(p$source_file)) {
+    ss_file <- file.path(dirname(p$source_file), paste0(
+      tools::file_path_sans_ext(basename(p$source_file)), "_steadystate.m"))
+    if (!file.exists(ss_file)) ss_file <- NULL
+  }
+  if (!is.null(ss_file) && !is.null(p$blocks$steady_state_model)) {
+    stop("Both a steady_state_model block and ", basename(ss_file),
+         " exist; Dynare does not allow this.", call. = FALSE)
+  }
+  if (!is.null(ss_file)) {
+    ssm <- dyn_matlab_ss_setup(ss_file, p, endo, params, ss_defaults,
+                               exo_ss[p$exo], fill_aux)
+    notes <- c(notes, ssm$notes)
+    if (length(mults) > 0L) {
+      guess <- tryCatch(ssm$ss_function(params), error = function(e) NULL)
+      if (!is.null(guess)) {
+        base_guess[endo] <- guess[endo]
+        ss_guess <- fill_aux(base_guess)
+      }
+    } else {
+      ss_function <- ssm$ss_function
+    }
+    if (length(ssm$derived) > 0L) {
+      params[ssm$derived] <- ssm$derived_values
+      derive_fn <- ssm$derive_fn
+    }
+  } else if (!is.null(derive_fn)) {
+    # Parameters assigned in steady_state_model are updated by Dynare
+    # whenever the steady state is computed; start from their values at
+    # the calibration.
+    base <- params[setdiff(names(params), attr(derive_fn, "names_out"))]
+    dv <- tryCatch(derive_fn(base), error = function(e) NULL)
+    if (length(dv) > 0L) {
+      params[names(dv)] <- dv
+      notes <- c(notes, paste0(
+        "Parameter(s) set in steady_state_model and updated with the ",
+        "steady state: ", paste(names(dv), collapse = ", "), "."))
+    }
+  }
+
+  if (length(lead_aux) > 0L && !is.null(ss_function)) {
+    base_ssf <- ss_function
+    ss_function <- function(params) {
+      v <- base_ssf(params)
+      for (a in lead_aux) {
+        v[a] <- dyn_ss_value(lead_sub$defs[[a]], v, params, cal_env)
+      }
+      v
     }
   }
 
@@ -929,8 +1361,18 @@ dyn_build <- function(p, observed = NULL) {
         if (name %in% names(ss_links)) ss_links[[name]] else NULL
       })
     }, character(1), USE.NAMES = FALSE)
-    model <- dyn_link_steady_state(model, make_model(ss_eqs, fixed, start),
-                                   ss_links)
+    ss_model <- make_model(ss_eqs, fixed, start)
+    if (!is.null(ramsey_holder)) {
+      # its Ramsey steady state must not go through the linked model
+      ss_model$ss_function <- function(params) {
+        dyn_ramsey_ss(ss_model, params, ss_guess, endo, mults, fill_aux)
+      }
+    }
+    model <- dyn_link_steady_state(model, ss_model, ss_links)
+  }
+
+  if (!is.null(derive_fn) && length(attr(derive_fn, "names_out")) > 0L) {
+    model <- dyn_link_derived(model, derive_fn)
   }
 
   if (!is.null(ramsey_holder)) ramsey_holder$model <- model
@@ -999,6 +1441,14 @@ dyn_build <- function(p, observed = NULL) {
   estimation <- dyn_estimation_options(p$commands, cal_env)
   notes <- c(notes, estimation$notes)
   estimation$notes <- NULL
+  if (identical(estimation$lik_init, 2L)) {
+    underlying <- stats::setNames(obs_model, obs_model)
+    underlying[me_obs] <- me_vars
+    model$kalman_init <- list(type = "lik_init_2", scale = 10,
+                              pred_states = lag_states,
+                              observed = underlying[obs_model],
+                              noise_states = me_states)
+  }
 
   policy <- dyn_policy_info(p, cal_env, endo, params, spec = spec,
                             extra = policy_extra)
@@ -1037,6 +1487,120 @@ dyn_build <- function(p, observed = NULL) {
   )
 }
 
+#' Auxiliary variables for nonlinear terms with leads of two or more
+#'
+#' Follows Dynare's substituteEndoLeadGreaterThanTwo: sums and differences
+#' are searched recursively, as are products and quotients whose other
+#' factor has no leads; any other term E with a lead n >= 2 is replaced by
+#' A(+1), with A = E(-1) (chained for n > 2). Leads on single variables are
+#' left to the usual auxiliary lead variables.
+#' @return list(equations, defs = named list of definitions in Dynare timing)
+#' @noRd
+dyn_substitute_leads <- function(eqs, endo, exo) {
+  lead_of <- function(e) {
+    if (length(e) != 2L) return(NA_integer_)
+    a <- e[[2L]]
+    v <- tryCatch(eval(a, baseenv()), error = function(err) NA)
+    if (is.numeric(v) && length(v) == 1L && v == round(v)) as.integer(v) else NA_integer_
+  }
+  is_ref <- function(e, set) {
+    is.call(e) && is.name(e[[1L]]) && as.character(e[[1L]]) %in% set &&
+      !is.na(lead_of(e))
+  }
+  max_lead <- function(e, set) {
+    if (is.name(e)) return(0L)
+    if (!is.call(e)) return(0L)
+    if (is_ref(e, set)) return(max(0L, lead_of(e)))
+    if (length(e) < 2L) return(0L)
+    max(0L, vapply(as.list(e)[-1L], max_lead, 0L, set = set))
+  }
+  shift <- function(e, d) {
+    if (d == 0L) return(e)
+    if (is.name(e)) {
+      nm <- as.character(e)
+      if (nm %in% c(endo, exo)) return(str2lang(sprintf("%s(%+d)", nm, d)))
+      return(e)
+    }
+    if (!is.call(e)) return(e)
+    if (is_ref(e, c(endo, exo))) {
+      l <- lead_of(e) + d
+      nm <- as.character(e[[1L]])
+      return(if (l == 0L) as.name(nm) else str2lang(sprintf("%s(%+d)", nm, l)))
+    }
+    for (k in seq_along(e)[-1L]) e[[k]] <- shift(e[[k]], d)
+    e
+  }
+  key <- function(e) paste(deparse(e, width.cutoff = 500L), collapse = " ")
+  table <- list()
+  defs <- list()
+  new_eqs <- character(0)
+  aux_for <- function(e) {
+    n <- max_lead(e, endo)
+    sub <- shift(e, -(n - 1L))
+    for (lag in rev(seq_len(n - 1L) - 1L)) {
+      k <- key(shift(e, -lag))
+      if (!is.null(table[[k]])) {
+        sub <- table[[k]]
+      } else {
+        nm <- paste0("aux_lead_", length(defs) + 1L)
+        while (nm %in% c(endo, exo)) nm <- paste0(nm, "_")
+        defs[[nm]] <<- key(sub)
+        new_eqs <<- c(new_eqs, paste0(nm, " = ", key(sub)))
+        sub <- str2lang(paste0(nm, "(+1)"))
+        table[[k]] <<- sub
+      }
+    }
+    sub
+  }
+  subst <- function(e) {
+    if (!is.call(e) || max_lead(e, endo) < 2L) return(e)
+    if (is_ref(e, endo)) return(e)
+    op <- as.character(e[[1L]])
+    if (op %in% c("+", "-", "(", "=")) {
+      for (k in seq_along(e)[-1L]) e[[k]] <- subst(e[[k]])
+      return(e)
+    }
+    if (op %in% c("*", "/") && length(e) == 3L) {
+      m1 <- max_lead(e[[2L]], endo)
+      m2 <- max_lead(e[[3L]], endo)
+      x1 <- max_lead(e[[2L]], exo)
+      x2 <- max_lead(e[[3L]], exo)
+      if (m1 >= 2L && m2 == 0L && x2 == 0L) {
+        e[[2L]] <- subst(e[[2L]])
+        return(e)
+      }
+      if (op == "*" && m1 == 0L && x1 == 0L && m2 >= 2L) {
+        e[[3L]] <- subst(e[[3L]])
+        return(e)
+      }
+    }
+    aux_for(e)
+  }
+  out <- vapply(eqs, function(eq) {
+    tree <- tryCatch(str2lang(eq), error = function(err) NULL)
+    if (is.null(tree) || max_lead(tree, endo) < 2L) return(eq)
+    key(subst(tree))
+  }, character(1), USE.NAMES = FALSE)
+  # definitions may themselves need substitution (leads > 2)
+  if (length(new_eqs)) {
+    out <- c(out, vapply(new_eqs, function(eq) key(subst(str2lang(eq))),
+                         character(1), USE.NAMES = FALSE))
+  }
+  list(equations = out, defs = defs)
+}
+
+#' Value of a Dynare expression at the steady state
+#' @noRd
+dyn_ss_value <- function(expr, values, params, cal_env) {
+  s <- dyn_rewrite_ids(expr, function(name, lag, has_index) {
+    if (has_index) name else NULL
+  })
+  env <- new.env(parent = cal_env)
+  for (nm in names(params)) assign(nm, params[[nm]], envir = env)
+  for (nm in names(values)) assign(nm, values[[nm]], envir = env)
+  as.numeric(eval(parse(text = dyn_translate_math(s)), envir = env))
+}
+
 #' Make STEADY_STATE(x) references follow the steady state
 #'
 #' `model` uses internal parameters (named in `links`) for STEADY_STATE(x);
@@ -1049,7 +1613,9 @@ dyn_link_steady_state <- function(model, ss_model, links) {
   inner <- model$eval_fn
   param_names <- ss_model$parameters
   cache <- new.env(parent = emptyenv())
-  model$eval_fn <- function(values) {
+  inner_resolve <- model$resolve_values
+  resolve <- function(values) {
+    if (is.function(inner_resolve)) values <- inner_resolve(values)
     pv <- values[param_names]
     if (is.null(cache$key) || !identical(cache$key, pv)) {
       ss <- steady_state(ss_model, params = pv)
@@ -1057,8 +1623,11 @@ dyn_link_steady_state <- function(model, ss_model, links) {
       cache$vals <- ss$values[unname(links)]
     }
     values[names(links)] <- cache$vals
-    inner(values)
+    values
   }
+  # resolve_values: the parameter values the equations actually use
+  model$resolve_values <- resolve
+  model$eval_fn <- function(values) inner(resolve(values))
   model$parameters <- setdiff(model$parameters, names(links))
   model$free_parameters <- setdiff(model$free_parameters, names(links))
   model$ss_links <- links
@@ -1121,7 +1690,7 @@ dyn_model_equations <- function(statements, predetermined, endo, exo) {
   ss_links <- character(0)
   eqs <- vapply(eqs, function(eq) {
     repeat {
-      pos <- regexpr("(?<![A-Za-z0-9_.])STEADY_STATE\\s*\\(", eq, perl = TRUE)
+      pos <- regexpr("(?<![A-Za-z0-9_.])(?i:STEADY_STATE)\\s*\\(", eq, perl = TRUE)
       if (pos == -1L) break
       open <- pos + attr(pos, "match.length") - 1L
       arg <- trimws(dyn_paren_content(eq, open))
@@ -1190,7 +1759,7 @@ format_num <- function(x) {
 #' Build a steady-state function from a steady_state_model block
 #' @noRd
 dyn_ss_function <- function(statements, cal_env, endo, exo_ss, fill_aux,
-                            defaults = NULL) {
+                            defaults = NULL, derived = character(0)) {
   assigns <- lapply(statements, function(st) {
     if (!grepl("^[A-Za-z_][A-Za-z0-9_]*\\s*=[^=]", st)) {
       stop("Unsupported statement in steady_state_model: ", st,
@@ -1206,7 +1775,9 @@ dyn_ss_function <- function(statements, cal_env, endo, exo_ss, fill_aux,
   force(cal_env)
   force(exo_ss)
   force(fill_aux)
-  function(params) {
+  # Parameters on the left-hand side are derived from the others.
+  derived <- intersect(vapply(assigns, `[[`, "", "name"), derived)
+  run <- function(params) {
     env <- new.env(parent = baseenv())
     for (nm in ls(cal_env)) assign(nm, get(nm, envir = cal_env), envir = env)
     for (nm in names(exo_ss)) assign(nm, exo_ss[[nm]], envir = env)
@@ -1215,8 +1786,110 @@ dyn_ss_function <- function(statements, cal_env, endo, exo_ss, fill_aux,
     for (a in assigns) {
       assign(a$name, eval(a$expr, envir = env), envir = env)
     }
+    env
+  }
+  out <- function(params) {
+    env <- run(params[setdiff(names(params), derived)])
     fill_aux(unlist(mget(endo, envir = env)))
   }
+  derive <- function(params) {
+    env <- run(params[setdiff(names(params), derived)])
+    unlist(mget(derived, envir = env))
+  }
+  attr(derive, "names_out") <- derived
+  attr(out, "derive") <- derive
+  out
+}
+
+#' Steady state (and recalibrated parameters) from a MATLAB file
+#' @noRd
+dyn_matlab_ss_setup <- function(path, p, endo, params, ys0, exo0, fill_aux) {
+  runner <- dyn_matlab_steady_state(path, p$params, endo, p$exo)
+  base_full <- stats::setNames(rep(NaN, length(p$params)), p$params)
+  base_full[names(params)] <- params
+  exo0 <- stats::setNames(as.numeric(exo0), p$exo)
+  exo0[is.na(exo0)] <- 0
+  ys0 <- as.numeric(ys0[endo])
+  cache <- new.env(parent = emptyenv())
+  run <- function(pv) {
+    full <- base_full
+    keep <- intersect(names(pv), p$params)
+    full[keep] <- pv[keep]
+    if (!is.null(cache$key) && identical(cache$key, full)) return(cache$val)
+    r <- runner(full, ys0, exo0)
+    if (!isTRUE(r$check == 0)) {
+      stop("The steady-state file ", basename(path),
+           " reports that it failed (check = ", format(r$check), ").",
+           call. = FALSE)
+    }
+    cache$key <- full
+    cache$val <- r
+    r
+  }
+  notes <- paste0("Steady state computed by running ", basename(path),
+                  " with read_dynare()'s MATLAB interpreter.")
+  r0 <- tryCatch(run(params), error = function(e) e)
+  derived <- character(0)
+  derived_values <- numeric(0)
+  if (inherits(r0, "error")) {
+    notes <- c(notes, paste0("The steady-state file failed at the ",
+                             "calibration: ", conditionMessage(r0)))
+  } else {
+    changed <- vapply(p$params, function(nm) {
+      a <- base_full[[nm]]
+      b <- r0$params[[nm]]
+      !(identical(a, b) || (!is.na(a) && !is.na(b) && a == b))
+    }, logical(1))
+    derived <- p$params[changed]
+    derived_values <- r0$params[derived]
+    if (length(derived) > 0L) {
+      notes <- c(notes, paste0(
+        "Parameter(s) set by the steady-state file and updated with the ",
+        "steady state: ", paste(derived, collapse = ", "), "."))
+    }
+  }
+  derive_fn <- function(pv) run(pv)$params[derived]
+  attr(derive_fn, "names_out") <- derived
+  list(ss_function = function(params) fill_aux(run(params)$ys),
+       derive_fn = derive_fn, derived = derived,
+       derived_values = derived_values, notes = notes)
+}
+
+#' Parameters computed from the others (steady_state_model or a MATLAB
+#' steady-state file): the evaluation function recomputes them from the
+#' current values of the remaining parameters (cached).
+#' @noRd
+dyn_link_derived <- function(model, derive_fn) {
+  inner <- model$eval_fn
+  derived <- attr(derive_fn, "names_out")
+  cache <- new.env(parent = emptyenv())
+  inner_resolve <- model$resolve_values
+  prm <- c(model$parameters, names(model$fixed))
+  resolve <- function(values) {
+    base <- setdiff(names(values), derived)
+    pv <- values[intersect(base, prm)]
+    if (is.null(cache$key) || !identical(cache$key, pv)) {
+      cache$vals <- derive_fn(pv)
+      cache$key <- pv
+    }
+    values[names(cache$vals)] <- cache$vals
+    if (is.function(inner_resolve)) values <- inner_resolve(values)
+    values
+  }
+  model$resolve_values <- resolve
+  model$eval_fn <- function(values) {
+    # inner already applies the STEADY_STATE() links, if any
+    base <- setdiff(names(values), derived)
+    pv <- values[intersect(base, prm)]
+    if (is.null(cache$key) || !identical(cache$key, pv)) {
+      cache$vals <- derive_fn(pv)
+      cache$key <- pv
+    }
+    values[names(cache$vals)] <- cache$vals
+    inner(values)
+  }
+  model$derived_parameters <- derived
+  model
 }
 
 #' Parse the shocks block (variances only)
@@ -1305,9 +1978,19 @@ dyn_parse_shocks <- function(statements, exo, cal_env, endo = character(0)) {
         stop("'values' without a preceding 'periods' in the shocks block.",
              call. = FALSE)
       }
-      vals <- vapply(dyn_split_values(sub("^values\\s+", "", st)),
-                     dyn_eval, numeric(1), env = cal_env,
-                     what = "deterministic shock value")
+      # a value may be a MATLAB vector covering several periods
+      vals <- tryCatch(
+        unlist(lapply(dyn_split_values(sub("^values\\s+", "", st)),
+                      dyn_eval, env = cal_env,
+                      what = "deterministic shock value")),
+        error = function(e) e)
+      if (inherits(vals, "error")) {
+        # e.g. values computed by MATLAB code that simulates the model
+        notes <- c(notes, paste0("Deterministic shock '", current,
+                                 "' dropped: ", conditionMessage(vals)))
+        det[[k]] <- NULL
+        next
+      }
       det[[k]]$values <- vals
     } else {
       notes <- c(notes, paste0("Unrecognised shocks statement ignored: ",
@@ -1351,6 +2034,13 @@ dyn_det_paths <- function(det) {
   out <- matrix(0, horizon, length(shocks),
                 dimnames = list(NULL, shocks))
   for (d in det) {
+    flat <- unlist(d$periods)
+    if (!is.null(d$values) && length(d$values) > 1L &&
+        length(d$values) == length(flat) && length(flat) != length(d$periods)) {
+      # a vector of values over a range of periods, element by element
+      out[flat, d$shock] <- d$values
+      next
+    }
     if (is.null(d$values) || length(d$values) != length(d$periods)) {
       if (!is.null(d$values) && length(d$values) == 1L) {
         d$values <- rep(d$values, length(d$periods))
@@ -1650,10 +2340,11 @@ dyn_estimation_options <- function(commands, cal_env) {
   out$nobs <- int_opt("nobs", NA_integer_)
   out$datafile <- kv$datafile
   lik_init <- int_opt("lik_init", 1L)
-  if (lik_init != 1L) {
+  out$lik_init <- lik_init
+  if (!lik_init %in% c(1L, 2L)) {
     out$notes <- c(out$notes, paste0(
-      "estimation uses lik_init = ", lik_init, "; dsge initialises the ",
-      "Kalman filter at the stationary distribution (Dynare's lik_init = 1)."))
+      "estimation uses lik_init = ", lik_init, "; dsge supports lik_init = 1 ",
+      "(stationary distribution) and 2 (10 times the identity) and uses 1."))
   }
   if (int_opt("prefilter", 0L) != 0L) {
     out$notes <- c(out$notes, paste0(

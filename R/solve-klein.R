@@ -44,9 +44,15 @@
 #'   }
 #'
 #' @details
-#' The method forms a companion system from the structural matrices and
-#' solves via undetermined coefficients iteration. Saddle-path stability
-#' requires that all eigenvalues of H have modulus less than 1.
+#' The stable solution is computed by cyclic reduction (as Dynare's
+#' `cycle_reduction` option); if that fails, for example with unit roots
+#' or a singular lead matrix, the stable deflating subspace of the model's
+#' matrix pencil is found with the inverse-free spectral divide of Bai,
+#' Demmel and Gu (1997), which needs no QZ decomposition; an
+#' undetermined-coefficients iteration is the last resort. As in Dynare,
+#' eigenvalues with modulus up to 1 + 1e-6 count as stable, so unit roots
+#' are allowed. Saddle-path stability requires that all eigenvalues of H
+#' have modulus below 1 + `tol`.
 #'
 #' For nonlinear models, the solver first computes the deterministic
 #' steady state, then linearizes the model via first-order Taylor
@@ -258,24 +264,37 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
                         shock_sd, n_c, n_s, tol, A4 = NULL) {
 
   A0_A2 <- A0 - A2
-
-  # Check that A0 - A2 is invertible
-  if (abs(det(A0_A2)) < 1e-14) {
-    return(list(
-      G = NULL, H = NULL, M = NULL,
-      eigenvalues = rep(NA_complex_, n_s),
-      stable = FALSE, n_stable = NA_integer_
-    ))
-  }
-
-  A0_A2_inv <- solve(A0_A2)
   has_A4 <- !is.null(A4) && max(abs(A4)) > 1e-15
 
-  # Initialize G from the static solution (ignoring forward-looking terms)
-  G <- A0_A2_inv %*% A3
-
-  max_iter <- 1000L
+  # Cyclic reduction (as Dynare's cycle_reduction) finds the stable
+  # solution directly; the fixed-point iteration below is the fallback.
+  cr <- klein_cyclic_reduction(A0, A1, A2, A3, B0, B1, B2, B3,
+                               if (has_A4) A4 else NULL, n_c, n_s)
   converged <- FALSE
+  if (is.null(cr)) {
+    cr <- klein_spectral_divide(A0, A1, A2, A3, B0, B1, B2, B3,
+                                if (has_A4) A4 else NULL, n_c, n_s)
+  }
+  if (!is.null(cr)) {
+    G <- cr$G
+    converged <- TRUE
+  }
+
+  # Fallback: fixed-point iteration, which needs A0 - A2 invertible
+  if (!converged) {
+    if (abs(det(A0_A2)) < 1e-14) {
+      return(list(
+        G = NULL, H = NULL, M = NULL,
+        eigenvalues = rep(NA_complex_, n_s),
+        stable = FALSE, n_stable = NA_integer_
+      ))
+    }
+    A0_A2_inv <- solve(A0_A2)
+    # Initialize G from the static solution (ignoring forward-looking terms)
+    G <- A0_A2_inv %*% A3
+  }
+
+  max_iter <- if (converged) 0L else 1000L
 
   for (iter in seq_len(max_iter)) {
     G_old <- G
@@ -297,6 +316,7 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
     if (has_A4) A3_eff <- A3 + A4 %*% H
     G <- A0_A2_inv %*% (A1 %*% G %*% H + A3_eff)
 
+    if (!all(is.finite(G))) break
     if (max(abs(G - G_old)) < 1e-12) {
       converged <- TRUE
       break
@@ -337,4 +357,165 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
     eigenvalues = eigenvalues_H,
     stable = TRUE, n_stable = n_stable_eig
   )
+}
+
+#' First-order solution by cyclic reduction
+#'
+#' With controls y and states x, the linearized model is
+#'   (A0 - A2) y_t = A1 y_{t+1} + A3 x_t + A4 x_{t+1}
+#'   B0 x_{t+1} = B1 y_{t+1} + B2 y_t + B3 x_t.
+#' In v_t = (x_{t+1}, y_t) it reads Am v_{t-1} + Az v_t + Ap v_{t+1} = 0,
+#' whose stable solution v_t = X v_{t-1} is found by cyclic reduction
+#' (Bini, Iannazzo and Meini 2012; Dynare's cycle_reduction). Then
+#' H = X_xx and G = X_yx. Returns NULL when the method fails or the
+#' solution is not determinate, so the caller can fall back.
+#' @noRd
+klein_cyclic_reduction <- function(A0, A1, A2, A3, B0, B1, B2, B3, A4,
+                                   n_c, n_s, tol = 1e-13, max_it = 300L) {
+  n <- n_s + n_c
+  ix <- seq_len(n_s)
+  iy <- n_s + seq_len(n_c)
+  if (is.null(A4)) A4 <- matrix(0, n_c, n_s)
+  Am <- rbind(cbind(A3, matrix(0, n_c, n_c)), cbind(-B3, matrix(0, n_s, n_c)))
+  Az <- rbind(cbind(A4, -(A0 - A2)), cbind(B0, -B2))
+  Ap <- rbind(cbind(matrix(0, n_c, n_s), A1), cbind(matrix(0, n_s, n_s), -B1))
+  out <- tryCatch({
+    a0 <- Am
+    a1 <- Az
+    a2 <- Ap
+    ahat <- Az
+    i0 <- seq_len(n)
+    i2 <- n + seq_len(n)
+    it <- 0L
+    repeat {
+      tmp <- t(solve(t(a1), t(rbind(a0, a2)))) %*% cbind(a0, a2)
+      a1 <- a1 - tmp[i0, i2, drop = FALSE] - tmp[i2, i0, drop = FALSE]
+      a0n <- -tmp[i0, i0, drop = FALSE]
+      a2 <- -tmp[i2, i2, drop = FALSE]
+      ahat <- ahat - tmp[i2, i0, drop = FALSE]
+      a0 <- a0n
+      crit0 <- sum(abs(a0))
+      if (!is.finite(crit0)) return(NULL)
+      it <- it + 1L
+      if (crit0 < tol * max(1, sum(abs(Am))) &&
+          max(colSums(abs(a2))) < tol * max(1, max(colSums(abs(Ap))))) break
+      if (it >= max_it) return(NULL)
+    }
+    X <- -solve(ahat, Am)
+    X
+  }, error = function(e) NULL)
+  if (is.null(out) || !all(is.finite(out))) return(NULL)
+  X <- out
+  # determinate solution: v_t depends on x_t only (v_{t-1}'s first block)
+  if (max(abs(X[, iy])) > 1e-8 * max(1, max(abs(X)))) return(NULL)
+  resid <- Am + Az %*% X + Ap %*% X %*% X
+  if (max(abs(resid)) > 1e-8 * max(1, max(abs(Az)))) return(NULL)
+  list(G = X[iy, ix, drop = FALSE], H = X[ix, ix, drop = FALSE])
+}
+
+#' First-order solution by an inverse-free spectral divide
+#'
+#' With z_t = (x_t, y_t) the model is E z_{t+1} = F z_t. The right deflating
+#' subspace of the pencil F - lambda E for the eigenvalues inside the unit
+#' circle is the range of the projector lim (A_j + B_j)^{-1} B_j of the
+#' inverse-free iteration of Bai, Demmel and Gu (1997), which needs no QZ
+#' decomposition and copes with infinite eigenvalues and Jordan blocks. With
+#' a basis V = (V_x; V_y) of that subspace, G = V_y V_x^{-1} and
+#' H = V_x S V_x^{-1}, where E V S = F V. Returns NULL unless there are
+#' exactly as many stable eigenvalues as states.
+#' @noRd
+klein_spectral_divide <- function(A0, A1, A2, A3, B0, B1, B2, B3, A4,
+                                  n_c, n_s, maxit = 100L) {
+  n <- n_s + n_c
+  ix <- seq_len(n_s)
+  iy <- n_s + seq_len(n_c)
+  if (is.null(A4)) A4 <- matrix(0, n_c, n_s)
+  E <- rbind(cbind(A4, A1), cbind(B0, -B1))
+  F <- rbind(cbind(-A3, A0 - A2), cbind(B3, B2))
+  out <- tryCatch({
+    # split at 1 + 1e-6 (Dynare's qz_criterium): unit roots count as stable
+    A <- F / (1 + 1e-6)
+    B <- E
+    R_old <- NULL
+    i1 <- seq_len(n)
+    i2 <- n + seq_len(n)
+    for (j in seq_len(maxit)) {
+      q <- qr(rbind(B, -A))
+      Q <- qr.Q(q, complete = TRUE)
+      R <- qr.R(q)
+      A <- crossprod(Q[i1, i2, drop = FALSE], A)
+      B <- crossprod(Q[i2, i2, drop = FALSE], B)
+      if (!is.null(R_old) &&
+          sqrt(sum((abs(R) - abs(R_old))^2)) <= 1e-14 * sqrt(sum(R^2))) break
+      R_old <- R
+    }
+    P <- solve(A + B, B)
+    sv <- svd(P)
+    k <- sum(sv$d > 1e-8 * max(1, sv$d[1]))
+    if (k != n_s) return(NULL)
+    V <- sv$u[, seq_len(k), drop = FALSE]
+    Vx <- V[ix, , drop = FALSE]
+    Vy <- V[iy, , drop = FALSE]
+    Vx_inv <- solve(Vx)
+    S <- qr.solve(E %*% V, F %*% V)
+    list(G = Vy %*% Vx_inv, H = Vx %*% S %*% Vx_inv)
+  }, error = function(e) NULL)
+  if (is.null(out) || !all(is.finite(out$G)) || !all(is.finite(out$H))) {
+    return(NULL)
+  }
+  # accuracy check on the original system
+  G <- out$G
+  H <- out$H
+  res_c <- (A0 - A2) %*% G - A1 %*% G %*% H - A3 - A4 %*% H
+  res_s <- (B0 - B1 %*% G) %*% H - B2 %*% G - B3
+  # relative to the size of the solution: with linearly dependent states
+  # (e.g. k + kp = constant) G is not unique and can have large entries
+  # along the direction in which the states never move
+  scale <- max(1, max(abs(E)), max(abs(F))) * max(1, max(abs(G)), max(abs(H)))
+  if (max(abs(res_c), abs(res_s)) > 1e-8 * scale) {
+    out <- klein_newton_refine(G, A0, A1, A2, A3, B0, B1, B2, B3, A4,
+                               tol = 1e-10 * scale)
+  }
+  out
+}
+
+#' Newton refinement of a first-order solution G
+#'
+#' Solves Phi(G) = (A0 - A2) G - A1 G H - A3 - A4 H = 0 with
+#' H = (B0 - B1 G)^{-1} (B2 G + B3), using the exact Jacobian in Kronecker
+#' form. Used when a solution from an ill-conditioned invariant subspace is
+#' not accurate enough. Returns NULL if it does not converge.
+#' @noRd
+klein_newton_refine <- function(G, A0, A1, A2, A3, B0, B1, B2, B3, A4,
+                                tol, maxit = 8L) {
+  n_c <- nrow(G)
+  n_s <- ncol(G)
+  if (n_c * n_s > 3000L) return(NULL)
+  AA <- A0 - A2
+  Ic <- diag(n_s)
+  for (it in seq_len(maxit)) {
+    K <- solve(B0 - B1 %*% G)
+    H <- K %*% (B2 %*% G + B3)
+    Phi <- AA %*% G - A1 %*% G %*% H - A3 - A4 %*% H
+    if (max(abs(Phi)) < tol) return(list(G = G, H = H))
+    # dH = K (B2 dG + B1 dG H)
+    dH_dG <- kronecker(Ic, K %*% B2) + kronecker(t(H), K %*% B1)
+    J <- kronecker(Ic, AA) - kronecker(t(H), A1) -
+      kronecker(Ic, A1 %*% G + A4) %*% dH_dG
+    # minimum-norm step: G is not unique when states are linearly
+    # dependent (e.g. k + kp = constant), and any solution will do
+    step <- tryCatch({
+      sv <- svd(J)
+      keep <- sv$d > 1e-9 * sv$d[1]
+      as.vector(sv$v[, keep, drop = FALSE] %*%
+                  (crossprod(sv$u[, keep, drop = FALSE], -as.vector(Phi)) / sv$d[keep]))
+    }, error = function(e) NULL)
+    if (is.null(step)) return(NULL)
+    G <- G + matrix(step, n_c, n_s)
+    if (!all(is.finite(G))) return(NULL)
+  }
+  K <- solve(B0 - B1 %*% G)
+  H <- K %*% (B2 %*% G + B3)
+  Phi <- AA %*% G - A1 %*% G %*% H - A3 - A4 %*% H
+  if (max(abs(Phi)) < tol) list(G = G, H = H) else NULL
 }

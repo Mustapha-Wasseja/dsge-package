@@ -7,9 +7,9 @@
 #           path/to/DSGE_mod/Smets_Wouters_2007
 #
 # Dynare runs the file's estimation command at the published posterior mode
-# (mode_file = usmodel_mode, mode_compute = 0, mh_replic = 0), with
-# lik_init = 1 because dsge initialises the Kalman filter at the stationary
-# distribution. It exports the parameters, shock standard deviations, the
+# (mode_file = usmodel_mode, mode_compute = 0, mh_replic = 0), with the
+# file's own lik_init = 2 (set LIK_INIT=1 in the environment to use the
+# stationary initialisation instead). It exports the parameters, shock standard deviations, the
 # data, the log-likelihood and log-prior at the mode and all first-order
 # IRFs; the same quantities are then computed with dsge.
 
@@ -25,7 +25,8 @@ invisible(file.copy(file.path(sw_dir, c("usmodel_data.mat", "usmodel_mode.mat"))
                      work))
 src <- readLines(mod)
 src <- src[!grepl("^shock_decomposition", src)]
-src <- sub("lik_init=2", "lik_init=1", src, fixed = TRUE)
+lik_init <- as.integer(Sys.getenv("LIK_INIT", "2"))
+src <- sub("lik_init=2", paste0("lik_init=", lik_init), src, fixed = TRUE)
 src <- sub(", tex);", ");", src, fixed = TRUE)
 writeLines(c(src, "stoch_simul(order = 1, irf = 20, nograph, noprint);"),
            file.path(work, "sw_est.mod"))
@@ -61,6 +62,7 @@ system2("octave", c("--no-gui", "--quiet", "run.m"), stdout = FALSE,
 setwd(old)
 
 m <- read_dynare(mod)
+if (lik_init == 1L) m$model$kalman_init <- NULL
 pr <- utils::read.csv(file.path(work, "params.csv"), header = FALSE)
 mode <- stats::setNames(pr$V2, pr$V1)
 sdv <- utils::read.csv(file.path(work, "sd.csv"), header = FALSE)
@@ -85,7 +87,8 @@ dat <- utils::read.csv(file.path(work, "data.csv"))
 obs <- m$model$variables$observed
 y <- sweep(as.matrix(dat[, obs]), 2, sol$steady_state[obs])
 ll <- dsge:::kalman_filter(y, sol$G, sol$H, sol$M, sol$D,
-                           presample = m$estimation$presample)$loglik
+                           presample = m$estimation$presample,
+                           init = m$model$kalman_init)$loglik
 lp <- sum(vapply(names(m$priors), function(nm) {
   x <- if (startsWith(nm, "sd_e.")) sd[[sub("sd_e.", "", nm, fixed = TRUE)]]
        else mode[[nm]]
@@ -94,7 +97,7 @@ lp <- sum(vapply(names(m$priors), function(nm) {
 
 res <- data.frame(
   check = c("IRFs (40 variables x 7 shocks), max abs diff",
-            "log-likelihood at posterior mode (presample 4)",
+            sprintf("log-likelihood at posterior mode (presample 4, lik_init %d)", lik_init),
             "log-prior at posterior mode",
             "log-posterior kernel at posterior mode"),
   dynare = c("", sprintf("%.9f", lik[1]), sprintf("%.9f", lik[2]),
