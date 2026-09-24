@@ -73,8 +73,9 @@ solving, and estimating DSGE models entirely in R. No external software
 - **Markov-switching volatility** (`ms_filter()`) -- regime-switching
   shock variances via the Kim (1994) filter, with smoothed regime
   probabilities
-- **PAC equations** (`pac_weights()`) -- FRB/US-style polynomial
-  adjustment costs with closed-form forward-looking weights
+- **PAC equations** (`pac_weights()`, `pac_target_loading()`,
+  `pac_simulate()`) -- FRB/US-style polynomial adjustment costs with
+  closed-form forward-looking weights
 - **Ramsey optimal policy** via linear-quadratic regulator
   (`ramsey_policy()`, `welfare_loss()`)
 - **Second- and third-order perturbation** with pruned simulation
@@ -87,6 +88,9 @@ solving, and estimating DSGE models entirely in R. No external software
 - **Robust (sandwich) standard errors** for ML estimation
 - **Posterior predictive checks** and marginal likelihood
 - **Model-implied covariance matrices** and prediction tools
+- **Publication-ready plots** with a unified theme: forecast fan charts
+  with history, +/- 2 sigma bands on smoothed states, and overlays for
+  comparing perfect-foresight paths
 
 ## Installation
 
@@ -361,6 +365,24 @@ fit_bayes <- bayes_dsge(nk, data = your_data, priors = my_priors,
 | Nonlinear perfect foresight (LBJ) | Yes | Via Dynare | Yes |
 | Ramsey optimal policy | Yes | Via Dynare | Yes |
 | Bayes factor model comparison | Yes | No | Partial |
+| Variance decomposition (unconditional + FEVD) | Yes | Via Dynare | Yes |
+| Optimal simple rules | Yes | Via Dynare | Yes |
+| Discretionary optimal policy | Yes | Via Dynare | Yes |
+| Conditional forecasts | Yes | Via Dynare | Yes |
+| IRF matching estimation | Yes | Via Dynare | Yes |
+| GMM / SMM estimation | Yes | Via Dynare | Yes |
+| DSGE-VAR (joint MH + forecasting) | Yes | Via Dynare | Yes |
+| Sequential Monte Carlo sampler | Yes | Via Dynare | Yes |
+| Endogenous priors | Yes | Via Dynare | Yes |
+| Derived (model-local) parameters | Yes | Via Dynare | Yes |
+| Calibrated-model smoother | Yes | Via Dynare | Yes |
+| Extended path simulation | Yes | Via Dynare | Yes |
+| Perfect foresight with expectation errors | Yes | Via Dynare | Yes |
+| Global sensitivity analysis | Yes | Via Dynare | Yes |
+| Skew-normal Kalman filter | Yes | Via Dynare | Yes |
+| Markov-switching volatility | Yes | Via Dynare | Yes |
+| PAC equations | Yes | Via Dynare | Yes |
+| LaTeX model export | Yes | Via Dynare | Yes |
 | R model interface (coef, vcov, plot) | Yes | No | No |
 | Formula-based specification | Yes | No | No |
 
