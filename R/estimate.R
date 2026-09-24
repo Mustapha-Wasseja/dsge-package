@@ -8,7 +8,8 @@
 #' Estimates the parameters of a linear DSGE model by maximizing the
 #' log-likelihood computed via the Kalman filter.
 #'
-#' @param model A `dsge_model` object created by [dsge_model()].
+#' @param model A `dsge_model` object created by [dsge_model()], a
+#'   `dsgenl_model`, or a Dynare model imported with [read_dynare()].
 #' @param data A data frame, matrix, or `ts` object containing the observed
 #'   variables. Column names must match the observed control variable names
 #'   in the model.
@@ -62,6 +63,8 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
                      method = "BFGS", control = list(),
                      shock_start = NULL,
                      demean = TRUE, hessian = TRUE) {
+  model <- unwrap_dynare(model)
+
   # Dispatch to nonlinear estimator if needed
   if (inherits(model, "dsgenl_model")) {
     return(estimate_dsgenl(model, data = data, start = start, fixed = fixed,

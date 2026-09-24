@@ -9,10 +9,13 @@
 #' re-solved and the model re-linearized at each candidate parameter
 #' vector.
 #'
-#' @param model A `dsge_model` or `dsgenl_model` object.
+#' @param model A `dsge_model` or `dsgenl_model` object, or a Dynare model
+#'   imported with [read_dynare()].
 #' @param data A data frame, matrix, or `ts` object containing the observed
 #'   variables.
 #' @param priors Named list of `dsge_prior` objects (one per free parameter).
+#'   For a model imported with [read_dynare()], defaults to the priors
+#'   translated from its `estimated_params` block.
 #'   Shock standard deviations get default `inv_gamma(0.01, 0.01)` priors
 #'   unless overridden (names: `"sd_e.shock_name"`).
 #' @param chains Integer. Number of MCMC chains. Default is 2.
@@ -97,6 +100,10 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
       !inherits(endogenous_prior, "dsge_endog_prior"))
     stop("`endogenous_prior` must be a dsge_endog_prior object ",
          "(from endogenous_prior()).", call. = FALSE)
+  if (inherits(model, "dsge_dynare")) {
+    if (missing(priors)) priors <- model$priors
+    model <- model$model
+  }
   is_nonlinear <- inherits(model, "dsgenl_model")
   if (!inherits(model, "dsge_model") && !is_nonlinear) {
     stop("`model` must be a dsge_model or dsgenl_model object.", call. = FALSE)

@@ -20,12 +20,15 @@ bayes_dsge(
 )
 }
 \arguments{
-\item{model}{A \code{dsge_model} or \code{dsgenl_model} object.}
+\item{model}{A \code{dsge_model} or \code{dsgenl_model} object, or a Dynare model
+imported with \code{\link[=read_dynare]{read_dynare()}}.}
 
 \item{data}{A data frame, matrix, or \code{ts} object containing the observed
 variables.}
 
 \item{priors}{Named list of \code{dsge_prior} objects (one per free parameter).
+For a model imported with \code{\link[=read_dynare]{read_dynare()}}, defaults to the priors
+translated from its \code{estimated_params} block.
 Shock standard deviations get default \code{inv_gamma(0.01, 0.01)} priors
 unless overridden (names: \code{"sd_e.shock_name"}).}
 

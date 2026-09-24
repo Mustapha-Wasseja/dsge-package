@@ -17,7 +17,8 @@ estimate(
 )
 }
 \arguments{
-\item{model}{A \code{dsge_model} object created by \code{\link[=dsge_model]{dsge_model()}}.}
+\item{model}{A \code{dsge_model} object created by \code{\link[=dsge_model]{dsge_model()}}, a
+\code{dsgenl_model}, or a Dynare model imported with \code{\link[=read_dynare]{read_dynare()}}.}
 
 \item{data}{A data frame, matrix, or \code{ts} object containing the observed
 variables. Column names must match the observed control variable names

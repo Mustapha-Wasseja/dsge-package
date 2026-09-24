@@ -1,8 +1,9 @@
 # dsge 1.2.0
 
-This release collects the additions made between May and August 2026,
-which were previously listed under 1.1.1.  Dates are taken from the git
-history.  Entries within each section are in chronological order.
+This release collects the additions made between May and September 2026;
+the May-August ones were previously listed under 1.1.1.  Dates are taken
+from the git history.  Entries within each section are in chronological
+order.
 
 ## New features
 
@@ -174,6 +175,41 @@ and tests:
   (normalised so long-run homogeneity holds exactly), and collapses
   the infinite forward sum into closed form when the target follows a
   linear state process.
+
+### Importing Dynare .mod files (2026-09-24)
+
+* New **`read_dynare()`** reads a Dynare `.mod` file (or model code passed
+  as text) and translates it into a `dsgenl_model`, together with the
+  calibration, shock standard deviations and priors it declares.  No
+  Dynare, MATLAB or Octave installation is needed.  `solve_dsge()`,
+  `estimate()` and `bayes_dsge()` accept the imported object directly,
+  using its calibration, `shocks` block and translated priors by default.
+* Supports `var`, `varexo`, `parameters`, `predetermined_variables`,
+  `varobs`, parameter assignments, the `model` block (including
+  `model(linear)`, equation tags and `#` model-local variables), leads
+  and lags of any length, `initval`, `steady_state_model`, the `shocks`
+  block (including correlated shocks, orthogonalised by Cholesky
+  factorisation in declaration order as in Dynare's impulse responses)
+  and `estimated_params` / `estimated_params_init`.
+* Dynare timing needs no manual re-timing: lags become auxiliary state
+  variables (`x_lag1`, ...), leads beyond one period become auxiliary
+  controls (`x_lead1`, ...), and each shock becomes an exogenous state
+  holding the current innovation, the same approach Dynare uses
+  internally.
+* Dynare's mean/standard-deviation priors are converted to dsge's
+  parameterisation: exactly for `normal_pdf`, `beta_pdf`, `gamma_pdf`,
+  `uniform_pdf` and `inv_gamma2_pdf`, and by moment matching for
+  `inv_gamma_pdf`.  Anything not translated (macro directives, shifted
+  priors, `weibull_pdf`, deterministic shock paths, other blocks) is
+  reported, never silently dropped.
+* Validated against Dynare 6.0: first-order impulse responses of 8
+  models (134 responses, including Dynare's `example1`/`example2`, the
+  macro-expanded `bkk` and `agtrend` examples, and models with
+  two-period leads and lags, lagged shocks, correlated shocks and
+  `predetermined_variables`) agree to within 2e-6, and to within 1e-7
+  for all but `bkk`.  The validation script is in
+  `dev/dynare-validation/`.
+* New example file `inst/examples/rbc.mod`.
 
 ## Improvements
 
