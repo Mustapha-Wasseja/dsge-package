@@ -5,6 +5,15 @@ functionality and fixes bugs; no function exported in 1.0.0 has been
 removed.  See NEWS.md for details.
 Highlights:
 
+- `read_dynare()` imports Dynare `.mod` model files into R, including
+  Dynare's macro language, calibration, steady state, shocks,
+  measurement errors, priors and estimation settings, and Ramsey,
+  discretionary and optimal-simple-rule policy and occasionally binding
+  constraints (OccBin). It is written entirely in R: it does not call
+  Dynare, MATLAB or Octave and adds no new package dependencies. Results
+  were checked against Dynare 6.0 during development; the comparison
+  scripts are in the GitHub repository and excluded from the package
+  build.
 - Nonlinear perfect foresight via a stacked-time Newton solver.
 - Variance decomposition (unconditional and forecast-error).
 - Optimal simple rules, discretionary policy, conditional forecasts,
