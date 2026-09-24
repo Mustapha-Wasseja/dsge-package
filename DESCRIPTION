@@ -1,6 +1,6 @@
 Package: dsge
 Title: Dynamic Stochastic General Equilibrium Models
-Version: 1.1.1
+Version: 1.2.0
 Authors@R: person(given = c("Mustapha", "Wasseja"), family = "Mohammed",
     role = c("aut", "cre"), email = "muswaseja@gmail.com")
 Description: Specify, solve, and estimate dynamic stochastic general
