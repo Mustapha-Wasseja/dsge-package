@@ -11,6 +11,7 @@ apt-get install octave dynare        # Dynare 6.0 on Ubuntu 24.04
 Rscript dev/dynare-validation/validate.R                 # bundled models
 Rscript dev/dynare-validation/validate.R path/to/*.mod   # any other files
 Rscript dev/dynare-validation/extra/validate_extra.R
+Rscript dev/dynare-validation/extra/validate_smets_wouters.R path/to/DSGE_mod/Smets_Wouters_2007
 ```
 
 ## Impulse responses (2026-09-24, Dynare 6.0, Octave 8.4)
@@ -40,6 +41,19 @@ Rscript dev/dynare-validation/extra/validate_extra.R
 | OSR `phi_pi` (`phi_y` at its bound 2) | 2.336216 | 2.336203 |
 | OccBin ZLB, one surprise shock (`nk_zlb_occbin.mod`) | 10 periods at the bound | same; paths within 2.1e-13 |
 | OccBin ZLB, two surprise shocks | 15 periods at the bound | same; paths within 2.2e-13 |
+
+## Smets & Wouters (2007), end to end (`extra/validate_smets_wouters.R`)
+
+Johannes Pfeifer's replication file (`DSGE_mod/Smets_Wouters_2007`, GPL,
+not included) imported unchanged; comparison at the published posterior
+mode on the US data (Dynare with `lik_init = 1`, `presample = 4`):
+
+| Check | Dynare | dsge |
+|---|---|---|
+| IRFs, 40 variables x 7 shocks (280), max abs diff | | 2.5e-12 |
+| Log-likelihood | -1714.061158377 | -1714.061158377 |
+| Log-prior (36 priors, incl. 7 `inv_gamma_pdf`) | -23.994069948 | -23.994069948 |
+| Log-posterior kernel | -1738.055228325 | -1738.055228325 |
 
 Dynare prints the log-likelihood to four decimals. The Dynare example
 files are GPL-licensed and are not included in this repository; they were
