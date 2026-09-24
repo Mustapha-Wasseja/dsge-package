@@ -39,11 +39,22 @@ Highlights:
 
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note
+`R CMD check --as-cran` with the CRAN incoming checks enabled
+(`_R_CHECK_CRAN_INCOMING_REMOTE_=TRUE`, spelling via aspell):
 
+0 errors | 0 warnings | 2 notes
+
+- "checking CRAN incoming feasibility ... NOTE: Possibly misspelled words
+  in DESCRIPTION: Andrieu, Grohe, Juillard, Kass, Raftery, Schmitt,
+  Uribe, al, et". These are author names in the cited references and
+  "et al.", and are spelled correctly.
 - "checking for future file timestamps ... NOTE: unable to verify
   current time". This comes from the check machine being unable to reach
   an external time server, not from the package.
+
+The DOI for Schmitt-Grohe and Uribe (2004) in DESCRIPTION has been
+corrected to 10.1016/S0165-1889(03)00043-5 (the previous one did not
+resolve).
 
 ## Reverse dependencies
 
