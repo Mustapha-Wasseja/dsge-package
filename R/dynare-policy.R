@@ -369,25 +369,35 @@ dyn_discretion_rule <- function(eqs, objective, endo, exo, instruments,
   H2 <- K %*% B
   dimnames(H1) <- list(endo, endo)
   dimnames(H2) <- list(endo, exo)
+  # Targeting rule: at the discretionary equilibrium the planner's
+  # first-order condition is Gam' (W + beta P) y_t = 0, where Gam spans the
+  # directions left free by the constraints given E_t y_{t+1} = H1 y_t.
+  D <- A_0 + A_lead %*% H1
+  Gam <- matrix(0, n, length(u_idx))
+  Gam[z_idx, ] <- -solve(D[, z_idx, drop = FALSE], D[, u_idx, drop = FALSE])
+  Gam[u_idx, ] <- diag(length(u_idx))
+  target <- t(Gam) %*% (W + beta * P)
+  dimnames(target) <- list(instruments, endo)
   list(F1 = H1[instruments, , drop = FALSE], F2 = H2[instruments, , drop = FALSE],
-       H1 = H1, H2 = H2, W = W, P = P, beta = beta, iterations = it)
+       H1 = H1, H2 = H2, W = W, P = P, beta = beta, target = target,
+       iterations = it)
 }
 
-#' Equation strings for the discretionary rule u = F1 y(-1) + F2 e
+#' Equation strings for the discretionary targeting rule
+#'
+#' One equation per instrument, `target %*% y_t = 0`. Imposing the targeting
+#' rule (rather than the instrument's reaction to shocks and lags, which can
+#' leave the equilibrium indeterminate, e.g. with a purely forward-looking
+#' model) reproduces the discretionary equilibrium.
 #' @noRd
 dyn_rule_equations <- function(rule, endo, exo) {
-  vapply(rownames(rule$F1), function(u) {
-    terms <- character(0)
-    for (v in endo) {
-      cf <- rule$F1[u, v]
-      if (abs(cf) > 1e-14) terms <- c(terms, sprintf("(%.17g) * %s(-1)", cf, v))
-    }
-    for (e in exo) {
-      cf <- rule$F2[u, e]
-      if (abs(cf) > 1e-14) terms <- c(terms, sprintf("(%.17g) * %s", cf, e))
-    }
+  vapply(rownames(rule$target), function(u) {
+    cf <- rule$target[u, ]
+    cf <- cf / max(abs(cf))
+    keep <- abs(cf) > 1e-14
+    terms <- sprintf("(%.17g) * %s", cf[keep], endo[keep])
     if (length(terms) == 0L) terms <- "0"
-    paste0(u, " = ", paste(terms, collapse = " + "))
+    paste0("0 = ", paste(terms, collapse = " + "))
   }, character(1), USE.NAMES = FALSE)
 }
 
@@ -415,7 +425,7 @@ dyn_ramsey_ss <- function(model, params, guess, endo, mults, fill,
       resid_at(v, e) - a
     }, numeric(length(a)))
     B <- matrix(B, length(a), length(mults))
-    lam <- -qr.solve(B, a)
+    lam <- -dyn_lstsq(B, a)
     list(lam = lam, r = a + B %*% lam)
   }
   v <- guess[endo]
@@ -428,7 +438,7 @@ dyn_ramsey_ss <- function(model, params, guess, endo, mults, fill,
       return(fill(vals)[model$all_variables])
     }
     J <- numDeriv::jacobian(function(z) as.numeric(concentrate(z)$r), v)
-    step <- qr.solve(J, -r)
+    step <- dyn_lstsq(J, -r)
     lambda <- 1
     for (ls in seq_len(20L)) {
       v_new <- v + lambda * step
@@ -441,4 +451,15 @@ dyn_ramsey_ss <- function(model, params, guess, endo, mults, fill,
   }
   stop("Ramsey steady state did not converge; supply better initval ",
        "values.", call. = FALSE)
+}
+
+#' Minimum-norm least-squares solution of A x = b (via the SVD)
+#' @noRd
+dyn_lstsq <- function(A, b) {
+  A <- as.matrix(A)
+  sv <- svd(A)
+  if (length(sv$d) == 0L || sv$d[1] == 0) return(numeric(ncol(A)))
+  keep <- sv$d > max(dim(A)) * .Machine$double.eps * sv$d[1] * 10
+  as.vector(sv$v[, keep, drop = FALSE] %*%
+              (crossprod(sv$u[, keep, drop = FALSE], as.numeric(b)) / sv$d[keep]))
 }

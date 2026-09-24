@@ -372,7 +372,7 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
       y_dev <- sweep(y_raw, 2, obs_ss)
 
       kf <- kalman_filter(y_dev, sol$G, sol$H, sol$M, sol$D,
-                        presample = presample)
+                        presample = presample, init = model$kalman_init)
       -kf$loglik
     }, error = function(e) Inf)
   }
@@ -392,7 +392,7 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
   obs_ss <- sol$steady_state[obs_vars]
   y_dev <- sweep(y_raw, 2, obs_ss)
   kf <- kalman_filter(y_dev, sol$G, sol$H, sol$M, sol$D,
-                        presample = presample)
+                        presample = presample, init = model$kalman_init)
 
   # Build coefficient vector
   coefs <- c(params_final$structural, params_final$shock_sd)

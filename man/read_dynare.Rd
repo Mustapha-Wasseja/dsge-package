@@ -71,6 +71,17 @@ lags of any length on variables and shocks, and \code{STEADY_STATE(x)},
 which always equals the steady state of \code{x} at the current parameter
 values.
 
+\strong{MATLAB code.} Dynare passes MATLAB statements in a \code{.mod} file
+through to MATLAB; \code{read_dynare()} runs them with a built-in MATLAB
+interpreter (matrices, cell arrays, structures, indexing, loops,
+functions, \code{eval}, \code{fsolve}, \code{fzero}, \code{csolve}, ...), so calibrations
+computed in MATLAB (e.g. \code{sigma = sqrt(V(1, 1))}, \code{verbatim} blocks or
+\code{set_param_value()}) are reproduced. Parameters take the values they
+have when the file first solves, simulates or estimates the model
+(the first \code{stoch_simul}, \code{estimation}, ...); later assignments and
+MATLAB code that post-processes results (plots, tables) are skipped and
+listed in \code{notes}.
+
 \strong{Macro processor.} \verb{@#define}, \verb{@#if}/\verb{@#elseif}/\verb{@#else}/\verb{@#endif},
 \verb{@#ifdef}, \verb{@#ifndef}, \verb{@#for} (over arrays, ranges and tuples, with
 optional \code{when} filters), \verb{@#include}, \verb{@#includepath}, \verb{@#echo},
@@ -88,7 +99,12 @@ solution and IRF output.
 \strong{Steady state and shocks.} \code{steady_state_model} becomes the model's
 steady-state function (variables it does not set keep their \code{initval}
 value, 0 by default, as in Dynare) and \code{initval} supplies starting
-values for the numerical solver. Models declared \code{model(linear)} are
+values for the numerical solver. A MATLAB steady-state file
+\verb{<model>_steadystate.m} next to the \code{.mod} file is run with the MATLAB
+interpreter instead, including helper functions in other \code{.m} files of
+the same folder. Parameters that \code{steady_state_model} or the
+steady-state file set (calibrated to targets) are recomputed from the
+other parameters whenever the model is solved, as in Dynare. Models declared \code{model(linear)} are
 linearised with an exact Jacobian. In the \code{shocks} block, standard deviations,
 variances, covariances and correlations are supported; correlated shocks
 are orthogonalised by Cholesky factorisation in \code{varexo} order, which
@@ -116,9 +132,12 @@ names are case-insensitive. Shifted or generalised priors and
 file's \code{estimation} command are stored in \code{estimation} and used by
 \code{\link[=estimate]{estimate()}} and \code{\link[=bayes_dsge]{bayes_dsge()}}: the data are restricted to the
 estimation sample and the first \code{presample} observations only
-initialise the Kalman filter. dsge always initialises the filter at the
-stationary distribution (Dynare's \code{lik_init = 1}); other \code{lik_init}
-values are reported in \code{notes}.
+initialise the Kalman filter. The filter starts from the stationary
+distribution (Dynare's \code{lik_init = 1}, the default) or, with
+\code{lik_init = 2}, from Dynare's covariance of 10 times the identity on its
+state vector (the observed and predetermined variables); other
+\code{lik_init} values are reported in \code{notes}. Set \code{x$model$kalman_init}
+to \code{NULL} to use the stationary initialisation instead.
 
 \strong{Optimal policy.} With \code{planner_objective} and \code{ramsey_model} or
 \code{ramsey_policy}, the planner's first-order conditions are derived
@@ -127,7 +146,8 @@ symbolically and added to the model together with Lagrange multipliers
 equilibrium; the steady state is found with the multipliers concentrated
 out. With \code{discretionary_policy} (linear models), the time-consistent
 rule is computed with the Dennis (2007) algorithm at the calibrated
-parameters and the model is closed with it. With \code{osr_params},
+parameters and the model is closed with the planner's time-consistent
+targeting rule. With \code{osr_params},
 \code{osr_params_bounds} and \code{optim_weights}, \code{\link[=osr]{osr()}} can be called directly
 on the imported model.
 
@@ -140,7 +160,8 @@ block by default.
 
 \strong{Not supported:} \code{external_function}, \code{trend_var}, \code{EXPECTATION()},
 \code{diff()}, \code{adl()}, PAC and VAR expectation operators; these raise an
-error. Other blocks and commands are recorded but not run.
+error. Other blocks and commands are recorded but not run. MATLAB code
+that reads data files (\code{load}, \code{xlsread}) cannot be run.
 }
 \examples{
 rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))

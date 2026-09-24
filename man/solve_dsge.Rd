@@ -46,9 +46,15 @@ nonlinear models (\code{dsgenl_model}). For nonlinear models, the steady
 state is computed and the model is linearized automatically.
 }
 \details{
-The method forms a companion system from the structural matrices and
-solves via undetermined coefficients iteration. Saddle-path stability
-requires that all eigenvalues of H have modulus less than 1.
+The stable solution is computed by cyclic reduction (as Dynare's
+\code{cycle_reduction} option); if that fails, for example with unit roots
+or a singular lead matrix, the stable deflating subspace of the model's
+matrix pencil is found with the inverse-free spectral divide of Bai,
+Demmel and Gu (1997), which needs no QZ decomposition; an
+undetermined-coefficients iteration is the last resort. As in Dynare,
+eigenvalues with modulus up to 1 + 1e-6 count as stable, so unit roots
+are allowed. Saddle-path stability requires that all eigenvalues of H
+have modulus below 1 + \code{tol}.
 
 For nonlinear models, the solver first computes the deterministic
 steady state, then linearizes the model via first-order Taylor
