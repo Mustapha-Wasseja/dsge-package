@@ -209,10 +209,17 @@ and tests:
   equal numbers).  A `stderr` on an observed variable is a measurement
   error: `y` is observed as `y_obs = y + y_me`, and `estimate()` /
   `bayes_dsge()` map a data column `y` to `y_obs` automatically.
-* **Priors:** Dynare's mean/standard-deviation priors are converted to
-  dsge's parameterisation: exactly for `normal_pdf`, `beta_pdf`,
-  `gamma_pdf`, `uniform_pdf` and `inv_gamma2_pdf`, and by moment matching
-  for `inv_gamma_pdf`.  Anything not translated is reported.
+* **Priors:** Dynare's mean/standard-deviation priors are converted
+  exactly to dsge's parameterisation, including `inv_gamma_pdf` via the
+  new `"inv_gamma1"` prior family (Dynare's type-1 inverse gamma on a
+  standard deviation; `prior("inv_gamma1", mean = , sd = )` works too).
+  Anything not translated is reported.
+* **Estimation settings:** `presample`, `first_obs` and `nobs` from the
+  file's `estimation` command are applied by `estimate()` and
+  `bayes_dsge()`, which gain `presample` arguments; `bayes_dsge()` also
+  gains `shock_start` (defaulting to the file's shock standard
+  deviations).  Models declared `model(linear)` are linearised with an
+  exact Jacobian (about 4x faster for Smets-Wouters).
 * **Optimal policy:** `ramsey_model` / `ramsey_policy` add the planner's
   first-order conditions (derived symbolically) and Lagrange multipliers,
   with the Ramsey steady state found by concentrating out the
@@ -226,6 +233,12 @@ and tests:
   (anticipated regime durations, surprise shocks).
 * `solve_dsge()` on an imported model honours values supplied in `params`
   for parameters that are otherwise fixed.
+* **Smets & Wouters (2007), end to end:** the standard replication file
+  (40 variables, 7 shocks, 36 estimated parameters) imports unchanged
+  and, at the published posterior mode on the US data, reproduces
+  Dynare's 280 impulse responses to 2.5e-12 and its log-likelihood
+  (-1714.061158377), log-prior (-23.994069948) and posterior kernel to
+  all nine printed decimals.
 * **Validated against Dynare 6.0** (scripts in `dev/dynare-validation/`):
   first-order impulse responses of 12 models (160 responses, including
   Dynare's `example1`, `example2`, `agtrend` and `bkk`, Ramsey, discretion,
