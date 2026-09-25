@@ -163,6 +163,7 @@ test_that("parameter_sensitivity policy works", {
 # ===========================================================================
 
 test_that("prior_posterior_update works on Bayesian fit", {
+  skip_on_cran()  # slow; run locally and on CI
   m <- dsge_model(
     obs(y ~ z),
     state(z ~ rho * z),
@@ -189,6 +190,7 @@ test_that("prior_posterior_update works on Bayesian fit", {
 })
 
 test_that("prior_posterior_update flags weak updates", {
+  skip_on_cran()  # slow; run locally and on CI
   # With a very tight prior centered on truth, update should be weak
   # (posterior can't move much from the prior)
   m <- dsge_model(
@@ -214,6 +216,7 @@ test_that("prior_posterior_update flags weak updates", {
 })
 
 test_that("prior_posterior_update print works", {
+  skip_on_cran()  # slow; run locally and on CI
   m <- dsge_model(
     obs(y ~ z),
     state(z ~ rho * z),
@@ -232,6 +235,7 @@ test_that("prior_posterior_update print works", {
 })
 
 test_that("prior_posterior_update plot runs without error", {
+  skip_on_cran()  # slow; run locally and on CI
   m <- dsge_model(
     obs(y ~ z),
     state(z ~ rho * z),

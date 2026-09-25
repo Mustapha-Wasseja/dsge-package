@@ -1,6 +1,6 @@
 # Tests for conditional_forecast()
 
-setup_fit <- function() {
+setup_fit_uncached <- function() {
   nk <- dsge_model(
     obs(p   ~ beta * lead(p) + kappa * x),
     unobs(x ~ lead(x) - (r - lead(p) - g)),
@@ -29,6 +29,14 @@ setup_fit <- function() {
   estimate(nk, data = dat)
 }
 
+
+# The model is deterministic (seeded), so it is estimated once and
+# reused by every test in this file.
+.setup_fit_cache <- new.env()
+setup_fit <- function() {
+  if (is.null(.setup_fit_cache$fit)) .setup_fit_cache$fit <- setup_fit_uncached()
+  .setup_fit_cache$fit
+}
 
 test_that("conditional_forecast returns expected structure", {
   fit <- setup_fit()
