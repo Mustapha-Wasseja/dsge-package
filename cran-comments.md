@@ -47,7 +47,8 @@ Highlights:
 - local: Ubuntu 24.04, R 4.3.3
 - GitHub Actions: macOS (release), Windows (release),
   Ubuntu (devel, release, oldrel-1)
-- win-builder: R-devel (2026-09-21 r90579 ucrt), R-release (4.5.3)
+- win-builder: R-devel (2026-09-21 r90579 ucrt), R-release (4.6.1),
+  R-oldrelease (4.5.3)
 
 ## R CMD check results
 
@@ -56,7 +57,7 @@ Highlights:
 
 0 errors | 0 warnings | 2 notes
 
-On win-builder (R-devel and R-release) the result is
+On win-builder (R-devel, R-release and R-oldrelease) the result is
 0 errors | 0 warnings | 1 note (the spelling note below).
 
 - "checking CRAN incoming feasibility ... NOTE: Possibly misspelled words
