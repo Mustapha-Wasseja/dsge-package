@@ -19,4 +19,4 @@
 ^\.Renviron$
 ^CRAN-SUBMISSION$
 ^paper$
-^\.claude$
+^\.[^.]
