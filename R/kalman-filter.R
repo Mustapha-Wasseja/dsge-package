@@ -20,6 +20,8 @@
 #' @param M Shock impact matrix (n_s x n_shocks).
 #' @param D Observation selection matrix (n_obs x n_c).
 #' @param presample Number of initial periods excluded from the likelihood.
+#' @param init Optional initialisation (`model$kalman_init`); `NULL` starts
+#'   from the stationary distribution.
 #'
 #' @return A list with components:
 #'   \describe{
@@ -31,7 +33,7 @@
 #'     \item{predicted_obs}{Matrix of predicted observations (T x n_obs).}
 #'   }
 #' @noRd
-kalman_filter <- function(y, G, H, M, D, presample = 0L) {
+kalman_filter <- function(y, G, H, M, D, presample = 0L, init = NULL) {
   y <- as.matrix(y)
   n_T <- nrow(y)
   n_obs <- ncol(y)
@@ -48,7 +50,11 @@ kalman_filter <- function(y, G, H, M, D, presample = 0L) {
 
   # Initialize covariance: P_0|0 from unconditional distribution
   # vec(P) = (I - H kron H)^{-1} vec(Q)
+  if (!is.null(init)) {
+    return(kalman_filter_dynare_state(y, G, H, M, D, presample, init))
+  }
   P_filt <- compute_unconditional_P(H, Q)
+  P1 <- NULL
 
   # Storage
   filtered_states <- matrix(0, n_T, n_s)
@@ -61,8 +67,13 @@ kalman_filter <- function(y, G, H, M, D, presample = 0L) {
 
   for (t in seq_len(n_T)) {
     # === Prediction step ===
-    x_pred <- as.numeric(H %*% x_filt)
-    P_pred <- H %*% P_filt %*% t(H) + Q
+    if (t == 1L && !is.null(P1)) {
+      x_pred <- numeric(n_s)
+      P_pred <- P1
+    } else {
+      x_pred <- as.numeric(H %*% x_filt)
+      P_pred <- H %*% P_filt %*% t(H) + Q
+    }
 
     predicted_states[t, ] <- x_pred
 
@@ -241,4 +252,73 @@ kalman_smoother <- function(y, G, H, M, D) {
   }
 
   list(smoothed_states = smoothed_states)
+}
+
+#' Kalman filter on Dynare's state vector (for `lik_init = 2`)
+#'
+#' Dynare's filter state alpha_t holds the current values of the observed
+#' and predetermined variables: alpha_t = T alpha_{t-1} + R e_t and
+#' y_t = Z alpha_t + measurement error, started at alpha(1|0) = 0 and
+#' P(1|0) = scale * I. With x_t = (lag states, shocks) the state of the dsge
+#' solution, the predetermined variables at t are the lag states at t + 1
+#' (rows of H) and the observed variables rows of G, so alpha_t = A x_t,
+#' x_t = J alpha_{t-1} + M e_t, T = A J and R = A M. The observed variables
+#' are separate elements of alpha even when they are exact functions of
+#' predetermined ones (e.g. robs = r + constant), as in Dynare.
+#' @noRd
+kalman_filter_dynare_state <- function(y, G, H, M, D, presample, init) {
+  if (!identical(init$type, "lik_init_2")) {
+    stop("Unknown Kalman filter initialisation.", call. = FALSE)
+  }
+  y <- as.matrix(y)
+  states <- colnames(H)
+  pred <- intersect(init$pred_states, states)
+  noise <- intersect(init$noise_states, states)
+  obs_ctrl <- rownames(D %*% G)
+  if (is.null(obs_ctrl)) obs_ctrl <- colnames(D)[apply(D, 1L, which.max)]
+  under <- unname(init$observed[obs_ctrl])
+  extra <- unique(under[!paste0(under, "_lag1") %in% pred])
+  A <- rbind(H[pred, , drop = FALSE], G[extra, , drop = FALSE])
+  A[, noise] <- 0
+  mm <- nrow(A)
+  J <- matrix(0, length(states), mm)
+  J[cbind(match(pred, states), seq_along(pred))] <- 1
+  Tm <- A %*% J
+  R <- A %*% M
+  RQR <- R %*% t(R)
+  alpha_names <- c(pred, extra)
+  pos <- ifelse(under %in% extra, length(pred) + match(under, extra),
+                match(paste0(under, "_lag1"), pred))
+  Z <- matrix(0, length(under), mm)
+  Z[cbind(seq_along(under), pos)] <- 1
+  # measurement errors: y_obs = underlying + noise state
+  Zn <- (D %*% G)[, noise, drop = FALSE]
+  Mn <- M[noise, , drop = FALSE]
+  Hm <- Zn %*% Mn %*% t(Mn) %*% t(Zn)
+
+  n_T <- nrow(y)
+  a <- numeric(mm)
+  P <- init$scale * diag(mm)
+  loglik <- 0
+  errors <- matrix(0, n_T, ncol(y))
+  for (t in seq_len(n_T)) {
+    v <- y[t, ] - as.numeric(Z %*% a)
+    Ft <- Z %*% P %*% t(Z) + Hm
+    Ft <- (Ft + t(Ft)) / 2
+    dF <- det(Ft)
+    if (!is.finite(dF) || dF <= 0) return(list(loglik = -Inf))
+    Fi <- solve(Ft)
+    if (t > presample) {
+      loglik <- loglik - 0.5 * (ncol(y) * log(2 * pi) + log(dF) +
+                                  as.numeric(t(v) %*% Fi %*% v))
+    }
+    errors[t, ] <- v
+    K <- P %*% t(Z) %*% Fi
+    a <- as.numeric(Tm %*% (a + K %*% v))
+    P <- Tm %*% (P - K %*% Z %*% P) %*% t(Tm) + RQR
+    P <- (P + t(P)) / 2
+  }
+  if (!is.finite(loglik)) loglik <- -Inf
+  list(loglik = loglik, prediction_errors = errors,
+       state_names = alpha_names)
 }

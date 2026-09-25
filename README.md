@@ -16,7 +16,8 @@ solving, and estimating DSGE models entirely in R. No external software
   file straight into dsge (macro directives, calibration, steady state,
   shocks, measurement errors, priors, Ramsey/discretionary/OSR policy
   and OccBin constraints), and solve or estimate it without Dynare or
-  MATLAB
+  MATLAB; MATLAB code in the file and `_steadystate.m` files are run by
+  a built-in MATLAB interpreter
 - **Linear models** via formula interface (`obs()`, `unobs()`, `state()`)
 - **Nonlinear models** via string-based equations with perturbation up to
   third order (`dsgenl_model()`, `solve_dsge(order = 1, 2, 3)`)
@@ -363,8 +364,16 @@ plot(irf(sol, periods = 40))
 
 Dynare timing is handled automatically (lags become auxiliary state
 variables, so `k(-1)` capital timing needs no rewriting), and macro
-directives (`@#define`, `@#for`, `@#if`, ...) are expanded in R. Results
-have been checked against Dynare 6.0 (see `dev/dynare-validation/`).
+directives (`@#define`, `@#for`, `@#if`, ...) are expanded in R. MATLAB
+statements in the file (calibrations, `verbatim` blocks) and MATLAB
+steady-state files (`<model>_steadystate.m`, with `fsolve` and helper
+functions) are run by a built-in MATLAB interpreter. Results have been
+checked against Dynare 6.0 (see `dev/dynare-validation/`): the
+first-order impulse responses of every model in Johannes Pfeifer's
+DSGE_mod collection that Dynare runs in Octave, second- and third-order
+decision rules of 21 nonlinear models, the Smets-Wouters (2007)
+likelihood (with `lik_init = 1` and `2`), and a full Bayesian
+estimation.
 
 ### Parallel MCMC Chains
 
