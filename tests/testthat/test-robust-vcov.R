@@ -1,7 +1,7 @@
 # tests/testthat/test-robust-vcov.R
 
 # Helper: create and estimate a simple AR(1) model
-make_ar1_fit_for_robust <- function() {
+make_ar1_fit_for_robust_uncached <- function() {
   m <- dsge_model(
     obs(y ~ lead(y) + u),
     state(u ~ rho_u * u),
@@ -16,6 +16,14 @@ make_ar1_fit_for_robust <- function() {
   dat <- data.frame(y = u)
 
   estimate(m, data = dat, hessian = TRUE)
+}
+
+# The model is deterministic (seeded), so it is estimated once and
+# reused by every test in this file.
+.make_ar1_fit_for_robust_cache <- new.env()
+make_ar1_fit_for_robust <- function() {
+  if (is.null(.make_ar1_fit_for_robust_cache$fit)) .make_ar1_fit_for_robust_cache$fit <- make_ar1_fit_for_robust_uncached()
+  .make_ar1_fit_for_robust_cache$fit
 }
 
 test_that("robust_vcov returns correct structure", {

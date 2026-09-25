@@ -1,3 +1,19 @@
+## Resubmission
+
+This is a resubmission of 1.2.0. The incoming pre-tests reported an
+overall check time of 15 min on r-devel-windows-x86_64, mostly from the
+tests (11 min). As requested, test timings are reduced:
+
+- Model fits shared by several tests in a file are now computed once
+  per file instead of once per test.
+- The slowest simulation-based tests (posterior updating diagnostics,
+  SMC and IRF-matching parameter recovery, extra DSGE-VAR MH runs) are
+  skipped on CRAN with `skip_on_cran()`; they still run locally and on
+  continuous integration.
+
+The test suite now takes about 2 minutes locally (previously about 8),
+under the same settings as on CRAN.
+
 ## Submission summary
 
 This is an update of the dsge package from 1.0.0 (the version on CRAN)

@@ -14,6 +14,7 @@ make_nk <- function() {
 
 
 test_that("irf_match recovers true parameters when target IRF is model-generated", {
+  skip_on_cran()  # slow; run locally and on CI
   nk <- make_nk()
   true_params   <- c(kappa = 0.10, psi = 1.50, rhou = 0.70, rhog = 0.90)
   true_shock_sd <- c(e.u = 1.0, e.g = 0.5)

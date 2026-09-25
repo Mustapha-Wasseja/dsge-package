@@ -56,6 +56,7 @@ test_that("bayes_dsge_var_mh returns expected structure", {
 
 
 test_that("posterior draws of lambda respect the prior support", {
+  skip_on_cran()  # slow; run locally and on CI
   td <- setup_mh()
   priors <- list(
     kappa = prior("beta",  shape1 = 2, shape2 = 8),
@@ -79,6 +80,7 @@ test_that("posterior draws of lambda respect the prior support", {
 
 
 test_that("print.dsge_dsgevar_mh works", {
+  skip_on_cran()  # slow; run locally and on CI
   td <- setup_mh()
   priors <- list(
     kappa = prior("beta",  shape1 = 2, shape2 = 8),

@@ -1,7 +1,7 @@
 # tests/testthat/test-prediction-tools.R
 
 # Helper: create and estimate a simple AR(1) model
-make_ar1_fit <- function() {
+make_ar1_fit_uncached <- function() {
   m <- dsge_model(
     obs(y ~ lead(y) + u),
     state(u ~ rho_u * u),
@@ -16,6 +16,14 @@ make_ar1_fit <- function() {
   dat <- data.frame(y = u)
 
   estimate(m, data = dat)
+}
+
+# The model is deterministic (seeded), so it is estimated once and
+# reused by every test in this file.
+.make_ar1_fit_cache <- new.env()
+make_ar1_fit <- function() {
+  if (is.null(.make_ar1_fit_cache$fit)) .make_ar1_fit_cache$fit <- make_ar1_fit_uncached()
+  .make_ar1_fit_cache$fit
 }
 
 test_that("fitted.dsge_fit returns filtered values", {

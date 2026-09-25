@@ -30,6 +30,7 @@ test_that("bayes_smc returns expected structure", {
 
 
 test_that("posterior particles approach the data-generating process", {
+  skip_on_cran()  # slow; run locally and on CI
   d <- make_ar1_dat(TT = 200L, seed = 2L)
   fit <- bayes_smc(d$model, d$data,
                    priors = list(rho = prior("beta", shape1 = 2, shape2 = 2),
