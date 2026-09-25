@@ -592,6 +592,25 @@ mat_parse <- function(src) {
         return(list(t = "assign", lhs = lhs, rhs = rhs))
       }
     }
+    # command syntax that does something: load file var1 var2
+    if (t == "id" && v %in% c("load") && peek_t(1L) %in% c("id", "num") &&
+        tk$sp[pos + 1L] && !(peek_t(2L) == "op" && peek_v(2L) %in% c("=", "(", "."))) {
+      pos <<- pos + 1L
+      words <- character(0)
+      cur <- ""
+      while (!peek_t() %in% c("sep", "eof") && !is_op(c(";", ","))) {
+        if (tk$sp[pos] && nzchar(cur)) {
+          words <- c(words, cur)
+          cur <- ""
+        }
+        cur <- paste0(cur, peek_v())
+        pos <<- pos + 1L
+      }
+      if (nzchar(cur)) words <- c(words, cur)
+      return(list(t = "expr", e = list(t = "idx", obj = list(t = "id", name = v),
+                                       args = lapply(words, function(w) list(t = "str", v = w)),
+                                       kind = "(")))
+    }
     if (t == "id" && v %in% command_words && peek_t(1L) %in% c("id", "num") &&
         tk$sp[pos + 1L] && !(peek_t(2L) == "op" && peek_v(2L) == "=")) {
       while (!peek_t() %in% c("sep", "eof") && !is_op(c(";", ","))) {
@@ -2406,3 +2425,393 @@ dyn_matlab_steady_state <- function(path, param_names, endo, exo) {
          params = stats::setNames(p_out, param_names), check = check)
   }
 }
+
+# ---------------------------------------------------------------------------
+# Data files, optimisation and statistics
+# ---------------------------------------------------------------------------
+
+#' Locate a data file next to the model (or in the working directory)
+#' @noRd
+mat_find_file <- function(name, ctx, exts = character(0)) {
+  dirs <- unique(c(ctx$path, getwd()))
+  cands <- name
+  if (!grepl("\\.[A-Za-z0-9]+$", name)) cands <- c(paste0(name, exts), name)
+  for (d in dirs) for (f in cands) {
+    fp <- if (grepl("^(/|[A-Za-z]:)", f)) f else file.path(d, f)
+    if (file.exists(fp) && !dir.exists(fp)) return(fp)
+  }
+  stop("File not found: ", name, call. = FALSE)
+}
+
+#' Convert values read by R.matlab::readMat to interpreter values
+#' @noRd
+mat_from_readmat <- function(x) {
+  if (is.character(x)) return(paste(x, collapse = ""))
+  if (is.numeric(x) || is.logical(x)) {
+    if (is.null(dim(x))) return(matrix(as.numeric(x), nrow = 1L))
+    return(array(as.numeric(x), dim(x)[1:2]))
+  }
+  if (is.list(x)) {
+    d <- dim(x)
+    fields <- if (!is.null(dimnames(x))) dimnames(x)[[1]] else names(x)
+    if (!is.null(fields) && length(fields) == length(x)) {
+      s <- mat_struct()
+      for (k in seq_along(fields)) {
+        s[fields[k]] <- list(mat_from_readmat(x[[k]]))
+      }
+      return(s)
+    }
+    items <- lapply(x, mat_from_readmat)
+    return(mat_cell(items, 1L, length(items)))
+  }
+  x
+}
+
+#' Read Octave's text format (the default of Octave's save)
+#' @noRd
+mat_read_octave_text <- function(path) {
+  lines <- readLines(path, warn = FALSE)
+  out <- list()
+  i <- 1L
+  hdr <- function(key) {
+    while (i <= length(lines) && !startsWith(lines[i], paste0("# ", key, ":"))) {
+      i <<- i + 1L
+    }
+    v <- trimws(sub("^#[^:]*:", "", lines[i]))
+    i <<- i + 1L
+    v
+  }
+  while (i <= length(lines)) {
+    if (!startsWith(lines[i], "# name:")) {
+      i <- i + 1L
+      next
+    }
+    name <- hdr("name")
+    type <- hdr("type")
+    if (type %in% c("scalar", "bool")) {
+      out[[name]] <- matrix(as.numeric(lines[i]))
+      i <- i + 1L
+    } else if (type %in% c("matrix", "bool matrix")) {
+      r <- as.integer(hdr("rows"))
+      cc <- as.integer(hdr("columns"))
+      vals <- scan(text = lines[i:(i + r - 1L)], quiet = TRUE)
+      out[[name]] <- matrix(vals, r, cc, byrow = TRUE)
+      i <- i + r
+    } else if (type %in% c("string", "sq_string")) {
+      n_el <- as.integer(hdr("elements"))
+      txt <- character(0)
+      for (k in seq_len(n_el)) {
+        hdr("length")
+        txt <- c(txt, lines[i])
+        i <- i + 1L
+      }
+      out[[name]] <- paste(txt, collapse = "")
+    } else {
+      stop("Octave data type '", type, "' in ", basename(path),
+           " is not supported.", call. = FALSE)
+    }
+  }
+  out
+}
+
+#' Variables stored in a data file (.mat, Octave text, or plain numbers)
+#' @noRd
+mat_load_file <- function(path) {
+  con <- file(path, "rb")
+  head <- readBin(con, "raw", 128L)
+  close(con)
+  htxt <- rawToChar(head[head != as.raw(0)])
+  if (grepl("^# (Created by Octave|name:)", htxt)) {
+    return(mat_read_octave_text(path))
+  }
+  if (startsWith(htxt, "MATLAB")) {
+    if (!requireNamespace("R.matlab", quietly = TRUE)) {
+      stop("Reading the MATLAB file ", basename(path), " needs the ",
+           "R.matlab package: install.packages(\"R.matlab\").", call. = FALSE)
+    }
+    if (grepl("MATLAB 7.3", htxt)) {
+      stop(basename(path), " is a MATLAB v7.3 (HDF5) file; save it with ",
+           "-v7 or earlier.", call. = FALSE)
+    }
+    raw <- R.matlab::readMat(path, fixNames = FALSE)
+    return(lapply(raw, mat_from_readmat))
+  }
+  if (grepl("^Octave-1-", htxt)) {
+    stop(basename(path), " is in Octave's binary format; save it with ",
+         "save -text or -v7.", call. = FALSE)
+  }
+  # plain numbers (ASCII)
+  m <- as.matrix(utils::read.table(path, header = FALSE))
+  storage.mode(m) <- "double"
+  stats::setNames(list(unname(m)),
+                  gsub("[^A-Za-z0-9_]", "_",
+                       tools::file_path_sans_ext(basename(path))))
+}
+
+mat_numeric_table <- function(df) {
+  m <- suppressWarnings(apply(as.matrix(df), 2L, as.numeric))
+  m <- matrix(m, nrow(df))
+  keep_r <- which(rowSums(!is.na(m)) > 0L)
+  keep_c <- which(colSums(!is.na(m)) > 0L)
+  if (!length(keep_r) || !length(keep_c)) return(matrix(numeric(0), 0L, 0L))
+  m <- m[min(keep_r):max(keep_r), min(keep_c):max(keep_c), drop = FALSE]
+  m[is.na(m)] <- NaN
+  m
+}
+
+#' Minimise f subject to bounds, linear and nonlinear constraints
+#' (fmincon), by an augmented Lagrangian around L-BFGS-B
+#' @noRd
+mat_fmincon <- function(f, x0, A = NULL, b = NULL, Aeq = NULL, beq = NULL,
+                        lb = NULL, ub = NULL, nonlcon = NULL) {
+  n <- length(x0)
+  lb <- if (length(lb)) rep_len(lb, n) else rep(-Inf, n)
+  ub <- if (length(ub)) rep_len(ub, n) else rep(Inf, n)
+  lb[!is.finite(lb)] <- -Inf
+  ub[!is.finite(ub)] <- Inf
+  cons <- function(x) {
+    g <- numeric(0)
+    h <- numeric(0)
+    if (length(A)) g <- c(g, as.numeric(A %*% x - b))
+    if (length(Aeq)) h <- c(h, as.numeric(Aeq %*% x - beq))
+    if (!is.null(nonlcon)) {
+      r <- nonlcon(x)
+      g <- c(g, r$c)
+      h <- c(h, r$ceq)
+    }
+    list(g = g, h = h)
+  }
+  c0 <- cons(pmin(pmax(x0, lb), ub))
+  lam_g <- numeric(length(c0$g))
+  lam_h <- numeric(length(c0$h))
+  rho <- 10
+  x <- pmin(pmax(x0, lb), ub)
+  for (outer in seq_len(60L)) {
+    x_prev <- x
+    L <- function(z) {
+      v <- f(z)
+      if (!is.finite(v)) return(1e20)
+      cc <- cons(z)
+      if (length(cc$h)) v <- v + sum(lam_h * cc$h) + rho / 2 * sum(cc$h^2)
+      if (length(cc$g)) {
+        v <- v + sum(pmax(0, lam_g + rho * cc$g)^2 - lam_g^2) / (2 * rho)
+      }
+      v
+    }
+    opt <- stats::optim(x, L, method = "L-BFGS-B", lower = lb, upper = ub,
+                        control = list(maxit = 2000, factr = 10))
+    x <- opt$par
+    cc <- cons(x)
+    viol <- max(c(0, abs(cc$h), pmax(cc$g, 0)))
+    if (length(cc$h)) lam_h <- lam_h + rho * cc$h
+    if (length(cc$g)) lam_g <- pmax(0, lam_g + rho * cc$g)
+    if (viol < 1e-9 && outer > 1L && max(abs(x - x_prev)) < 1e-10) break
+    rho <- min(rho * 4, 1e8)
+  }
+  cc <- cons(x)
+  viol <- max(c(0, abs(cc$h), pmax(cc$g, 0)))
+  list(x = x, fval = f(x), exitflag = if (viol < 1e-6) 1 else -2)
+}
+
+mat_fun_of <- function(h, shape) {
+  function(x) mat_scalar(mat_first(h$fn(list(array(x, shape)), 1L), 1L))
+}
+
+mat_opt_arg <- function(a, k) if (length(a) >= k && mat_numel(a[[k]]) > 0L) a[[k]] else NULL
+
+mat_builtins$load <- function(a, n, ctx) {
+  if (!length(a)) stop("load needs a file name", call. = FALSE)
+  args <- vapply(a, mat_str, "")
+  args <- args[!startsWith(args, "-")]
+  path <- mat_find_file(args[1], ctx, c(".mat", ".txt", ".dat", ".csv"))
+  vars <- mat_load_file(path)
+  if (length(args) > 1L) vars <- vars[intersect(args[-1], names(vars))]
+  if (n >= 1L) return(do.call(mat_struct, vars))
+  for (nm in names(vars)) assign(nm, vars[[nm]], envir = ctx$vars)
+  mat_multi()
+}
+mat_builtins$xlsread <- function(a, n, ctx) {
+  if (!requireNamespace("readxl", quietly = TRUE)) {
+    stop("xlsread needs the readxl package: install.packages(\"readxl\").",
+         call. = FALSE)
+  }
+  path <- mat_find_file(mat_str(a[[1]]), ctx, c(".xlsx", ".xls"))
+  sheet <- if (length(a) > 1L && mat_numel(a[[2]])) {
+    if (mat_is_char(a[[2]])) mat_str(a[[2]]) else mat_scalar(a[[2]])
+  } else 1L
+  range <- if (length(a) > 2L && mat_is_char(a[[3]]) && nzchar(a[[3]])) mat_str(a[[3]]) else NULL
+  df <- suppressMessages(readxl::read_excel(path, sheet = sheet, range = range,
+                                            col_names = FALSE))
+  num <- mat_numeric_table(df)
+  if (n <= 1L) return(num)
+  txt <- as.matrix(df)
+  txt[!is.na(suppressWarnings(as.numeric(txt)))] <- ""
+  txt[is.na(txt)] <- ""
+  mat_ret(num, structure(array(as.list(txt), dim(txt)), class = "mat_cell"))
+}
+mat_builtins$csvread <- function(a, n, ctx) {
+  path <- mat_find_file(mat_str(a[[1]]), ctx)
+  r0 <- if (length(a) > 1L) mat_scalar(a[[2]]) else 0
+  c0 <- if (length(a) > 2L) mat_scalar(a[[3]]) else 0
+  m <- as.matrix(utils::read.csv(path, header = FALSE, skip = r0))
+  storage.mode(m) <- "double"
+  unname(m[, (c0 + 1):ncol(m), drop = FALSE])
+}
+mat_builtins$dlmread <- function(a, n, ctx) {
+  path <- mat_find_file(mat_str(a[[1]]), ctx)
+  sep <- if (length(a) > 1L && mat_is_char(a[[2]])) mat_str(a[[2]]) else ""
+  sep <- gsub("\\\\t", "\t", sep)
+  r0 <- if (length(a) > 2L) mat_scalar(a[[3]]) else 0
+  c0 <- if (length(a) > 3L) mat_scalar(a[[4]]) else 0
+  m <- as.matrix(utils::read.table(path, header = FALSE, sep = sep, skip = r0))
+  storage.mode(m) <- "double"
+  unname(m[, (c0 + 1):ncol(m), drop = FALSE])
+}
+mat_builtins$readmatrix <- function(a, n, ctx) {
+  path <- mat_find_file(mat_str(a[[1]]), ctx)
+  if (grepl("\\.xlsx?$", path, ignore.case = TRUE)) {
+    return(mat_builtins$xlsread(list(path), 1L, ctx))
+  }
+  mat_numeric_table(utils::read.table(path, header = FALSE, fill = TRUE,
+                                      sep = if (grepl("\\.csv$", path)) "," else ""))
+}
+mat_builtins$fmincon <- function(a, n, ctx) {
+  h <- mat_handle_arg(a[[1]], ctx)
+  x0 <- mat_m(a[[2]])
+  get <- function(k) { v <- mat_opt_arg(a, k); if (is.null(v)) NULL else mat_m(v) }
+  nl <- mat_opt_arg(a, 9)
+  nonlcon <- if (is.null(nl)) NULL else {
+    nh <- mat_handle_arg(nl, ctx)
+    function(x) {
+      r <- nh$fn(list(array(x, dim(x0))), 2L)
+      if (!inherits(r, "mat_multi")) r <- mat_multi(r)
+      list(c = as.numeric(mat_m(r[[1]])),
+           ceq = if (length(r) > 1L) as.numeric(mat_m(r[[2]])) else numeric(0))
+    }
+  }
+  r <- mat_fmincon(mat_fun_of(h, dim(x0)), as.vector(x0), get(3), as.vector(get(4)),
+                   get(5), as.vector(get(6)), as.vector(get(7)),
+                   as.vector(get(8)), nonlcon)
+  mat_ret(array(r$x, dim(x0)), matrix(r$fval), matrix(r$exitflag))
+}
+mat_builtins$fminunc <- function(a, n, ctx) {
+  h <- mat_handle_arg(a[[1]], ctx)
+  x0 <- mat_m(a[[2]])
+  f <- mat_fun_of(h, dim(x0))
+  r <- stats::optim(as.vector(x0), f, method = "BFGS",
+                    control = list(maxit = 5000, reltol = 1e-14))
+  mat_ret(array(r$par, dim(x0)), matrix(r$value),
+          matrix(if (r$convergence == 0) 1 else 0))
+}
+mat_builtins$lsqnonlin <- function(a, n, ctx) {
+  h <- mat_handle_arg(a[[1]], ctx)
+  x0 <- mat_m(a[[2]])
+  lb <- if (length(a) > 2L && mat_numel(a[[3]])) as.vector(mat_m(a[[3]])) else -Inf
+  ub <- if (length(a) > 3L && mat_numel(a[[4]])) as.vector(mat_m(a[[4]])) else Inf
+  res <- function(x) mat_call_handle(h, x, shape = dim(x0))
+  if (all(!is.finite(c(lb, ub)))) {
+    r <- mat_newton(res, as.vector(x0))
+    x <- r$x
+  } else {
+    x <- stats::optim(as.vector(x0), function(z) sum(res(z)^2), method = "L-BFGS-B",
+                      lower = lb, upper = ub, control = list(factr = 10))$par
+  }
+  rr <- res(x)
+  mat_ret(array(x, dim(x0)), matrix(sum(rr^2)), matrix(rr, ncol = 1L), matrix(1))
+}
+mat_hp <- function(y, lambda) {
+  y <- mat_m(y)
+  col <- nrow(y) == 1L
+  if (col) y <- t(y)
+  T <- nrow(y)
+  D <- diff(diag(T), differences = 2L)
+  trend <- solve(diag(T) + lambda * crossprod(D), y)
+  if (col) list(trend = t(trend), cycle = t(y - trend)) else
+    list(trend = trend, cycle = y - trend)
+}
+mat_builtins$hpfilter <- function(a, n, ctx) {
+  lambda <- if (length(a) > 1L) mat_scalar(a[[2]]) else 1600
+  r <- mat_hp(a[[1]], lambda)
+  mat_ret(r$trend, r$cycle)
+}
+mat_builtins$sample_hp_filter <- function(a, n, ctx) {
+  r <- mat_hp(a[[1]], mat_scalar(a[[2]]))
+  mat_ret(r$trend, r$cycle)
+}
+mat_builtins$ksdensity <- function(a, n, ctx) {
+  x <- as.vector(mat_m(a[[1]]))
+  if (length(a) > 1L && is.numeric(a[[2]])) {
+    pts <- as.vector(mat_m(a[[2]]))
+    d <- stats::density(x, n = 512L)
+    f <- stats::approx(d$x, d$y, xout = pts, rule = 2)$y
+  } else {
+    d <- stats::density(x, n = 100L)
+    pts <- d$x
+    f <- d$y
+  }
+  mat_ret(matrix(f, nrow = 1L), matrix(pts, nrow = 1L))
+}
+mat_builtins$interp1 <- function(a, n, ctx) {
+  x <- as.vector(mat_m(a[[1]]))
+  y <- as.vector(mat_m(a[[2]]))
+  xi <- mat_m(a[[3]])
+  method <- if (length(a) > 3L && mat_is_char(a[[4]])) tolower(mat_str(a[[4]])) else "linear"
+  extrap <- any(vapply(a, function(v) mat_is_char(v) && tolower(v) == "extrap", TRUE))
+  out <- if (method %in% c("spline", "pchip", "cubic")) {
+    stats::spline(x, y, xout = as.vector(xi),
+                  method = if (method == "spline") "fmm" else "hyman")$y
+  } else {
+    stats::approx(x, y, xout = as.vector(xi), rule = if (extrap) 2 else 1,
+                  method = if (method %in% c("nearest", "previous")) "constant" else "linear")$y
+  }
+  out[is.na(out)] <- NaN
+  array(out, dim(xi))
+}
+mat_builtins$polyfit <- function(a, n, ctx) {
+  x <- as.vector(mat_m(a[[1]]))
+  y <- as.vector(mat_m(a[[2]]))
+  k <- mat_scalar(a[[3]])
+  X <- outer(x, k:0, `^`)
+  matrix(qr.solve(X, y), nrow = 1L)
+}
+mat_builtins$polyval <- function(a, n, ctx) {
+  p <- as.vector(mat_m(a[[1]]))
+  x <- mat_m(a[[2]])
+  out <- 0 * x
+  for (cf in p) out <- out * x + cf
+  out
+}
+mat_builtins$prctile <- function(a, n, ctx) {
+  x <- as.vector(mat_m(a[[1]]))
+  p <- as.vector(mat_m(a[[2]]))
+  matrix(stats::quantile(x, p / 100, names = FALSE, type = 5), nrow = 1L)
+}
+mat_builtins$quantile <- function(a, n, ctx) {
+  x <- as.vector(mat_m(a[[1]]))
+  p <- as.vector(mat_m(a[[2]]))
+  matrix(stats::quantile(x, p, names = FALSE, type = 5), nrow = 1L)
+}
+mat_builtins$cov <- function(a, n, ctx) {
+  x <- mat_m(a[[1]])
+  if (length(a) > 1L) x <- cbind(as.vector(x), as.vector(mat_m(a[[2]])))
+  if (nrow(x) == 1L) x <- t(x)
+  v <- stats::cov(x)
+  if (length(v) == 1L) matrix(v) else v
+}
+mat_builtins$corrcoef <- function(a, n, ctx) {
+  x <- mat_m(a[[1]])
+  if (length(a) > 1L) x <- cbind(as.vector(x), as.vector(mat_m(a[[2]])))
+  stats::cor(x)
+}
+mat_builtins$corr <- mat_builtins$corrcoef
+mat_builtins$trapz <- function(a, n, ctx) {
+  if (length(a) == 1L) {
+    y <- as.vector(mat_m(a[[1]]))
+    return(matrix(sum((y[-1] + y[-length(y)]) / 2)))
+  }
+  x <- as.vector(mat_m(a[[1]]))
+  y <- as.vector(mat_m(a[[2]]))
+  matrix(sum(diff(x) * (y[-1] + y[-length(y)]) / 2))
+}
+mat_ignored <- c(mat_ignored, "save", "datatomfile", "dynasave", "dynatype",
+                 "rplot", "print_info")
