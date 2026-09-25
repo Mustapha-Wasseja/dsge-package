@@ -1,5 +1,6 @@
 ---
 title: "Introduction to the dsge Package"
+author: "Mustapha Wasseja Mohammed"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Introduction to the dsge Package}
