@@ -17,7 +17,9 @@ solving, and estimating DSGE models entirely in R. No external software
   shocks, measurement errors, priors, Ramsey/discretionary/OSR policy
   and OccBin constraints), and solve or estimate it without Dynare or
   MATLAB; MATLAB code in the file and `_steadystate.m` files are run by
-  a built-in MATLAB interpreter
+  a built-in MATLAB interpreter, and perfect-foresight simulations
+  (`initval`/`endval`, deterministic shocks, `lmmcp` constraints) by
+  `simulate_perfect_foresight()`
 - **Linear models** via formula interface (`obs()`, `unobs()`, `state()`)
 - **Nonlinear models** via string-based equations with perturbation up to
   third order (`dsgenl_model()`, `solve_dsge(order = 1, 2, 3)`)

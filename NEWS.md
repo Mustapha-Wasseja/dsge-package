@@ -283,6 +283,31 @@ and tests:
   (relative), most to 1e-9 or better
   (`dev/dynare-validation/extra/validate_higher_order.R`).
 
+### Perfect foresight and MATLAB data files for imported models (2026-09-25)
+
+* New **`simulate_perfect_foresight()`** solves the deterministic path of
+  a model imported with `read_dynare()` as Dynare's
+  `perfect_foresight_setup` / `perfect_foresight_solver` (and `simul`)
+  do: initial and terminal conditions from `initval`, `endval`,
+  `histval`, `steady` and `oo_.endo_simul(..., 1) = ...`, deterministic
+  shocks (temporary and permanent), and complementarity conditions from
+  `mcp` equation tags (Dynare's `lmmcp` option, e.g. a zero lower bound).
+  The stacked system is solved by Newton's method with a sparse Jacobian
+  from symbolic derivatives (using the Matrix package when installed),
+  with Levenberg-Marquardt steps where the Jacobian is singular.  On
+  Johannes Pfeifer's DSGE_mod collection the paths of all six
+  perfect-foresight models Dynare solves in Octave (Solow models,
+  Ramsey-Cass-Koopmans, Ramsey policy from t0, a ZLB model solved with
+  `lmmcp`) agree with Dynare's to within 2.5e-7, mostly 1e-13.
+* The MATLAB interpreter used by `read_dynare()` now reads data files
+  (`load` of Octave text files, MATLAB `.mat` files via R.matlab, plain
+  numeric files; `xlsread`/`readmatrix` via readxl; `csvread`,
+  `dlmread`) and provides `fmincon` (bounds, linear and nonlinear
+  constraints), `fminunc`, `lsqnonlin`, `hpfilter`, `ksdensity`,
+  `interp1`, `polyfit`/`polyval`, `prctile`, `cov` and `corrcoef`.
+  Errors now name the MATLAB statement that failed first (e.g. a missing
+  data file).  Matrix, R.matlab and readxl are suggested packages.
+
 ## Improvements
 
 ### Publication-ready plot theme (2026-05-21)
