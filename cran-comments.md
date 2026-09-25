@@ -12,15 +12,20 @@ Highlights:
   discretionary and optimal-simple-rule policy and occasionally binding
   constraints (OccBin); MATLAB code in model files and MATLAB
   steady-state files are run by a small MATLAB interpreter written in R.
-  It is written entirely in R: it does not call Dynare, MATLAB or Octave
-  and adds no new package dependencies. Results
+  It is written entirely in R and does not call Dynare, MATLAB or Octave.
+  Its only new dependencies are optional (Suggests): Matrix for sparse
+  perfect-foresight solves, and R.matlab and readxl for MATLAB code that
+  reads .mat and Excel data files. Results
   were checked against Dynare 6.0 during development; the comparison
   scripts are in the GitHub repository and excluded from the package
   build.
 - From 1.1.0: Bayes factor model comparison, parallel MCMC chains,
   third-order perturbation, a bootstrap particle filter with particle
   marginal Metropolis-Hastings, and Ramsey optimal policy.
-- Nonlinear perfect foresight via a stacked-time Newton solver.
+- Nonlinear perfect foresight via a stacked-time Newton solver;
+  `simulate_perfect_foresight()` runs the perfect-foresight simulations
+  declared in imported Dynare files, including complementarity (ZLB)
+  constraints.
 - Variance decomposition (unconditional and forecast-error).
 - Optimal simple rules, discretionary policy, conditional forecasts,
   impulse-response matching, GMM/SMM estimation, DSGE-VAR (with joint
@@ -42,6 +47,8 @@ Highlights:
 - local: Ubuntu 24.04, R 4.3.3
 - GitHub Actions: macOS (release), Windows (release),
   Ubuntu (devel, release, oldrel-1)
+- win-builder: R-devel (2026-09-21 r90579 ucrt), R-release (4.6.1),
+  R-oldrelease (4.5.3)
 
 ## R CMD check results
 
@@ -49,6 +56,9 @@ Highlights:
 (`_R_CHECK_CRAN_INCOMING_REMOTE_=TRUE`, spelling via aspell):
 
 0 errors | 0 warnings | 2 notes
+
+On win-builder (R-devel, R-release and R-oldrelease) the result is
+0 errors | 0 warnings | 1 note (the spelling note below).
 
 - "checking CRAN incoming feasibility ... NOTE: Possibly misspelled words
   in DESCRIPTION: Andrieu, Grohe, Juillard, Kass, Raftery, Schmitt,
