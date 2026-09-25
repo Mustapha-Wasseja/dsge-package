@@ -398,8 +398,9 @@ and tests:
 
 ## Package maintenance
 
-* `.claude/` (local Claude Code settings) added to `.Rbuildignore` so
-  it is never bundled into the source tarball.
+* `.Rbuildignore` now excludes all hidden top-level files and folders
+  (such as local editor settings), so they are never bundled into the
+  source tarball.
 
 # dsge 1.1.0
 
