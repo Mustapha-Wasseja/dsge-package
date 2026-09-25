@@ -199,7 +199,7 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
       }
 
       kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D,
-                          presample = presample)
+                          presample = presample, init = model$kalman_init)
       lp_endo <- if (!is.null(endogenous_prior))
                    endogenous_prior$log_density(sol)
                  else 0
@@ -558,7 +558,7 @@ compute_rhat <- function(chain_draws) {
         y_eval <- sweep(y, 2, ss_obs, "-")
       }
       kf <- kalman_filter(y_eval, sol$G, sol$H, sol$M, sol$D,
-                          presample = presample)
+                          presample = presample, init = model$kalman_init)
       lp_endo <- if (!is.null(endogenous_prior))
                    endogenous_prior$log_density(sol)
                  else 0

@@ -40,8 +40,10 @@ Third-order terms capture:
 \item State-dependent risk premia (\code{g_xss}).
 \item Higher-order precautionary savings motives (\code{g_sss}).
 }
-The solver reuses the second-order solution.  Third-order derivatives
-of the model equations are computed via central finite differences.
+Derivatives of the model equations are computed symbolically (with
+finite differences as a fallback for functions \code{stats::D} cannot
+differentiate). As in Dynare, shocks are symmetric, so the sigma^3 terms
+are zero.
 Pruned simulation is available via \code{\link{simulate_3rd_order}}.
 }
 \seealso{
