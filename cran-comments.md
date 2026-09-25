@@ -12,7 +12,10 @@ tests (11 min). As requested, test timings are reduced:
   continuous integration.
 
 The test suite now takes about 2 minutes locally (previously about 8),
-under the same settings as on CRAN.
+under the same settings as on CRAN. On win-builder the resubmitted build
+checks in about 6.3 minutes (R-devel: 379 s overall, tests 181 s;
+R-release 4.6.1: 377 s overall, tests 177 s), and the CRAN incoming
+pre-test took 385 s, with only the spelling note below.
 
 ## Submission summary
 
@@ -63,7 +66,9 @@ Highlights:
 - local: Ubuntu 24.04, R 4.3.3
 - GitHub Actions: macOS (release), Windows (release),
   Ubuntu (devel, release, oldrel-1)
-- win-builder: R-devel (2026-09-21 r90579 ucrt), R-release (4.6.1),
+- win-builder, resubmitted build: R-devel (2026-09-21 r90579 ucrt),
+  R-release (4.6.1)
+- win-builder, first 1.2.0 build: R-devel, R-release (4.6.1),
   R-oldrelease (4.5.3)
 
 ## R CMD check results
@@ -73,7 +78,8 @@ Highlights:
 
 0 errors | 0 warnings | 2 notes
 
-On win-builder (R-devel, R-release and R-oldrelease) the result is
+On win-builder (all runs above) and in the CRAN incoming pre-tests
+(Windows and Debian, r-devel) the result is
 0 errors | 0 warnings | 1 note (the spelling note below).
 
 - "checking CRAN incoming feasibility ... NOTE: Possibly misspelled words
