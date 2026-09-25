@@ -66,6 +66,8 @@
 #'     [estimate()] and [bayes_dsge()] (`presample`, `first_obs`, `nobs`).}
 #'   \item{commands}{List of Dynare commands found in the file (such as
 #'     `stoch_simul` or `estimation`), recorded but not executed.}
+#'   \item{perfect_foresight}{The file's perfect-foresight setup, used by
+#'     [simulate_perfect_foresight()].}
 #'   \item{notes}{Character vector of translation notes, including
 #'     anything that was ignored or approximated.}
 #' }
@@ -166,10 +168,25 @@
 #' Dynare's `occbin_solver` does, using the file's `shocks(surprise)`
 #' block by default.
 #'
+#' **Perfect foresight.** `initval`, `endval`, `histval`, `steady`, the
+#' deterministic `shocks` (`periods`/`values`), `mcp` equation tags and
+#' `perfect_foresight_setup(periods = )` / `simul` are stored in
+#' `perfect_foresight`; [simulate_perfect_foresight()] solves the
+#' deterministic path as Dynare's `perfect_foresight_solver` does.
+#'
+#' **MATLAB data and toolbox functions.** The MATLAB interpreter reads data
+#' with `load` (Octave text files; MATLAB `.mat` files up to version 7 with
+#' the \pkg{R.matlab} package), `xlsread` / `readmatrix` (spreadsheets, with
+#' \pkg{readxl}), `csvread` and `dlmread`, and provides `fmincon`,
+#' `fminunc`, `lsqnonlin`, `hpfilter`, `ksdensity`, `interp1`, `polyfit`
+#' and other common functions. When a file cannot be run (e.g. a data file
+#' is missing), the error names the MATLAB statement that failed.
+#'
 #' **Not supported:** `external_function`, `trend_var`, `EXPECTATION()`,
 #' `diff()`, `adl()`, PAC and VAR expectation operators; these raise an
-#' error. Other blocks and commands are recorded but not run. MATLAB code
-#' that reads data files (`load`, `xlsread`) cannot be run.
+#' error. Other blocks and commands are recorded but not run, as is MATLAB
+#' code that calls Dynare's internal functions (e.g.
+#' `perfect_foresight_solver_core`).
 #'
 #' @references
 #' Dennis, R. (2007). Optimal policy in rational expectations models: new
@@ -180,7 +197,7 @@
 #' \emph{Journal of Monetary Economics}, 70, 22-38.
 #'
 #' @seealso [dsgenl_model()], [solve_dsge()], [bayes_dsge()], [osr()],
-#'   [simulate_occbin()]
+#'   [simulate_occbin()], [simulate_perfect_foresight()]
 #'
 #' @examples
 #' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
@@ -564,7 +581,8 @@ dyn_parse_statements <- function(statements) {
     params = character(0),
     predetermined = character(0), varobs = NULL,
     param_exprs = list(), model = character(0), model_linear = FALSE,
-    blocks = list(), commands = list(), notes = character(0)
+    blocks = list(), commands = list(), notes = character(0),
+    sequence = character(0)
   )
 
   i <- 1L
@@ -574,6 +592,17 @@ dyn_parse_statements <- function(statements) {
     st <- statements[i]
     if (startsWith(st, "%native% ")) {
       st <- sub("^%native% ", "", st)
+      # oo_.endo_simul(rows, 1) = value sets the initial condition of a
+      # perfect-foresight simulation (e.g. Ramsey multipliers at 0)
+      es <- regmatches(st, regexec(
+        "^oo_\\.endo_simul\\s*\\(\\s*(.+?)\\s*,\\s*1\\s*\\)\\s*=\\s*(.+?)\\s*;?\\s*$",
+        st))[[1]]
+      if (length(es) == 3L) {
+        p$endo_simul_init[[length(p$endo_simul_init) + 1L]] <-
+          list(rows = es[2], value = es[3])
+        i <- i + 1L
+        next
+      }
       spv <- regmatches(st, regexec(
         "^set_param_value\\s*\\(\\s*['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]\\s*,(.*)\\)\\s*;?$",
         st))[[1]]
@@ -607,6 +636,7 @@ dyn_parse_statements <- function(statements) {
       if (j > n) {
         stop("Block '", kw, "' is not closed with 'end;'.", call. = FALSE)
       }
+      p$sequence <- c(p$sequence, paste0("block:", kw))
       if (kw == "model") {
         if (length(p$model) > 0L) {
           stop("Multiple model blocks are not supported.", call. = FALSE)
@@ -689,6 +719,7 @@ dyn_parse_statements <- function(statements) {
     }
     p$commands[[length(p$commands) + 1L]] <- list(name = kw, options = opts,
                                                   statement = st)
+    p$sequence <- c(p$sequence, paste0("cmd:", kw))
     if (kw %in% dyn_compute_cmds) computed <- TRUE
     i <- i + 1L
   }
@@ -943,12 +974,23 @@ dyn_build <- function(p, observed = NULL) {
     if (inherits(val, "error")) {
       # Other assignments are MATLAB code (plots, tables, ...) as far as
       # the model is concerned.
-      if (pe$name %in% p$params) stop(val)
+      if (pe$name %in% p$params) {
+        # point to an earlier failure this one may stem from
+        earlier <- grep("^(Ignored MATLAB assignment|MATLAB statement not run)",
+                        notes, value = TRUE)
+        msg <- conditionMessage(val)
+        if (length(earlier)) {
+          msg <- paste0(msg, "\n  Earlier MATLAB failures:\n  ",
+                        paste(utils::tail(earlier, 3L), collapse = "\n  "))
+        }
+        stop(msg, call. = FALSE)
+      }
       if (exists(pe$name, envir = cal_env, inherits = FALSE)) {
         rm(list = pe$name, envir = cal_env)
       }
       notes <- c(notes, paste0("Ignored MATLAB assignment: ", pe$name, " = ",
-                               substr(pe$expr, 1L, 40L)))
+                               substr(pe$expr, 1L, 40L), " (",
+                               substr(conditionMessage(val), 1L, 80L), ")"))
       next
     }
     assign(pe$name, val, envir = cal_env)
@@ -1041,6 +1083,11 @@ dyn_build <- function(p, observed = NULL) {
       paste(spec$instruments, collapse = ", "), ", computed at ",
       "the calibrated parameters (Dennis 2007)."))
   }
+  pf_equations <- eqs
+  pf_tags <- meq$tagged$tags
+  if (!is.null(occ_split)) pf_tags <- pf_tags[occ_split$base_idx]
+  length(pf_tags) <- length(pf_equations)
+
   # --- leads of two or more periods inside nonlinear terms ---------------
   # As in Dynare, such terms become auxiliary variables (exact at every
   # order of approximation, by the law of iterated expectations).
@@ -1458,11 +1505,31 @@ dyn_build <- function(p, observed = NULL) {
     "initval", "initval_opts", "steady_state_model",
     "steady_state_model_opts", "shocks", "shocks_opts", "estimated_params",
     "estimated_params_init", "osr_params_bounds", "optim_weights",
-    "occbin_constraints"))
+    "occbin_constraints", "endval", "histval"))
   if (length(ignored_blocks) > 0L) {
     notes <- c(notes, paste0("Block(s) not translated: ",
                              paste(ignored_blocks, collapse = ", "), "."))
   }
+
+  seq_ <- p$sequence
+  pos <- function(x) which(seq_ == x)
+  ini_pos <- pos("block:initval")
+  end_pos <- pos("block:endval")
+  steady_pos <- pos("cmd:steady")
+  first_end <- if (length(end_pos)) min(end_pos) else Inf
+  pf_periods <- dyn_pf_periods(p$commands, cal_env)
+  perfect_foresight <- list(
+    equations = pf_equations, tags = pf_tags,
+    endo = c(endo, mults), exo = exo, variables = endo,
+    initval = p$blocks$initval, endval = p$blocks$endval,
+    histval = p$blocks$histval,
+    steady_after_init = any(steady_pos < first_end) ||
+      (length(end_pos) == 0L && length(steady_pos) > 0L),
+    steady_after_end = any(steady_pos > first_end),
+    periods = pf_periods, lmmcp = dyn_pf_lmmcp(p$commands),
+    det = shk$det, det_set = shk$det_set,
+    ss_links = ss_links, cal_env = cal_env,
+    endo_simul_init = p$endo_simul_init)
 
   list(
     model = model,
@@ -1483,8 +1550,34 @@ dyn_build <- function(p, observed = NULL) {
     occbin = occbin,
     estimation = estimation,
     commands = p$commands,
+    perfect_foresight = perfect_foresight,
     notes = unique(notes)
   )
+}
+
+#' Does the file solve its perfect-foresight problem with lmmcp (mcp tags)?
+#' @noRd
+dyn_pf_lmmcp <- function(commands) {
+  any(vapply(commands, function(cm) {
+    cm$name == "perfect_foresight_solver" && grepl("\\blmmcp\\b", cm$options)
+  }, logical(1)))
+}
+
+#' Number of periods of the file's perfect-foresight setup (or NA)
+#' @noRd
+dyn_pf_periods <- function(commands, cal_env) {
+  for (cm in commands) {
+    if (cm$name %in% c("perfect_foresight_setup", "simul") &&
+        grepl("periods", cm$options)) {
+      v <- sub("^.*periods\\s*=\\s*([^,]+).*$", "\\1", cm$options)
+      return(as.integer(dyn_eval(v, cal_env, "periods")))
+    }
+    if (cm$name == "periods") {
+      v <- trimws(sub("^periods", "", cm$statement))
+      return(as.integer(dyn_eval(v, cal_env, "periods")))
+    }
+  }
+  NA_integer_
 }
 
 #' Auxiliary variables for nonlinear terms with leads of two or more
@@ -1997,7 +2090,9 @@ dyn_parse_shocks <- function(statements, exo, cal_env, endo = character(0)) {
                                st, "."))
     }
   }
-  list(sd = sd, declared = declared, me_sd = me_sd, cross = cross,
+  det_set <- list()
+  for (d in det) det_set[[d$shock]] <- c(det_set[[d$shock]], unlist(d$periods))
+  list(det_set = det_set, sd = sd, declared = declared, me_sd = me_sd, cross = cross,
        det = dyn_det_paths(det), notes = unique(notes))
 }
 

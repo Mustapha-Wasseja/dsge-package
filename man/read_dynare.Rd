@@ -51,6 +51,8 @@ or \code{NULL}.}
 \code{\link[=estimate]{estimate()}} and \code{\link[=bayes_dsge]{bayes_dsge()}} (\code{presample}, \code{first_obs}, \code{nobs}).}
 \item{commands}{List of Dynare commands found in the file (such as
 \code{stoch_simul} or \code{estimation}), recorded but not executed.}
+\item{perfect_foresight}{The file's perfect-foresight setup, used by
+\code{\link[=simulate_perfect_foresight]{simulate_perfect_foresight()}}.}
 \item{notes}{Character vector of translation notes, including
 anything that was ignored or approximated.}
 }
@@ -158,10 +160,25 @@ piecewise-linear algorithm of Guerrieri and Iacoviello (2015), as
 Dynare's \code{occbin_solver} does, using the file's \code{shocks(surprise)}
 block by default.
 
+\strong{Perfect foresight.} \code{initval}, \code{endval}, \code{histval}, \code{steady}, the
+deterministic \code{shocks} (\code{periods}/\code{values}), \code{mcp} equation tags and
+\code{perfect_foresight_setup(periods = )} / \code{simul} are stored in
+\code{perfect_foresight}; \code{\link[=simulate_perfect_foresight]{simulate_perfect_foresight()}} solves the
+deterministic path as Dynare's \code{perfect_foresight_solver} does.
+
+\strong{MATLAB data and toolbox functions.} The MATLAB interpreter reads data
+with \code{load} (Octave text files; MATLAB \code{.mat} files up to version 7 with
+the \pkg{R.matlab} package), \code{xlsread} / \code{readmatrix} (spreadsheets, with
+\pkg{readxl}), \code{csvread} and \code{dlmread}, and provides \code{fmincon},
+\code{fminunc}, \code{lsqnonlin}, \code{hpfilter}, \code{ksdensity}, \code{interp1}, \code{polyfit}
+and other common functions. When a file cannot be run (e.g. a data file
+is missing), the error names the MATLAB statement that failed.
+
 \strong{Not supported:} \code{external_function}, \code{trend_var}, \code{EXPECTATION()},
 \code{diff()}, \code{adl()}, PAC and VAR expectation operators; these raise an
-error. Other blocks and commands are recorded but not run. MATLAB code
-that reads data files (\code{load}, \code{xlsread}) cannot be run.
+error. Other blocks and commands are recorded but not run, as is MATLAB
+code that calls Dynare's internal functions (e.g.
+\code{perfect_foresight_solver_core}).
 }
 \examples{
 rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
@@ -200,5 +217,5 @@ dynamic models with occasionally binding constraints easily.
 }
 \seealso{
 \code{\link[=dsgenl_model]{dsgenl_model()}}, \code{\link[=solve_dsge]{solve_dsge()}}, \code{\link[=bayes_dsge]{bayes_dsge()}}, \code{\link[=osr]{osr()}},
-\code{\link[=simulate_occbin]{simulate_occbin()}}
+\code{\link[=simulate_occbin]{simulate_occbin()}}, \code{\link[=simulate_perfect_foresight]{simulate_perfect_foresight()}}
 }

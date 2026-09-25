@@ -32,6 +32,9 @@ Imports:
     numDeriv
 Suggests:
     coda,
+    Matrix,
+    R.matlab,
+    readxl,
     testthat (>= 3.0.0),
     knitr,
     rmarkdown
