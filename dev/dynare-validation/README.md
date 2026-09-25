@@ -15,6 +15,7 @@ Rscript dev/dynare-validation/extra/validate_smets_wouters.R path/to/DSGE_mod/Sm
 Rscript dev/dynare-validation/extra/batch_dsge_mod.R path/to/DSGE_mod results.csv
 Rscript dev/dynare-validation/extra/validate_higher_order.R [ORDER] path/to/*.mod
 Rscript dev/dynare-validation/extra/validate_estimation.R path/to/DSGE_mod/RBC_baseline
+Rscript dev/dynare-validation/extra/validate_perfect_foresight.R path/to/*.mod
 ```
 
 ## Impulse responses (2026-09-24, Dynare 6.0, Octave 8.4)
@@ -172,3 +173,27 @@ differences in the flat `rhoz`/`eps_z` direction reflect this). Posterior
 means and standard deviations agree to within Monte Carlo error. Dynare's
 log marginal density is 1425.13 (Laplace) / 1425.30 (modified harmonic
 mean). Run time: Dynare 9.4 minutes (Octave), dsge 25 minutes.
+
+## Perfect foresight (`extra/validate_perfect_foresight.R`)
+
+The nine perfect-foresight files of DSGE_mod, macro-expanded and cut
+after their first `perfect_foresight_solver` (a second call right after
+it, e.g. a retry with `lmmcp`, is kept); Dynare is asked for
+`tolf = tolx = 1e-12`. `simulate_perfect_foresight()` on the imported
+file is compared with Dynare's `oo_.endo_simul` over all variables and
+periods (2026-09-25, Dynare 6.0, Octave 8.4):
+
+| Model | Features | Periods | Max abs. difference |
+|---|---|---|---|
+| `Solow_SS_transition` | `initval`/`endval`, transition | 200 | 5.6e-15 |
+| `Solow_growth_rate_changes` | `endval` with `steady`, macros | 100 | 1.2e-13 |
+| `Solow_nonstationary` | vector shock values from MATLAB (`cumprod`) | 100 | 5.3e-14 |
+| `Ramsey_Cass_Koopmans` | shock paths, `endval` | 30 | 1.5e-14 |
+| `Woodford_2003_Chapter_7` | Ramsey policy from t0 (`oo_.endo_simul(:,1)=0`) | 50 | 5.8e-15 |
+| `Gali_2015_chapter_5_commitment_ZLB` | `lmmcp` (`mcp` tag), `max()` | 50 | 2.5e-7 |
+| `Gali_2015_chapter_5_discretion_ZLB` | `lmmcp` | 20 | all variables agree except the interest rate after the ZLB episode, where it enters no equation: any value >= 0 solves the model, Dynare's solver returns 0 and dsge keeps its starting value 1 |
+| `NK_linear_forward_guidance` | the shock path is found by MATLAB code calling Dynare's internal `perfect_foresight_solver_core` inside `csolve`, which `read_dynare()` cannot run; it reports this and drops that shock | | not comparable |
+| `Stock_SIR_2020` | Dynare fails to solve it in Octave ("Failed to solve perfect foresight model"); dsge does not converge either | | not comparable |
+
+The remaining differences for the ZLB model come from Dynare's `lmmcp`
+tolerance.
