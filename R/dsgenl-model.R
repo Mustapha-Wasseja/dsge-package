@@ -212,7 +212,9 @@ dsgenl_model <- function(..., observed = character(0),
       eval_fn = eval_fn,
       ss_guess = ss_guess,
       ss_function = ss_function,
-      call = match.call()
+      call = match.call(),
+      # cache for derived quantities (e.g. the compiled Jacobian)
+      .cache = new.env(parent = emptyenv())
     ),
     class = "dsgenl_model"
   )

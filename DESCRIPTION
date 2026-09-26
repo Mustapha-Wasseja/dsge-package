@@ -26,6 +26,7 @@ License: MIT + file LICENSE
 Depends:
     R (>= 3.5.0)
 Imports:
+    compiler,
     grDevices,
     graphics,
     stats,

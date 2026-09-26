@@ -64,10 +64,15 @@ linearize <- function(model, steady_state, params = NULL) {
     model$eval_fn(eval_vec)
   }
 
-  # Full Jacobian at steady state. For models declared linear (e.g.
-  # imported from a Dynare model(linear) block) a unit perturbation of
-  # each argument is exact and far cheaper than Richardson extrapolation.
-  if (isTRUE(model$linear)) {
+  # Full Jacobian at steady state: exact symbolic derivatives when every
+  # equation can be differentiated with stats::D (compiled once per model),
+  # otherwise finite differences. For models declared linear (e.g. imported
+  # from a Dynare model(linear) block) a unit perturbation of each argument
+  # is exact and far cheaper than Richardson extrapolation.
+  J <- .symbolic_jacobian(model, timed_names, timed_ss, params)
+  if (!is.null(J)) {
+    # symbolic
+  } else if (isTRUE(model$linear)) {
     f0 <- full_fn(timed_ss)
     J <- vapply(seq_along(timed_ss), function(k) {
       z <- timed_ss
