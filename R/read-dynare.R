@@ -1529,6 +1529,7 @@ dyn_build <- function(p, observed = NULL) {
     periods = pf_periods, lmmcp = dyn_pf_lmmcp(p$commands),
     det = shk$det, det_set = shk$det_set,
     ss_links = ss_links, cal_env = cal_env,
+    steady_state_model = p$blocks$steady_state_model,
     endo_simul_init = p$endo_simul_init)
 
   list(

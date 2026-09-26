@@ -1,3 +1,19 @@
+# dsge (development version)
+
+## Bug fixes
+
+* `simulate_perfect_foresight()` now starts from the file's
+  `steady_state_model` block when computing the initial and terminal steady
+  states, as Dynare's `steady` does. Previously it always started Newton's
+  method from the `initval` values, so a file that relied on
+  `steady_state_model` and gave no starting values failed with "missing
+  value where TRUE/FALSE needed". When the steady state cannot be computed
+  from the starting values, the error now says so.
+* `plot()` and `summary()` on an OccBin simulation of a model imported with
+  `read_dynare()` failed when the constraint's bound was a parameter (e.g.
+  `bind inot <= ilb`). The result now also stores the bound's numeric value
+  (`bound_value`), which the plot and summary use.
+
 # dsge 1.2.0
 
 This release collects the additions made between May and September 2026;

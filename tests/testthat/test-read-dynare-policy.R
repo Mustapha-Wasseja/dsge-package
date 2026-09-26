@@ -158,4 +158,10 @@ test_that("occbin_constraints are simulated piecewise-linearly as in Dynare", {
   expect_true(all(o$controls[o$binding[, 1], "i"] + 0.01 < 1e-10))
   expect_true(any(o$controls_unc[, "i"] < -0.01))
   expect_output(print(o), "inot >= ilb")
+  # the bound's value is known, so plot() and summary() can use it
+  expect_equal(o$constraints$zlb$bound_value, -0.01)
+  expect_output(summary(o), "Max violation")
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_no_error(plot(o))
 })

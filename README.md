@@ -3,6 +3,8 @@
 Dynamic Stochastic General Equilibrium Models for R.
 
 [![CRAN status](https://www.r-pkg.org/badges/version/dsge)](https://CRAN.R-project.org/package=dsge)
+[![CRAN checks](https://badges.cranchecks.info/worst/dsge.svg)](https://cran.r-project.org/web/checks/check_results_dsge.html)
+[![CRAN downloads](https://cranlogs.r-pkg.org/badges/grand-total/dsge)](https://CRAN.R-project.org/package=dsge)
 
 ## Overview
 
@@ -102,13 +104,36 @@ solving, and estimating DSGE models entirely in R. No external software
 
 ## Installation
 
-```r
-# Install from CRAN
-install.packages("dsge")
+dsge is on [CRAN](https://CRAN.R-project.org/package=dsge). Install the
+released version (currently 1.2.0) with:
 
-# Or install the development version from GitHub
-# install.packages("devtools")
-devtools::install_github("Mustapha-Wasseja/dsge-package")
+```r
+install.packages("dsge")
+```
+
+If you already have an older version, update it with
+`update.packages()` or by running `install.packages("dsge")` again, then
+restart R. Check the installed version with `packageVersion("dsge")`.
+
+Some features use optional packages. Install them together with dsge
+with:
+
+```r
+install.packages("dsge", dependencies = TRUE)
+```
+
+| Package | Used for |
+|---|---|
+| `Matrix` | Faster perfect-foresight solves for large models |
+| `R.matlab` | `read_dynare()` models whose MATLAB code loads `.mat` files |
+| `readxl` | `read_dynare()` models whose MATLAB code reads Excel files |
+
+The development version, which may include changes not yet on CRAN, is
+available from GitHub:
+
+```r
+# install.packages("remotes")
+remotes::install_github("Mustapha-Wasseja/dsge-package")
 ```
 
 ## Quick Start: Maximum Likelihood

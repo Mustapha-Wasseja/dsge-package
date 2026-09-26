@@ -404,16 +404,17 @@ summary.dsge_occbin <- function(object, ...) {
       # Max violation in unconstrained path
       v_idx <- match(con$variable, object$control_names)
       y_unc <- object$controls_unc[, v_idx]
-      bound_dev <- con$bound
-      if (!is.null(object$steady_state) && con$variable %in% names(object$steady_state)) {
-        bound_dev <- con$bound - object$steady_state[con$variable]
+      bound_dev <- .occbin_bound_value(con)
+      if (!is.null(bound_dev)) {
+        if (!is.null(object$steady_state) &&
+            con$variable %in% names(object$steady_state)) {
+          bound_dev <- bound_dev - object$steady_state[con$variable]
+        }
+        max_viol <- if (con$type == ">=") min(y_unc) - bound_dev
+                    else max(y_unc) - bound_dev
+        cat("  Max violation (unc.): ", sprintf("%.6f", max_viol), "\n",
+            sep = "")
       }
-      if (con$type == ">=") {
-        max_viol <- min(y_unc) - bound_dev
-      } else {
-        max_viol <- max(y_unc) - bound_dev
-      }
-      cat("  Max violation (unc.): ", sprintf("%.6f", max_viol), "\n", sep = "")
     } else {
       cat("  Never binds.\n")
     }
@@ -512,13 +513,15 @@ plot.dsge_occbin <- function(x, vars = NULL, compare = TRUE, shade = TRUE,
     # Bound line for constrained variables
     if (v %in% con_vars) {
       ci <- which(con_vars == v)[1]
-      bound_dev <- x$constraints[[ci]]$bound
-      if (!is.null(x$steady_state) && v %in% names(x$steady_state)) {
-        bound_dev <- x$constraints[[ci]]$bound - x$steady_state[v]
+      bound_dev <- .occbin_bound_value(x$constraints[[ci]])
+      if (!is.null(bound_dev)) {
+        if (!is.null(x$steady_state) && v %in% names(x$steady_state)) {
+          bound_dev <- bound_dev - x$steady_state[v]
+        }
+        graphics::abline(h = bound_dev,
+                         col = .DSGE_INK_SECONDARY,
+                         lty = "dotted", lwd = 1.3)
       }
-      graphics::abline(h = bound_dev,
-                       col = .DSGE_INK_SECONDARY,
-                       lty = "dotted", lwd = 1.3)
     }
 
     if (compare) {
@@ -531,4 +534,13 @@ plot.dsge_occbin <- function(x, vars = NULL, compare = TRUE, shade = TRUE,
   }
 
   invisible(x)
+}
+
+#' Numeric bound of an OccBin constraint, or NULL when it is not a number
+#' (constraints from read_dynare() store the expression in `bound` and its
+#' value in `bound_value`)
+#' @noRd
+.occbin_bound_value <- function(con) {
+  b <- if (!is.null(con$bound_value)) con$bound_value else con$bound
+  if (is.numeric(b) && length(b) == 1L && is.finite(b)) b else NULL
 }
