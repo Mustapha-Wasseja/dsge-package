@@ -13,3 +13,7 @@ kalman_filter_dynare_cpp <- function(y, Z, Tm, RQR, Hm, P0, presample) {
     .Call(`_dsge_kalman_filter_dynare_cpp`, y, Z, Tm, RQR, Hm, P0, presample)
 }
 
+cyclic_reduction_cpp <- function(Am, Az, Ap, tol, max_it) {
+    .Call(`_dsge_cyclic_reduction_cpp`, Am, Az, Ap, tol, max_it)
+}
+

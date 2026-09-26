@@ -75,3 +75,72 @@
   if (!ok) return(NULL)
   list(hess = hess, third = third)
 }
+
+#' Compiled symbolic Jacobian of the model equations
+#'
+#' Differentiates each equation with stats::D with respect to the timed
+#' variables it contains, and collects the nonzero derivatives into one
+#' byte-compiled expression `c(d_1, ..., d_m)` with their (row, column)
+#' positions. The result is cached in `model$.cache` (when the model has
+#' one) and rebuilt if the equations or variable names change.
+#'
+#' @return list(rows, cols, code), or NULL if an equation uses a function
+#'   stats::D cannot differentiate.
+#' @noRd
+.symbolic_jacobian_code <- function(model, timed_names) {
+  exprs <- lapply(model$equations, function(eq) eq$expression[[1L]])
+  key <- list(exprs, timed_names)
+  cache <- model$.cache
+  if (is.environment(cache) && identical(cache$jac_key, key)) {
+    return(cache$jac_code)
+  }
+  code <- tryCatch({
+    rows <- integer(0)
+    cols <- integer(0)
+    terms <- list()
+    for (k in seq_along(exprs)) {
+      v <- intersect(all.vars(exprs[[k]]), timed_names)
+      for (a in v) {
+        d <- stats::D(exprs[[k]], a)
+        if (is.numeric(d) && length(d) == 1L && d == 0) next
+        rows <- c(rows, k)
+        cols <- c(cols, match(a, timed_names))
+        terms[[length(terms) + 1L]] <- d
+      }
+    }
+    call <- as.call(c(list(as.name("c")), terms))
+    list(rows = rows, cols = cols,
+         code = compiler::compile(call, options = list(suppressAll = TRUE)))
+  }, error = function(e) NULL)
+  if (is.environment(cache)) {
+    cache$jac_key <- key
+    cache$jac_code <- code
+  }
+  code
+}
+
+#' Exact Jacobian of the model equations at a point
+#'
+#' @param model A dsgenl_model.
+#' @param timed_names Names of the timed variables (columns of the result).
+#' @param point Values of the timed variables (named, in that order).
+#' @param params Parameter values (named).
+#' @return An n_eq x length(timed_names) matrix, or NULL when symbolic
+#'   differentiation is not possible (the caller then differentiates
+#'   numerically).
+#' @noRd
+.symbolic_jacobian <- function(model, timed_names, point, params) {
+  jc <- .symbolic_jacobian_code(model, timed_names)
+  if (is.null(jc)) return(NULL)
+  vals <- c(point, params)
+  vals <- vals[!duplicated(names(vals))]
+  if (is.function(model$resolve_values)) vals <- model$resolve_values(vals)
+  env <- list2env(as.list(vals), parent = baseenv())
+  d <- tryCatch(as.numeric(eval(jc$code, env)), error = function(e) NULL)
+  if (is.null(d) || length(d) != length(jc$rows) || !all(is.finite(d))) {
+    return(NULL)
+  }
+  J <- matrix(0, length(model$equations), length(timed_names))
+  J[cbind(jc$rows, jc$cols)] <- d
+  J
+}

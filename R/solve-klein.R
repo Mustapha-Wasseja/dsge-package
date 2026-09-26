@@ -368,7 +368,8 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
 #' whose stable solution v_t = X v_{t-1} is found by cyclic reduction
 #' (Bini, Iannazzo and Meini 2012; Dynare's cycle_reduction). Then
 #' H = X_xx and G = X_yx. Returns NULL when the method fails or the
-#' solution is not determinate, so the caller can fall back.
+#' solution is not determinate, so the caller can fall back. The iteration
+#' runs in C++ (src/klein.cpp).
 #' @noRd
 klein_cyclic_reduction <- function(A0, A1, A2, A3, B0, B1, B2, B3, A4,
                                    n_c, n_s, tol = 1e-13, max_it = 300L) {
@@ -379,31 +380,9 @@ klein_cyclic_reduction <- function(A0, A1, A2, A3, B0, B1, B2, B3, A4,
   Am <- rbind(cbind(A3, matrix(0, n_c, n_c)), cbind(-B3, matrix(0, n_s, n_c)))
   Az <- rbind(cbind(A4, -(A0 - A2)), cbind(B0, -B2))
   Ap <- rbind(cbind(matrix(0, n_c, n_s), A1), cbind(matrix(0, n_s, n_s), -B1))
-  out <- tryCatch({
-    a0 <- Am
-    a1 <- Az
-    a2 <- Ap
-    ahat <- Az
-    i0 <- seq_len(n)
-    i2 <- n + seq_len(n)
-    it <- 0L
-    repeat {
-      tmp <- t(solve(t(a1), t(rbind(a0, a2)))) %*% cbind(a0, a2)
-      a1 <- a1 - tmp[i0, i2, drop = FALSE] - tmp[i2, i0, drop = FALSE]
-      a0n <- -tmp[i0, i0, drop = FALSE]
-      a2 <- -tmp[i2, i2, drop = FALSE]
-      ahat <- ahat - tmp[i2, i0, drop = FALSE]
-      a0 <- a0n
-      crit0 <- sum(abs(a0))
-      if (!is.finite(crit0)) return(NULL)
-      it <- it + 1L
-      if (crit0 < tol * max(1, sum(abs(Am))) &&
-          max(colSums(abs(a2))) < tol * max(1, max(colSums(abs(Ap))))) break
-      if (it >= max_it) return(NULL)
-    }
-    X <- -solve(ahat, Am)
-    X
-  }, error = function(e) NULL)
+  cr <- tryCatch(cyclic_reduction_cpp(Am, Az, Ap, tol, as.integer(max_it)),
+                 error = function(e) NULL)
+  out <- if (!is.null(cr) && isTRUE(cr$ok)) cr$X else NULL
   if (is.null(out) || !all(is.finite(out))) return(NULL)
   X <- out
   # determinate solution: v_t depends on x_t only (v_{t-1}'s first block)

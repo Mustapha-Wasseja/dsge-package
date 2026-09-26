@@ -57,11 +57,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cyclic_reduction_cpp
+List cyclic_reduction_cpp(const arma::mat& Am, const arma::mat& Az, const arma::mat& Ap, double tol, int max_it);
+RcppExport SEXP _dsge_cyclic_reduction_cpp(SEXP AmSEXP, SEXP AzSEXP, SEXP ApSEXP, SEXP tolSEXP, SEXP max_itSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type Am(AmSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Az(AzSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Ap(ApSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< int >::type max_it(max_itSEXP);
+    rcpp_result_gen = Rcpp::wrap(cyclic_reduction_cpp(Am, Az, Ap, tol, max_it));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_dsge_lyapunov_schur_cpp", (DL_FUNC) &_dsge_lyapunov_schur_cpp, 2},
     {"_dsge_kalman_filter_cpp", (DL_FUNC) &_dsge_kalman_filter_cpp, 7},
     {"_dsge_kalman_filter_dynare_cpp", (DL_FUNC) &_dsge_kalman_filter_dynare_cpp, 7},
+    {"_dsge_cyclic_reduction_cpp", (DL_FUNC) &_dsge_cyclic_reduction_cpp, 5},
     {NULL, NULL, 0}
 };
 

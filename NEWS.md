@@ -14,6 +14,16 @@
     including solving the model, takes about half as long as before.
   * Where the innovation covariance is numerically singular, the filter now
     returns a log-likelihood of `-Inf` instead of stopping with an error.
+* `solve_dsge()` is faster for nonlinear and imported models: 6.6 times
+  for Smets-Wouters (135 ms to 21 ms), which makes one likelihood evaluation
+  3.5 times faster than in the previous development version.
+  * `linearize()` now uses exact symbolic first derivatives of the model
+    equations, differentiated and byte-compiled once per model and cached,
+    instead of re-evaluating every equation once per variable. Models whose
+    equations use a function `stats::D()` cannot differentiate (such as
+    `abs()`) still use numerical derivatives. For nonlinear models the
+    Jacobian is now exact, so solutions can change in the tenth decimal.
+  * The cyclic-reduction step of the first-order solver runs in C++.
 
 ## Bug fixes
 
