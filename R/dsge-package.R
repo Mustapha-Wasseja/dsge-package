@@ -6,4 +6,6 @@
 #' @importFrom grDevices rgb
 #' @importFrom graphics par plot lines polygon abline legend
 #' @importFrom numDeriv jacobian hessian
+#' @importFrom Rcpp sourceCpp
+#' @useDynLib dsge, .registration = TRUE
 NULL

@@ -1,5 +1,20 @@
 # dsge (development version)
 
+## Performance
+
+* The Kalman filter now runs in C++ (via Rcpp and RcppArmadillo), so dsge
+  now contains compiled code. Results are unchanged: the Smets-Wouters
+  (2007) log-likelihood still matches Dynare's to nine decimals, and the
+  filter agrees with the previous R version to rounding error.
+  * The unconditional state covariance that starts the filter is computed
+    with a Schur-form Lyapunov solver (O(n^3)) instead of a Kronecker-form
+    linear system (O(n^6)): 34 times faster for Smets-Wouters (27 states).
+  * The filter loop is 3 to 10 times faster, and during estimation only the
+    log-likelihood is computed. One likelihood evaluation of Smets-Wouters,
+    including solving the model, takes about half as long as before.
+  * Where the innovation covariance is numerically singular, the filter now
+    returns a log-likelihood of `-Inf` instead of stopping with an error.
+
 ## Bug fixes
 
 * `simulate_perfect_foresight()` now starts from the file's
