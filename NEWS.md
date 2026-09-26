@@ -31,8 +31,11 @@
   time, and the whole `solve_dsge()` call about a third.
 * Second- and third-order solutions (`solve_dsge(order = 2)` or `3`) are
   faster, especially for larger models: for Andreasen's (2012) rare-disaster
-  model (134 controls, 8 states), repeated second-order solves take about a
-  sixth of the time and third-order solves about a third.
+  model (134 controls, 8 states), a second-order solve is about 20 times
+  faster and a third-order solve about 4 times faster. They are also more
+  accurate: with exact first derivatives the higher-order decision rules of
+  the models in `dev/dynare-validation/` now match Dynare's to about 1e-12
+  (previously up to 1e-6).
   * The exact first derivatives are also used here, and the second and
     third derivatives are derived once per model and cached instead of on
     every solve.
