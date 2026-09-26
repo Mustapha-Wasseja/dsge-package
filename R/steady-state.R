@@ -75,7 +75,7 @@ steady_state.dsgenl_model <- function(model, params = NULL, guess = NULL,
     names(x_vals) <- vars
     eval_ss_residual(model, x_vals, param_vec)
   }
-  # Jacobian: exact, from the compiled symbolic Jacobian of the dynamic
+  # Jacobian: exact, from the cached symbolic Jacobian of the dynamic
   # equations (leads equal current values in the steady state, so their
   # columns are added), or by finite differences if that is not available
   timed <- c(vars, paste0(vars, "__f"))

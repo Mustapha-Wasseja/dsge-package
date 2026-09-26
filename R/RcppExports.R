@@ -17,3 +17,19 @@ cyclic_reduction_cpp <- function(Am, Az, Ap, tol, max_it) {
     .Call(`_dsge_cyclic_reduction_cpp`, Am, Az, Ap, tol, max_it)
 }
 
+contract2_cpp <- function(eq, i, j, v, P, Q, n_eq) {
+    .Call(`_dsge_contract2_cpp`, eq, i, j, v, P, Q, n_eq)
+}
+
+contract3_cpp <- function(eq, i, j, l, v, P, Q, R, n_eq) {
+    .Call(`_dsge_contract3_cpp`, eq, i, j, l, v, P, Q, R, n_eq)
+}
+
+apply_hx_cpp <- function(X, hx, k) {
+    .Call(`_dsge_apply_hx_cpp`, X, hx, k)
+}
+
+sylvester_doubling_cpp <- function(P, X, hx, k, tol, max_it) {
+    .Call(`_dsge_sylvester_doubling_cpp`, P, X, hx, k, tol, max_it)
+}
+

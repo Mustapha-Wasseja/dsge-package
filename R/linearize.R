@@ -65,7 +65,7 @@ linearize <- function(model, steady_state, params = NULL) {
   }
 
   # Full Jacobian at steady state: exact symbolic derivatives when every
-  # equation can be differentiated with stats::D (compiled once per model),
+  # equation can be differentiated with stats::D (derived once per model),
   # otherwise finite differences. For models declared linear (e.g. imported
   # from a Dynare model(linear) block) a unit perturbation of each argument
   # is exact and far cheaper than Richardson extrapolation.
