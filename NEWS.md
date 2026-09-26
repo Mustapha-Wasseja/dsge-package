@@ -24,6 +24,11 @@
     `abs()`) still use numerical derivatives. For nonlinear models the
     Jacobian is now exact, so solutions can change in the tenth decimal.
   * The cyclic-reduction step of the first-order solver runs in C++.
+* `steady_state()` is faster for models whose steady state is found
+  numerically (no `ss_function` or `steady_state_model`): Newton's method
+  now uses the same exact, compiled Jacobian instead of finite differences.
+  For the nonlinear RBC model the steady state takes about a sixth of the
+  time, and the whole `solve_dsge()` call about a third.
 
 ## Bug fixes
 

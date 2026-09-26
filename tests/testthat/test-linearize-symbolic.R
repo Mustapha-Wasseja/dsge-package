@@ -64,3 +64,22 @@ test_that("models without a cache (e.g. saved by older versions) still solve", {
   ref <- solve_dsge(rbc_model(), params = rbc_params, shock_sd = c(Z = 0.01))
   expect_equal(s$G, ref$G)
 })
+
+test_that("the steady-state solver uses the exact Jacobian", {
+  m <- rbc_model()
+  n_eval <- 0L
+  inner <- m$eval_fn
+  m$eval_fn <- function(values) {
+    n_eval <<- n_eval + 1L
+    inner(values)
+  }
+  ss <- steady_state(m, params = rbc_params)
+  # analytical steady state of the RBC model
+  a <- 0.33; b <- 0.99; d <- 0.025
+  K <- ((1 / b - 1 + d) / a)^(1 / (a - 1))
+  expect_equal(unname(ss$values["K"]), K, tolerance = 1e-10)
+  expect_equal(unname(ss$values["C"]), K^a - d * K, tolerance = 1e-10)
+  # Newton with the symbolic Jacobian evaluates the equations only for the
+  # residual and the line search; finite differences would need many more
+  expect_lte(n_eval, 3L * ss$iterations)
+})
