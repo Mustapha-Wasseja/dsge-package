@@ -68,12 +68,22 @@ dyn_occbin_constraints <- function(statements) {
 
 #' Condition string -> obc_constraint-like description for print/plot
 #' @noRd
-dyn_occbin_describe <- function(cond, controls) {
+dyn_occbin_describe <- function(cond, controls, env = NULL) {
   m <- regmatches(cond, regexec(
     "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(<=|>=|<|>)\\s*(.+)$", cond))[[1]]
   if (length(m) == 4L && m[2] %in% controls) {
     type <- if (m[3] %in% c("<", "<=")) ">=" else "<="
-    return(list(variable = m[2], type = type, bound = trimws(m[4])))
+    bound <- trimws(m[4])
+    # the bound as a number (in levels) when it depends on parameters only;
+    # `bound` keeps the expression as written for printing
+    value <- NULL
+    if (!is.null(env)) {
+      v <- tryCatch(eval(parse(text = dyn_translate_math(bound))[[1]], env),
+                    error = function(e) NULL)
+      if (is.numeric(v) && length(v) == 1L && is.finite(v)) value <- v
+    }
+    return(list(variable = m[2], type = type, bound = bound,
+                bound_value = value))
   }
   list(variable = controls[1], type = "", bound = cond)
 }
@@ -315,7 +325,7 @@ dyn_occbin_simulate <- function(x, shocks = NULL, horizon = 40L,
                              dimnames = list(NULL, names(cons))),
       n_iter = occ$iters, converged = occ$ok,
       constraints = lapply(cons, function(cn) {
-        dyn_occbin_describe(cn$bind, controls)
+        dyn_occbin_describe(cn$bind, controls, env)
       }),
       steady_state = ss, horizon = horizon,
       state_names = states, control_names = controls,

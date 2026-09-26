@@ -40,6 +40,59 @@ test_that("a permanent shock reproduces Dynare's perfect-foresight path", {
   expect_equal(nrow(pf2$path), 52L)
 })
 
+test_that("steady_state_model gives the steady state when initval has no guesses", {
+  # As Dynare's `steady`, the analytical block is used, so no starting values
+  # are needed for c and k (Newton from zero would divide by zero).
+  m <- read_dynare(text = "
+    var c k;
+    varexo a;
+    parameters alpha beta delta;
+    alpha = 0.33; beta = 0.99; delta = 0.025;
+    model;
+      1/c = beta/c(+1) * (alpha * exp(a(+1)) * k^(alpha - 1) + 1 - delta);
+      k = exp(a) * k(-1)^alpha + (1 - delta) * k(-1) - c;
+    end;
+    steady_state_model;
+      k = ((1/beta - 1 + delta)/(alpha*exp(a)))^(1/(alpha - 1));
+      c = exp(a)*k^alpha - delta*k;
+    end;
+    initval; a = 0; end;
+    steady;
+    endval; a = 0.1; end;
+    steady;
+    perfect_foresight_setup(periods = 100);
+    perfect_foresight_solver;
+  ")
+  pf <- simulate_perfect_foresight(m)
+  expect_true(pf$converged)
+  rows <- as.character(c(0, 1, 50, 101))
+  expect_equal(unname(pf$path[rows, "c"]),
+               c(2.306617231988, 2.453436260101, 2.644784899034,
+                 2.677907700536), tolerance = 1e-9)
+  expect_silent({
+    grDevices::pdf(NULL)
+    plot(pf)
+    grDevices::dev.off()
+  })
+})
+
+test_that("a clear error when the steady state cannot be computed", {
+  m <- read_dynare(text = "
+    var c;
+    varexo a;
+    parameters beta;
+    beta = 0.99;
+    model;
+      1/c = beta/c(+1) * (1/beta + a);
+    end;
+    initval; a = 0; end;
+    steady;
+    perfect_foresight_setup(periods = 10);
+    perfect_foresight_solver;
+  ")
+  expect_error(simulate_perfect_foresight(m), "starting values")
+})
+
 test_that("mcp tags give a zero lower bound (Dynare's lmmcp)", {
   txt <- "
     var pi x i;

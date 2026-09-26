@@ -446,9 +446,18 @@ dyn_pf_steady <- function(sys, guess, exo_vals, env0, spec) {
                                            envir = env)
     vapply(sys$exprs, function(e) as.numeric(eval(e, env))[1L], 0)
   }
-  y <- guess
+  # As Dynare's `steady`, start from the steady_state_model block when the
+  # file has one (evaluated at the current exogenous values); Newton then
+  # only polishes it.
+  y <- dyn_pf_ss_model(spec, guess, stats::setNames(exo_vals, sys$exo), env0)
   for (it in 1:100) {
     r <- f(y)
+    if (!all(is.finite(r))) {
+      stop("The steady state for the perfect-foresight simulation cannot be ",
+           "computed from the starting values (the model equations are not ",
+           "finite there). Give starting values in `initval` or a ",
+           "`steady_state_model` block.", call. = FALSE)
+    }
     if (max(abs(r)) < 1e-12) break
     J <- numDeriv::jacobian(function(z) f(stats::setNames(z, names(y))), y)
     step <- dyn_lstsq(J, -r)
@@ -467,6 +476,33 @@ dyn_pf_steady <- function(sys, guess, exo_vals, env0, spec) {
             ").", call. = FALSE)
   }
   y
+}
+
+#' Steady state from the file's steady_state_model block, used as the
+#' starting point of dyn_pf_steady(); variables the block does not set keep
+#' their value in `guess`
+#' @noRd
+dyn_pf_ss_model <- function(spec, guess, exo_vals, env0) {
+  stmts <- spec$steady_state_model
+  if (length(stmts) == 0L) return(guess)
+  env <- new.env(parent = env0)
+  for (nm in names(exo_vals)) assign(nm, exo_vals[[nm]], envir = env)
+  for (nm in names(guess)) assign(nm, guess[[nm]], envir = env)
+  ok <- tryCatch({
+    for (st in stmts) {
+      if (!grepl("^[A-Za-z_][A-Za-z0-9_]*\\s*=[^=]", st)) next
+      nm <- trimws(sub("=.*$", "", st))
+      assign(nm, eval(parse(text = dyn_translate_math(sub("^[^=]*=", "", st))),
+                      envir = env), envir = env)
+    }
+    TRUE
+  }, error = function(e) FALSE)
+  if (!ok) return(guess)
+  for (nm in names(guess)) {
+    v <- get(nm, envir = env)
+    if (is.numeric(v) && length(v) == 1L && is.finite(v)) guess[[nm]] <- v
+  }
+  guess
 }
 
 #' Newton step, or an adaptive Levenberg-Marquardt step when the Jacobian is
