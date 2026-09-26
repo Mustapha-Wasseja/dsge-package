@@ -29,7 +29,11 @@ Imports:
     grDevices,
     graphics,
     stats,
-    numDeriv
+    numDeriv,
+    Rcpp
+LinkingTo:
+    Rcpp,
+    RcppArmadillo
 Suggests:
     coda,
     Matrix,

@@ -122,7 +122,8 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
 
       if (!sol$stable) return(Inf)
 
-      kf <- kalman_filter(y, sol$G, sol$H, sol$M, sol$D, presample = presample)
+      kf <- kalman_filter(y, sol$G, sol$H, sol$M, sol$D, presample = presample,
+                          loglik_only = TRUE)
       -kf$loglik
     }, error = function(e) Inf)
   }
@@ -372,7 +373,8 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
       y_dev <- sweep(y_raw, 2, obs_ss)
 
       kf <- kalman_filter(y_dev, sol$G, sol$H, sol$M, sol$D,
-                        presample = presample, init = model$kalman_init)
+                        presample = presample, init = model$kalman_init,
+                        loglik_only = TRUE)
       -kf$loglik
     }, error = function(e) Inf)
   }

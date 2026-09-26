@@ -12,7 +12,9 @@
 
 #' Kalman filter for DSGE state-space models
 #'
-#' Evaluates the log-likelihood and produces filtered state estimates.
+#' Evaluates the log-likelihood and produces filtered state estimates. The
+#' filter loop runs in C++ (src/kalman.cpp); `kalman_filter_r()` below is the
+#' same filter in R, kept as a reference.
 #'
 #' @param y Matrix of observed data (T x n_obs).
 #' @param G Policy matrix (n_c x n_s).
@@ -22,6 +24,8 @@
 #' @param presample Number of initial periods excluded from the likelihood.
 #' @param init Optional initialisation (`model$kalman_init`); `NULL` starts
 #'   from the stationary distribution.
+#' @param loglik_only If `TRUE`, return only `loglik` (faster; used when
+#'   estimating).
 #'
 #' @return A list with components:
 #'   \describe{
@@ -30,10 +34,82 @@
 #'     \item{predicted_states}{Matrix of predicted states (T x n_s).}
 #'     \item{prediction_errors}{Matrix of prediction errors (T x n_obs).}
 #'     \item{filtered_P}{List of filtered covariance matrices.}
+#'     \item{innovation_var}{List of innovation covariance matrices.}
 #'     \item{predicted_obs}{Matrix of predicted observations (T x n_obs).}
 #'   }
 #' @noRd
-kalman_filter <- function(y, G, H, M, D, presample = 0L, init = NULL) {
+kalman_filter <- function(y, G, H, M, D, presample = 0L, init = NULL,
+                          loglik_only = FALSE) {
+  if (!is.null(init)) {
+    return(kalman_filter_dynare_state(y, G, H, M, D, presample, init))
+  }
+  y <- as.matrix(y)
+  storage.mode(y) <- "double"
+  Z <- D %*% G
+  Q <- M %*% t(M)
+  P0 <- compute_unconditional_P(H, Q)
+  res <- kalman_filter_cpp(y, Z, H, Q, P0, as.integer(presample),
+                           !loglik_only)
+  if (loglik_only) return(list(loglik = res$loglik))
+  list(
+    loglik = res$loglik,
+    filtered_states = res$filtered_states,
+    predicted_states = res$predicted_states,
+    prediction_errors = res$prediction_errors,
+    filtered_P = res$filtered_P,
+    innovation_var = res$innovation_var,
+    predicted_obs = res$predicted_obs
+  )
+}
+
+#' Compute unconditional state covariance matrix
+#'
+#' Solves the discrete Lyapunov equation P = H P H' + Q with a Schur-form
+#' solver in C++ (O(n^3)). If H is not stationary, or the result is not a
+#' valid covariance matrix, falls back to `compute_unconditional_P_r()`
+#' (Kronecker solve, then the doubling algorithm).
+#'
+#' @param H Transition matrix (n_s x n_s).
+#' @param Q Shock covariance matrix (n_s x n_s).
+#' @return P (n_s x n_s) unconditional covariance matrix.
+#' @noRd
+compute_unconditional_P <- function(H, Q, tol = 1e-10, max_iter = 100L) {
+  Q <- (Q + t(Q)) / 2
+  if (all(is.finite(H)) && all(is.finite(Q))) {
+    res <- tryCatch(lyapunov_schur_cpp(H, Q), error = function(e) NULL)
+    if (!is.null(res) && isTRUE(res$ok)) {
+      P <- res$P
+      ev <- tryCatch(eigen(P, symmetric = TRUE, only.values = TRUE)$values,
+                     error = function(e) -Inf)
+      if (all(ev > -1e-10 * max(1, max(abs(P))))) return(P)
+    }
+  }
+  compute_unconditional_P_r(H, Q, tol = tol, max_iter = max_iter)
+}
+
+#' Kalman filter on Dynare's state vector (for `lik_init = 2`)
+#'
+#' Builds Dynare's filter state (see `kalman_filter_dynare_state_r()`) and
+#' runs the filter loop in C++.
+#' @noRd
+kalman_filter_dynare_state <- function(y, G, H, M, D, presample, init) {
+  sys <- dynare_state_system(G, H, M, D, init)
+  y <- as.matrix(y)
+  storage.mode(y) <- "double"
+  res <- kalman_filter_dynare_cpp(y, sys$Z, sys$Tm, sys$RQR, sys$Hm,
+                                  init$scale * diag(nrow(sys$Tm)),
+                                  as.integer(presample))
+  if (!is.finite(res$loglik)) return(list(loglik = -Inf))
+  list(loglik = res$loglik, prediction_errors = res$prediction_errors,
+       state_names = sys$alpha_names)
+}
+
+#' Kalman filter in R
+#'
+#' The original R implementation of `kalman_filter()`, with the same
+#' arguments and result. It is kept as a reference to test the C++ version.
+#' @noRd
+kalman_filter_r <- function(y, G, H, M, D, presample = 0L, init = NULL) {
   y <- as.matrix(y)
   n_T <- nrow(y)
   n_obs <- ncol(y)
@@ -51,9 +127,9 @@ kalman_filter <- function(y, G, H, M, D, presample = 0L, init = NULL) {
   # Initialize covariance: P_0|0 from unconditional distribution
   # vec(P) = (I - H kron H)^{-1} vec(Q)
   if (!is.null(init)) {
-    return(kalman_filter_dynare_state(y, G, H, M, D, presample, init))
+    return(kalman_filter_dynare_state_r(y, G, H, M, D, presample, init))
   }
-  P_filt <- compute_unconditional_P(H, Q)
+  P_filt <- compute_unconditional_P_r(H, Q)
   P1 <- NULL
 
   # Storage
@@ -149,7 +225,7 @@ kalman_filter <- function(y, G, H, M, D, presample = 0L, init = NULL) {
 #' @param Q Shock covariance matrix (n_s x n_s).
 #' @return P (n_s x n_s) unconditional covariance matrix.
 #' @noRd
-compute_unconditional_P <- function(H, Q, tol = 1e-10, max_iter = 100L) {
+compute_unconditional_P_r <- function(H, Q, tol = 1e-10, max_iter = 100L) {
   n_s <- nrow(H)
   Q <- (Q + t(Q)) / 2
 
@@ -254,23 +330,15 @@ kalman_smoother <- function(y, G, H, M, D) {
   list(smoothed_states = smoothed_states)
 }
 
-#' Kalman filter on Dynare's state vector (for `lik_init = 2`)
+#' System matrices of Dynare's filter state (for `lik_init = 2`)
 #'
-#' Dynare's filter state alpha_t holds the current values of the observed
-#' and predetermined variables: alpha_t = T alpha_{t-1} + R e_t and
-#' y_t = Z alpha_t + measurement error, started at alpha(1|0) = 0 and
-#' P(1|0) = scale * I. With x_t = (lag states, shocks) the state of the dsge
-#' solution, the predetermined variables at t are the lag states at t + 1
-#' (rows of H) and the observed variables rows of G, so alpha_t = A x_t,
-#' x_t = J alpha_{t-1} + M e_t, T = A J and R = A M. The observed variables
-#' are separate elements of alpha even when they are exact functions of
-#' predetermined ones (e.g. robs = r + constant), as in Dynare.
+#' Returns Z, Tm, RQR (= R R'), the measurement-error covariance Hm and the
+#' names of the elements of alpha; see `kalman_filter_dynare_state_r()`.
 #' @noRd
-kalman_filter_dynare_state <- function(y, G, H, M, D, presample, init) {
+dynare_state_system <- function(G, H, M, D, init) {
   if (!identical(init$type, "lik_init_2")) {
     stop("Unknown Kalman filter initialisation.", call. = FALSE)
   }
-  y <- as.matrix(y)
   states <- colnames(H)
   pred <- intersect(init$pred_states, states)
   noise <- intersect(init$noise_states, states)
@@ -285,8 +353,6 @@ kalman_filter_dynare_state <- function(y, G, H, M, D, presample, init) {
   J[cbind(match(pred, states), seq_along(pred))] <- 1
   Tm <- A %*% J
   R <- A %*% M
-  RQR <- R %*% t(R)
-  alpha_names <- c(pred, extra)
   pos <- ifelse(under %in% extra, length(pred) + match(under, extra),
                 match(paste0(under, "_lag1"), pred))
   Z <- matrix(0, length(under), mm)
@@ -294,8 +360,29 @@ kalman_filter_dynare_state <- function(y, G, H, M, D, presample, init) {
   # measurement errors: y_obs = underlying + noise state
   Zn <- (D %*% G)[, noise, drop = FALSE]
   Mn <- M[noise, , drop = FALSE]
-  Hm <- Zn %*% Mn %*% t(Mn) %*% t(Zn)
+  list(Z = Z, Tm = Tm, RQR = R %*% t(R),
+       Hm = Zn %*% Mn %*% t(Mn) %*% t(Zn),
+       alpha_names = c(pred, extra))
+}
 
+#' Kalman filter on Dynare's state vector (for `lik_init = 2`)
+#'
+#' Dynare's filter state alpha_t holds the current values of the observed
+#' and predetermined variables: alpha_t = T alpha_{t-1} + R e_t and
+#' y_t = Z alpha_t + measurement error, started at alpha(1|0) = 0 and
+#' P(1|0) = scale * I. With x_t = (lag states, shocks) the state of the dsge
+#' solution, the predetermined variables at t are the lag states at t + 1
+#' (rows of H) and the observed variables rows of G, so alpha_t = A x_t,
+#' x_t = J alpha_{t-1} + M e_t, T = A J and R = A M. The observed variables
+#' are separate elements of alpha even when they are exact functions of
+#' predetermined ones (e.g. robs = r + constant), as in Dynare.
+#' @noRd
+kalman_filter_dynare_state_r <- function(y, G, H, M, D, presample, init) {
+  sys <- dynare_state_system(G, H, M, D, init)
+  y <- as.matrix(y)
+  Z <- sys$Z; Tm <- sys$Tm; RQR <- sys$RQR; Hm <- sys$Hm
+  mm <- nrow(Tm)
+  alpha_names <- sys$alpha_names
   n_T <- nrow(y)
   a <- numeric(mm)
   P <- init$scale * diag(mm)
