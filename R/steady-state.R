@@ -75,6 +75,17 @@ steady_state.dsgenl_model <- function(model, params = NULL, guess = NULL,
     names(x_vals) <- vars
     eval_ss_residual(model, x_vals, param_vec)
   }
+  # Jacobian: exact, from the compiled symbolic Jacobian of the dynamic
+  # equations (leads equal current values in the steady state, so their
+  # columns are added), or by finite differences if that is not available
+  timed <- c(vars, paste0(vars, "__f"))
+  ss_jac <- function(x_vals) {
+    names(x_vals) <- vars
+    point <- stats::setNames(c(x_vals, x_vals), timed)
+    J <- .symbolic_jacobian(model, timed, point, param_vec)
+    if (is.null(J)) return(numDeriv::jacobian(ss_fn, x_vals))
+    J[, seq_len(n_vars), drop = FALSE] + J[, n_vars + seq_len(n_vars), drop = FALSE]
+  }
 
   for (iter in seq_len(maxiter)) {
     fx <- ss_fn(x)
@@ -86,7 +97,7 @@ steady_state.dsgenl_model <- function(model, params = NULL, guess = NULL,
       ))
     }
 
-    J <- numDeriv::jacobian(ss_fn, x)
+    J <- ss_jac(x)
     dx <- tryCatch(
       solve(J, -fx),
       error = function(e) {
@@ -139,11 +150,10 @@ print.dsgenl_steady_state <- function(x, ...) {
 #' Evaluate steady-state residuals
 #' @noRd
 eval_ss_residual <- function(model, ss_vals, params) {
-  eval_vec <- c(ss_vals, params)
-  for (v in model$all_variables) {
-    eval_vec[paste0(v, "__f")] <- ss_vals[v]
-  }
-  model$eval_fn(eval_vec)
+  v <- model$all_variables
+  leads <- ss_vals[v]
+  names(leads) <- paste0(v, "__f")
+  model$eval_fn(c(ss_vals, params, leads))
 }
 
 #' Assemble full parameter vector from model and user input
