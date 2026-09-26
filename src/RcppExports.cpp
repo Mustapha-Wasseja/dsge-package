@@ -72,12 +72,81 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// contract2_cpp
+arma::mat contract2_cpp(const IntegerVector& eq, const IntegerVector& i, const IntegerVector& j, const NumericVector& v, const arma::mat& P, const arma::mat& Q, int n_eq);
+RcppExport SEXP _dsge_contract2_cpp(SEXP eqSEXP, SEXP iSEXP, SEXP jSEXP, SEXP vSEXP, SEXP PSEXP, SEXP QSEXP, SEXP n_eqSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const IntegerVector& >::type eq(eqSEXP);
+    Rcpp::traits::input_parameter< const IntegerVector& >::type i(iSEXP);
+    Rcpp::traits::input_parameter< const IntegerVector& >::type j(jSEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type v(vSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type P(PSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Q(QSEXP);
+    Rcpp::traits::input_parameter< int >::type n_eq(n_eqSEXP);
+    rcpp_result_gen = Rcpp::wrap(contract2_cpp(eq, i, j, v, P, Q, n_eq));
+    return rcpp_result_gen;
+END_RCPP
+}
+// contract3_cpp
+arma::mat contract3_cpp(const IntegerVector& eq, const IntegerVector& i, const IntegerVector& j, const IntegerVector& l, const NumericVector& v, const arma::mat& P, const arma::mat& Q, const arma::mat& R, int n_eq);
+RcppExport SEXP _dsge_contract3_cpp(SEXP eqSEXP, SEXP iSEXP, SEXP jSEXP, SEXP lSEXP, SEXP vSEXP, SEXP PSEXP, SEXP QSEXP, SEXP RSEXP, SEXP n_eqSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const IntegerVector& >::type eq(eqSEXP);
+    Rcpp::traits::input_parameter< const IntegerVector& >::type i(iSEXP);
+    Rcpp::traits::input_parameter< const IntegerVector& >::type j(jSEXP);
+    Rcpp::traits::input_parameter< const IntegerVector& >::type l(lSEXP);
+    Rcpp::traits::input_parameter< const NumericVector& >::type v(vSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type P(PSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type Q(QSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type R(RSEXP);
+    Rcpp::traits::input_parameter< int >::type n_eq(n_eqSEXP);
+    rcpp_result_gen = Rcpp::wrap(contract3_cpp(eq, i, j, l, v, P, Q, R, n_eq));
+    return rcpp_result_gen;
+END_RCPP
+}
+// apply_hx_cpp
+arma::mat apply_hx_cpp(const arma::mat& X, const arma::mat& hx, int k);
+RcppExport SEXP _dsge_apply_hx_cpp(SEXP XSEXP, SEXP hxSEXP, SEXP kSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type hx(hxSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    rcpp_result_gen = Rcpp::wrap(apply_hx_cpp(X, hx, k));
+    return rcpp_result_gen;
+END_RCPP
+}
+// sylvester_doubling_cpp
+List sylvester_doubling_cpp(arma::mat P, const arma::mat& X, arma::mat hx, int k, double tol, int max_it);
+RcppExport SEXP _dsge_sylvester_doubling_cpp(SEXP PSEXP, SEXP XSEXP, SEXP hxSEXP, SEXP kSEXP, SEXP tolSEXP, SEXP max_itSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type P(PSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type hx(hxSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    Rcpp::traits::input_parameter< int >::type max_it(max_itSEXP);
+    rcpp_result_gen = Rcpp::wrap(sylvester_doubling_cpp(P, X, hx, k, tol, max_it));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_dsge_lyapunov_schur_cpp", (DL_FUNC) &_dsge_lyapunov_schur_cpp, 2},
     {"_dsge_kalman_filter_cpp", (DL_FUNC) &_dsge_kalman_filter_cpp, 7},
     {"_dsge_kalman_filter_dynare_cpp", (DL_FUNC) &_dsge_kalman_filter_dynare_cpp, 7},
     {"_dsge_cyclic_reduction_cpp", (DL_FUNC) &_dsge_cyclic_reduction_cpp, 5},
+    {"_dsge_contract2_cpp", (DL_FUNC) &_dsge_contract2_cpp, 7},
+    {"_dsge_contract3_cpp", (DL_FUNC) &_dsge_contract3_cpp, 9},
+    {"_dsge_apply_hx_cpp", (DL_FUNC) &_dsge_apply_hx_cpp, 3},
+    {"_dsge_sylvester_doubling_cpp", (DL_FUNC) &_dsge_sylvester_doubling_cpp, 6},
     {NULL, NULL, 0}
 };
 

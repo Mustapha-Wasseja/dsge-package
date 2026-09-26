@@ -28,20 +28,13 @@
 
 #' Apply h_x to every state dimension of X (n_eq x n^k, as a matrix)
 #' @noRd
-.apply_hx <- function(X, hx, k) {
-  n_eq <- nrow(X)
-  n <- nrow(hx)
-  if (k == 1L) return(X %*% hx)
-  A <- array(X, c(n_eq, rep(n, k)))
-  for (m in seq_len(k)) A <- .mode_mult(A, hx, m + 1L)
-  matrix(A, n_eq, n^k)
-}
+.apply_hx <- function(X, hx, k) apply_hx_cpp(X, hx, as.integer(k))
 
 #' Solve A X + B X (hx^{(x)k}) = D for X (n_eq x n^k)
 #'
 #' Directly through the Kronecker form when small; otherwise by doubling on
 #' X = D~ - M X hx^{(x)k} (M = A^{-1} B, D~ = A^{-1} D), which converges when
-#' rho(M) rho(hx)^k < 1.
+#' rho(M) rho(hx)^k < 1. The doubling runs in C++ (src/perturbation.cpp).
 #' @noRd
 .solve_gen_sylvester <- function(A, B, hx, D, k, tol = 1e-13,
                                  max_direct = 2500L) {
@@ -77,32 +70,39 @@
     return(matrix(x, n_eq, nk))
   }
   Ai <- solve(A)
-  P <- -Ai %*% B
-  X <- Ai %*% D
-  S <- X
-  hk <- hx
-  for (it in seq_len(60L)) {
-    incr <- P %*% .apply_hx(S, hk, k)
-    S <- S + incr
-    if (max(abs(incr)) <= tol * max(1, max(abs(S)))) return(S)
-    if (!all(is.finite(S))) break
-    P <- P %*% P
-    hk <- hk %*% hk
-  }
+  res <- sylvester_doubling_cpp(-Ai %*% B, Ai %*% D, hx, as.integer(k), tol,
+                                60L)
+  if (isTRUE(res$ok)) return(res$S)
   stop("Higher-order perturbation: the Sylvester equation did not converge.",
        call. = FALSE)
 }
 
-#' Contract a sparse symmetric third-derivative tensor with three matrices
-#' @param trip matrix with columns i, j, l, val (all index permutations).
-#' @return array (ncol(P) x ncol(Q) x ncol(R)).
+#' Contract the sparse second derivatives with P and Q: row k of the result
+#' is vec(P' H_k Q) (see contract2_cpp in src/perturbation.cpp)
 #' @noRd
-.contract3 <- function(trip, P, Q, R) {
-  out <- array(0, c(ncol(P), ncol(Q), ncol(R)))
-  if (is.null(trip) || nrow(trip) == 0L) return(out)
-  for (r in seq_len(nrow(trip))) {
-    out <- out + trip[r, 4L] * (P[trip[r, 1L], ] %o% Q[trip[r, 2L], ] %o%
-                                  R[trip[r, 3L], ])
+.contract2 <- function(h, P, Q, n_eq) {
+  contract2_cpp(as.integer(h$eq), as.integer(h$i), as.integer(h$j), h$val,
+                as.matrix(P), as.matrix(Q), as.integer(n_eq))
+}
+
+#' Contract the sparse third derivatives with P, Q and R: row k of the
+#' result is the tensor of equation k contracted with them, vectorised
+#' @noRd
+.contract3 <- function(t3, P, Q, R, n_eq) {
+  contract3_cpp(as.integer(t3$eq), as.integer(t3$i), as.integer(t3$j),
+                as.integer(t3$l), t3$val, as.matrix(P), as.matrix(Q),
+                as.matrix(R), as.integer(n_eq))
+}
+
+#' Sum `x` over equations: a vector (or rows of a matrix) indexed by
+#' `eq`, summed into n_eq entries (rows)
+#' @noRd
+.sum_by_eq <- function(x, eq, n_eq) {
+  x <- as.matrix(x)
+  out <- matrix(0, n_eq, ncol(x))
+  if (length(eq)) {
+    r <- rowsum(x, eq)
+    out[as.integer(rownames(r)), ] <- r
   }
   out
 }
@@ -123,21 +123,29 @@
     names(tv) <- timed_names
     model$eval_fn(c(tv, all_params))
   }
-  jac <- numDeriv::jacobian(full_fn, point)
+  jac <- .symbolic_jacobian(model, timed_names, point, all_params)
+  if (is.null(jac)) jac <- numDeriv::jacobian(full_fn, point)
   sym <- .symbolic_equation_derivs(model, timed_names, point, all_params,
                                    order = order)
   if (!is.null(sym)) {
     hess <- sym$hess
     third <- sym$third
   } else {
-    hess <- .compute_equation_hessians(full_fn, point, n_eq, n_tv)
+    # finite differences, converted to the same sparse entries
+    H <- .compute_equation_hessians(full_fn, point, n_eq, n_tv)
+    hess <- do.call(rbind, lapply(seq_len(n_eq), function(k) {
+      w <- which(H[[k]] != 0, arr.ind = TRUE)
+      data.frame(eq = rep(k, nrow(w)), i = w[, 1L], j = w[, 2L],
+                 val = H[[k]][w])
+    }))
     third <- NULL
     if (order >= 3L) {
       T3 <- .compute_equation_third_derivs(full_fn, point, n_eq, n_tv)
-      third <- lapply(T3, function(a) {
-        w <- which(a != 0, arr.ind = TRUE)
-        cbind(w, a[w])
-      })
+      third <- do.call(rbind, lapply(seq_len(n_eq), function(k) {
+        w <- which(T3[[k]] != 0, arr.ind = TRUE)
+        data.frame(eq = rep(k, nrow(w)), i = w[, 1L], j = w[, 2L],
+                   l = w[, 3L], val = T3[[k]][w])
+      }))
     }
   }
   list(jac = jac, hess = hess, third = third, n_tv = n_tv)
@@ -172,10 +180,8 @@
   Z1 <- rbind(g_x, diag(n), g_x %*% h_x, h_x)
 
   # --- second order: g_xx, h_xx ---------------------------------------------
-  D2 <- matrix(0, n_eq, n * n)
-  for (k in seq_len(n_eq)) {
-    D2[k, ] <- -as.vector(crossprod(Z1, der$hess[[k]] %*% Z1))
-  }
+  hs <- der$hess
+  D2 <- -.contract2(hs, Z1, Z1, n_eq)
   X2 <- .solve_gen_sylvester(A, B, h_x, D2, 2L)
   g_xx <- array(X2[iy, , drop = FALSE], c(n_c, n, n))
   h_xx <- array(X2[n_c + seq_len(n), , drop = FALSE], c(n, n, n))
@@ -185,7 +191,7 @@
   gxx_Sig <- matrix(g_xx, n_c, n * n) %*% as.vector(Sig)
   L <- rbind(matrix(0, n_c + n, n_e), g_x %*% eta, eta)
   LL <- L %*% t(L)
-  curv <- vapply(seq_len(n_eq), function(k) sum(der$hess[[k]] * LL), 0)
+  curv <- as.numeric(.sum_by_eq(hs$val * LL[cbind(hs$i, hs$j)], hs$eq, n_eq))
   A_ss <- cbind(f_y + f_yf, f_yf %*% g_x + f_xf)
   X_ss <- .solve_gen_sylvester(A_ss, matrix(0, n_eq, n_eq), diag(1),
                                 -(f_yf %*% gxx_Sig) - curv, 1L)
@@ -215,15 +221,11 @@
   G1 <- .mode_mult(g_xx, h_x, 3L)                                # [m, j, c]
   Q1 <- array(.mode_mult(G1, matrix(h_xx, n, n * n), 2L), c(n_c, n, n, n))
   Q <- Q1 + aperm(Q1, c(1L, 2L, 4L, 3L)) + aperm(Q1, c(1L, 4L, 2L, 3L))
-  D3 <- matrix(0, n_eq, n^3)
-  for (k in seq_len(n_eq)) {
-    Hk <- der$hess[[k]]
-    M1 <- crossprod(Z2m, Hk %*% Z1)                # (a,b) x c
-    M1a <- array(M1, c(n, n, n))                   # [a, b, c]
-    cross <- M1a + aperm(M1a, c(1L, 3L, 2L)) + aperm(M1a, c(3L, 1L, 2L))
-    tri <- .contract3(der$third[[k]], Z1, Z1, Z1)
-    D3[k, ] <- -as.vector(tri + cross)
-  }
+  # M1[k, a, b, c] = (Z2' H_k Z1)[(a, b), c]
+  M1 <- array(.contract2(hs, Z2m, Z1, n_eq), c(n_eq, n, n, n))
+  cross <- M1 + aperm(M1, c(1L, 2L, 4L, 3L)) + aperm(M1, c(1L, 4L, 2L, 3L))
+  tri <- .contract3(der$third, Z1, Z1, Z1, n_eq)
+  D3 <- -(tri + matrix(cross, n_eq, n^3))
   D3 <- D3 - f_yf %*% matrix(Q, n_c, n^3)
   X3 <- .solve_gen_sylvester(A, B, h_x, D3, 3L)
   g_xxx <- array(X3[iy, , drop = FALSE], c(n_c, n, n, n))
@@ -242,24 +244,25 @@
   gxxx_Sig <- matrix(gxxx_Sig, n_c, n)          # g_xxx(Sigma, e_l)
   hss_term <- .mode_mult(array(g_xx, c(n_c, n, n)), matrix(h_ss, n, 1L), 2L)
   hss_term <- matrix(hss_term, n_c, n)           # g_xx(h_ss, e_l)
-  D1 <- matrix(0, n_eq, n)
-  for (k in seq_len(n_eq)) {
-    Hk <- der$hess[[k]]
-    HL <- Hk %*% L                                  # n_tv x n_e
-    t_cross <- vapply(seq_len(n), function(a) {
-      2 * sum(HL[iyf, , drop = FALSE] * gxx_eta_hx[, , a])
-    }, 0)
-    t_s2 <- as.numeric(crossprod(Z1, Hk %*% S2))
-    t_tri <- numeric(n)
-    trip <- der$third[[k]]
-    if (!is.null(trip) && nrow(trip) > 0L) {
-      for (r in seq_len(nrow(trip))) {
-        t_tri <- t_tri + trip[r, 4L] * Z1[trip[r, 1L], ] *
-          LL[trip[r, 2L], trip[r, 3L]]
-      }
-    }
-    D1[k, ] <- -(t_tri + t_cross + t_s2)
+  # t_cross[k, a] = 2 sum_{i in y', j} H_k[i, j] (L[j, ] . gxx_eta_hx[i, , a])
+  onf <- hs$i %in% iyf
+  hf <- hs[onf, , drop = FALSE]
+  m_idx <- hf$i - n_c - n                # position among the controls
+  contrib <- matrix(0, nrow(hf), n)
+  for (s_ in seq_len(n_e)) {
+    contrib <- contrib + (hf$val * L[hf$j, s_]) *
+      matrix(gxx_eta_hx[m_idx, s_, , drop = FALSE], nrow(hf), n)
   }
+  t_cross <- 2 * .sum_by_eq(contrib, hf$eq, n_eq)
+  # t_s2[k, ] = Z1' H_k S2
+  t_s2 <- .contract2(hs, Z1, matrix(S2, ncol = 1L), n_eq)
+  # t_tri[k, ] = sum_{i, j, l} T_k[i, j, l] Z1[i, ] LL[j, l]
+  t3 <- der$third
+  t_tri <- if (nrow(t3)) {
+    .sum_by_eq(t3$val * LL[cbind(t3$j, t3$l)] * Z1[t3$i, , drop = FALSE],
+               t3$eq, n_eq)
+  } else matrix(0, n_eq, n)
+  D1 <- -(t_tri + t_cross + t_s2)
   D1 <- D1 - f_yf %*% ((gxxx_Sig + hss_term) %*% h_x)
   X1 <- .solve_gen_sylvester(A, B, h_x, D1, 1L)
   g_xss <- X1[iy, , drop = FALSE]

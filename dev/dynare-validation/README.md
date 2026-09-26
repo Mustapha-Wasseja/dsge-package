@@ -92,31 +92,31 @@ standard deviations have very large deviations).
 
 | Model | Variables | Order 2 | Order 3 |
 |---|---|---|---|
-| rbc.mod (inst/examples) | 5 | 1.9e-11 | 1.9e-11 |
-| Collard_2001_example1 (correlated shocks) | 6 | 1.5e-11 | 1.5e-11 |
-| SGU_2004 | 3 | 1.3e-11 | 3.2e-11 |
-| SGU_2003 | 12 | 5.7e-10 | 8.9e-10 |
-| Hansen_1985 | 9 | 2.7e-11 | 2.7e-11 |
-| Sims_2012_RBC | 13 | 1.2e-10 | 1.2e-10 |
-| RBC_baseline | 15 | 3.9e-10 | 5.6e-10 |
-| RBC_state_dependent_GIRF | 9 | 1.9e-10 | 1.9e-10 |
-| RBC_capitalstock_shock | 6 | 4.4e-09 | 5.3e-09 |
-| RBC_news_shock_model (news shocks) | 8 | 1.1e-09 | 1.9e-09 |
-| McCandless_2008_Chapter_13 (leads of 2 in nonlinear terms) | 14 | 2.3e-10 | 4.0e-09 |
-| GarciaCicco_et_al_2010 | 18 | 5.4e-11 | 6.1e-10 |
-| Aguiar_Gopinath_2007 | 21 | 3.1e-08 | 7.1e-08 |
-| Caldara_et_al_2012 (Epstein-Zin) | 12 | 2.3e-08 | 2.6e-08 |
-| Chari_et_al_2007 (`_steadystate.m`) | 13 | 3.6e-08 | 3.3e-08 |
+| rbc.mod (inst/examples) | 5 | 1.3e-14 | 1.2e-14 |
+| Collard_2001_example1 (correlated shocks) | 6 | 5.9e-16 | 1.2e-15 |
+| SGU_2004 | 3 | 1.6e-15 | 3.0e-15 |
+| SGU_2003 | 12 | 8.0e-14 | 1.2e-13 |
+| Hansen_1985 | 9 | 4.3e-15 | 4.3e-15 |
+| Sims_2012_RBC | 13 | 4.9e-15 | 6.5e-15 |
+| RBC_baseline | 15 | 1.8e-14 | 2.9e-13 |
+| RBC_state_dependent_GIRF | 9 | 4.0e-14 | 4.6e-15 |
+| RBC_capitalstock_shock | 6 | 1.3e-13 | 5.1e-14 |
+| RBC_news_shock_model (news shocks) | 8 | 1.1e-14 | 4.1e-14 |
+| McCandless_2008_Chapter_13 (leads of 2 in nonlinear terms) | 14 | 2.6e-13 | 9.9e-12 |
+| GarciaCicco_et_al_2010 | 18 | 5.3e-13 | 7.2e-10 |
+| Aguiar_Gopinath_2007 | 21 | 8.7e-14 | 1.2e-13 |
+| Caldara_et_al_2012 (Epstein-Zin) | 12 | 3.0e-10 | 2.6e-09 |
+| Chari_et_al_2007 (`_steadystate.m`) | 13 | 2.6e-11 | 9.7e-11 |
 | Ghironi_Melitz_2005 (`_steadystate.m`) | 35 | 2.3e-07 | 2.3e-07 |
-| BP2020_CES (`_steadystate.m`, 43 variables) | 43 | 1.1e-09 | 1.1e-09 |
-| Andreasen_2012_rare_disasters (134 variables) | 134 | 7.5e-07 | 1.1e-06 |
+| BP2020_CES (`_steadystate.m`, 43 variables) | 43 | 1.5e-11 | 1.5e-12 |
+| Andreasen_2012_rare_disasters (134 variables) | 134 | 3.2e-13 | 3.4e-12 |
 
 In three further models (Jermann 1998, Gali 2015 ch. 3 nonlinear, Basu and
 Bundick 2017) the shocks have no variance before the first computing
 command, so only the steady state and the zero risk correction are
-compared; they agree to 2.4e-9 or better. The remaining small differences
-come from dsge's numerical first-order Jacobian (Dynare differentiates
-analytically); second and third derivatives are symbolic in both.
+compared; they agree to 2.4e-9 or better. First, second and third derivatives are
+all symbolic in both programs, so most models agree to rounding error;
+Ghironi_Melitz_2005's difference comes from its `_steadystate.m` file.
 
 ## Smets & Wouters (2007), end to end (`extra/validate_smets_wouters.R`)
 

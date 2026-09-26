@@ -18,7 +18,7 @@
   for Smets-Wouters. Together with the C++ Kalman filter, a likelihood
   evaluation of Smets-Wouters is several times faster than in dsge 1.2.0.
   * `linearize()` now uses exact symbolic first derivatives of the model
-    equations, differentiated and byte-compiled once per model and cached,
+    equations, differentiated once per model and cached,
     instead of re-evaluating every equation once per variable. Models whose
     equations use a function `stats::D()` cannot differentiate (such as
     `abs()`) still use numerical derivatives. For nonlinear models the
@@ -26,9 +26,23 @@
   * The cyclic-reduction step of the first-order solver runs in C++.
 * `steady_state()` is faster for models whose steady state is found
   numerically (no `ss_function` or `steady_state_model`): Newton's method
-  now uses the same exact, compiled Jacobian instead of finite differences.
+  now uses the same exact, cached Jacobian instead of finite differences.
   For the nonlinear RBC model the steady state takes about a sixth of the
   time, and the whole `solve_dsge()` call about a third.
+* Second- and third-order solutions (`solve_dsge(order = 2)` or `3`) are
+  faster, especially for larger models: for Andreasen's (2012) rare-disaster
+  model (134 controls, 8 states), a second-order solve is about 20 times
+  faster and a third-order solve about 4 times faster. They are also more
+  accurate: with exact first derivatives the higher-order decision rules of
+  the models in `dev/dynare-validation/` now match Dynare's to about 1e-12
+  (previously up to 1e-6).
+  * The exact first derivatives are also used here, and the second and
+    third derivatives are derived once per model and cached instead of on
+    every solve.
+  * The derivatives are kept as sparse entries instead of one dense
+    Hessian per equation, and their contractions with the first- and
+    second-order solutions, and the doubling algorithm for the generalized
+    Sylvester equations, run in C++.
 
 ## Bug fixes
 
