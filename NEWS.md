@@ -14,9 +14,9 @@
     including solving the model, takes about half as long as before.
   * Where the innovation covariance is numerically singular, the filter now
     returns a log-likelihood of `-Inf` instead of stopping with an error.
-* `solve_dsge()` is faster for nonlinear and imported models: 6.6 times
-  for Smets-Wouters (135 ms to 21 ms), which makes one likelihood evaluation
-  3.5 times faster than in the previous development version.
+* `solve_dsge()` is faster for nonlinear and imported models, about 6 times
+  for Smets-Wouters. Together with the C++ Kalman filter, a likelihood
+  evaluation of Smets-Wouters is several times faster than in dsge 1.2.0.
   * `linearize()` now uses exact symbolic first derivatives of the model
     equations, differentiated and byte-compiled once per model and cached,
     instead of re-evaluating every equation once per variable. Models whose
