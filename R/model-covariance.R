@@ -167,8 +167,7 @@ model_covariance.dsge_bayes <- function(x, variables = NULL,
   # Autocovariances at lags 1..K
   autocov <- list()
   if (n_lags > 0) {
-    n_s <- ncol(H)
-    Hk <- diag(n_s)
+    HkP <- P  # H^k P, updated as H (H^{k-1} P) to avoid forming H^k
 
     # Determine the selection matrix for requested variables
     if (is.null(variables)) {
@@ -179,8 +178,8 @@ model_covariance.dsge_bayes <- function(x, variables = NULL,
     }
 
     for (k in seq_len(n_lags)) {
-      Hk <- Hk %*% H
-      Gk <- Zsel %*% Hk %*% P %*% t(Zsel)
+      HkP <- H %*% HkP
+      Gk <- Zsel %*% HkP %*% t(Zsel)
       rownames(Gk) <- colnames(Gk) <- var_names
       autocov[[paste0("lag_", k)]] <- Gk
     }

@@ -230,7 +230,6 @@ compute_moment_vector <- function(sol, n_lags) {
   Z <- D %*% G
   Q <- M %*% t(M)
 
-  n_s <- ncol(H)
 
   # Unconditional state covariance: P = H P H' + Q
   P <- compute_unconditional_P(H, Q)
@@ -242,10 +241,10 @@ compute_moment_vector <- function(sol, n_lags) {
   moments <- as.numeric(Gamma0[lower.tri(Gamma0, diag = TRUE)])
 
   # Autocovariances at lags 1..K: Gamma(k) = Z H^k P Z'
-  Hk <- diag(n_s)
+  HkP <- P  # H^k P, updated as H (H^{k-1} P) to avoid forming H^k
   for (k in seq_len(n_lags)) {
-    Hk <- Hk %*% H
-    Gammak <- Z %*% Hk %*% P %*% t(Z)
+    HkP <- H %*% HkP
+    Gammak <- Z %*% HkP %*% t(Z)
     moments <- c(moments, as.numeric(Gammak))
   }
 

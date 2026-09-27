@@ -57,11 +57,20 @@
   now solves them, and `irf()` and `variance_decomposition()` explain that
   such models have no shocks to trace and point to
   `simulate_perfect_foresight()`.
+* `irf()` lost accuracy for models whose transition matrix has large
+  entries, as happens when states are linearly dependent (e.g. a fixed
+  land supply split between two sectors): it formed the matrix powers
+  H^k, which suffer from cancellation. It now iterates the state vector,
+  and in Kiyotaki and Moore (1997) the error after four periods falls from
+  0.5% to agreement with Dynare. The autocovariances in
+  `model_covariance()` and the moments used by `check_identification()`
+  get the same change. Building the IRF table is also much faster (the
+  `irf_match()` example runs in 1 second instead of 20).
 * `steady_state()` now accepts models imported with `read_dynare()`, using
   the file's calibration unless `params` overrides it.
 * The evidence table in `?bayes_factor` lost its last row ("more than 10:
   very strong") to a documentation formatting error.
-* Examples added to the help pages of 40 exported functions that had none,
+* Examples added to the help pages of 42 exported functions that had none,
   among them `solve_dsge()`, `steady_state()`, `linearize()`, the model
   specification helpers, the `dsge_fit` methods and the plot methods.
 * The `plot()` method for `simulate_perfect_foresight()` results now uses the

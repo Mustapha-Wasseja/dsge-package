@@ -91,38 +91,28 @@ irf.default <- function(x, periods = 20L, impulse = NULL, response = NULL,
 #' @noRd
 compute_irf_values <- function(G, H, M, controls, states, shocks,
                                 impulse, response, periods) {
-  n_s <- length(states)
-  results <- list()
-
-  for (imp in impulse) {
-    shock_idx <- match(imp, shocks)
-    impact <- M[, shock_idx]  # n_s x 1
-
-    H_power <- diag(n_s)  # H^0
-
+  resp_idx <- match(response, c(controls, states))
+  blocks <- lapply(impulse, function(imp) {
+    # iterate the state (x_k = H x_{k-1}) rather than forming H^k: with
+    # linearly dependent states H can have large entries, and its powers
+    # then lose accuracy to cancellation
+    x <- M[, match(imp, shocks)]
+    vals <- matrix(0, periods + 1L, length(resp_idx))
     for (k in 0:periods) {
-      state_response <- as.numeric(H_power %*% impact)
-      control_response <- as.numeric(G %*% state_response)
-
-      names(state_response) <- states
-      names(control_response) <- controls
-      all_response <- c(control_response, state_response)
-
-      for (resp in response) {
-        results[[length(results) + 1L]] <- data.frame(
-          period = k,
-          impulse = imp,
-          response = resp,
-          value = all_response[resp],
-          stringsAsFactors = FALSE
-        )
-      }
-
-      H_power <- H_power %*% H
+      vals[k + 1L, ] <- c(as.numeric(G %*% x), x)[resp_idx]
+      x <- as.numeric(H %*% x)
     }
-  }
-
-  do.call(rbind, results)
+    data.frame(
+      period = rep(0:periods, each = length(response)),
+      impulse = imp,
+      response = rep(response, times = periods + 1L),
+      value = as.vector(t(vals)),
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, blocks)
+  rownames(out) <- NULL
+  out
 }
 
 #' Add delta-method standard errors to IRF data
@@ -151,10 +141,10 @@ add_irf_se <- function(fit, irf_data, impulse, response, periods, level) {
       row <- irf_data[i, ]
       shock_idx <- match(row$impulse, shocks)
       impact <- sol$M[, shock_idx]
-      H_power <- if (row$period == 0) diag(length(states)) else {
-        Reduce(`%*%`, rep(list(sol$H), row$period))
+      state_resp <- impact
+      for (k in seq_len(row$period)) {
+        state_resp <- as.numeric(sol$H %*% state_resp)
       }
-      state_resp <- as.numeric(H_power %*% impact)
       control_resp <- as.numeric(sol$G %*% state_resp)
       names(state_resp) <- states
       names(control_resp) <- controls

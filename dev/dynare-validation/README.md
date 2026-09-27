@@ -59,14 +59,19 @@ itself). Shocks without a declared variance get a standard deviation of
 through its MATLAB interpreter) and compares all first-order IRFs over 20
 periods.
 
-Results (2026-09-24, Dynare 6.0, Octave 8.4):
+Results (2026-09-24, Dynare 6.0, Octave 8.4; Kiyotaki-Moore re-run
+2026-09-27 after the IRF fix below):
 
 | Outcome | Files |
 |---|---|
-| IRFs agree to within 1e-6 (relative to the largest response) | 52 |
-| IRFs agree to 7e-5 relative (Kiyotaki-Moore 1997: `k + m*kp` is constant, so the states are linearly dependent and the solution is ill-conditioned) | 1 |
+| IRFs agree to within 1e-6 (relative to the largest response) | 53 |
 | Perfect-foresight models (`simul`, `perfect_foresight_*`), not compared | 9 |
 | Dynare fails in Octave (`hpfilter`, `fmincon`, `ksdensity` or `verLessThan` missing; a `.mat` data file not in the repository; Smets-Wouters parameters that only `estimated_params` initialises) | 6 |
+
+Kiyotaki-Moore (1997) used to differ by 5e-5: land market clearing
+(`k + m*kp` constant) makes its states linearly dependent, the transition
+matrix has entries near 5e5, and `irf()` formed its powers H^k, which lost
+accuracy to cancellation. `irf()` now iterates the state vector instead.
 
 `read_dynare()` imports 67 of the 68 files unchanged; the exception loads
 a `.mat` file that is not in the repository (Dynare fails on it too). Most
