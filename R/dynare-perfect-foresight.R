@@ -218,15 +218,25 @@ print.dsge_dynare_pf <- function(x, ...) {
 #' @export
 plot.dsge_dynare_pf <- function(x, vars = NULL, ...) {
   if (is.null(vars)) vars <- utils::head(colnames(x$path), 9L)
+  bad <- setdiff(vars, colnames(x$path))
+  if (length(bad) > 0L) {
+    stop("Unknown variable(s): ", paste(bad, collapse = ", "), call. = FALSE)
+  }
   n <- length(vars)
   nc <- min(3L, n)
-  op <- graphics::par(mfrow = c(ceiling(n / nc), nc), mar = c(3, 3, 2, 1))
-  on.exit(graphics::par(op))
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par))
+  .dsge_par_grid(ceiling(n / nc), nc)
   t <- as.numeric(rownames(x$path))
   for (v in vars) {
-    graphics::plot(t, x$path[, v], type = "l", main = v, xlab = "",
-                   ylab = "", col = "#1f3a5f", lwd = 1.5)
-    graphics::abline(h = x$terminal[[v]], lty = 3, col = "grey50")
+    ylim <- range(c(x$path[, v], x$terminal[[v]]), na.rm = TRUE)
+    graphics::plot(t, x$path[, v], type = "n", main = v, xlab = "Period",
+                   ylab = "Level", ylim = ylim, ...)
+    .dsge_grid()
+    # new steady state
+    graphics::abline(h = x$terminal[[v]], col = .DSGE_INK_SECONDARY,
+                     lty = "dotted", lwd = 1.3)
+    graphics::lines(t, x$path[, v], col = .DSGE_INK_PRIMARY, lwd = 1.8)
   }
   invisible(x)
 }

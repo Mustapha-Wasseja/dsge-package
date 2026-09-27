@@ -72,8 +72,10 @@ test_that("steady_state_model gives the steady state when initval has no guesses
   expect_silent({
     grDevices::pdf(NULL)
     plot(pf)
+    plot(pf, vars = "k")
     grDevices::dev.off()
   })
+  expect_error(plot(pf, vars = "nope"), "Unknown variable")
 })
 
 test_that("a clear error when the steady state cannot be computed", {

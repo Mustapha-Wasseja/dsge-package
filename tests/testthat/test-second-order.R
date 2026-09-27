@@ -207,3 +207,63 @@ test_that("second-order simulation is reproducible with seed", {
   expect_equal(sim1$states, sim2$states)
   expect_equal(sim1$controls, sim2$controls)
 })
+
+rbc2 <- function() {
+  m <- dsgenl_model(
+    "1/C = beta / C(+1) * (alpha * exp(Z) * K^(alpha-1) + 1 - delta)",
+    "K(+1) = exp(Z) * K^alpha - C + (1 - delta) * K",
+    "Z(+1) = rho * Z",
+    observed = "C", endo_state = "K", exo_state = "Z",
+    fixed = list(alpha = 0.33, beta = 0.99, delta = 0.025),
+    start = list(rho = 0.9), ss_guess = c(C = 2, K = 30, Z = 0)
+  )
+  solve_dsge(m, params = c(alpha = 0.33, beta = 0.99, delta = 0.025,
+                           rho = 0.9),
+             shock_sd = c(Z = 0.01), order = 2)
+}
+
+test_that("irf_2nd_order shocks are in standard deviations", {
+  sol <- rbc2()
+  s <- 1e-3
+  ir2 <- irf_2nd_order(sol, shock = "Z", size = s, periods = 10)
+  ir1 <- irf(sol, periods = 9, se = FALSE)$data
+  c2 <- ir2$response[ir2$variable == "C"] / s
+  c1 <- ir1$value[ir1$response == "C" & ir1$impulse == "Z"]
+  # for a tiny shock the second-order response is the first-order one
+  expect_equal(c2, c1, tolerance = 1e-3)
+  # impact response of a one-sd shock: G M (0.45 x 0.01)
+  ir <- irf_2nd_order(sol, shock = "Z", size = 1, periods = 1)
+  expect_equal(ir$response[ir$variable == "C"],
+               as.numeric(sol$G["C", ] %*% sol$M[, "Z"]), tolerance = 1e-2)
+})
+
+test_that("the quadratic terms of irf_2nd_order have the right timing", {
+  sol <- rbc2()
+  s <- 5
+  up <- irf_2nd_order(sol, shock = "Z", size = s, periods = 3)
+  dn <- irf_2nd_order(sol, shock = "Z", size = -s, periods = 3)
+  even <- (up$response + dn$response) / 2     # the second-order part
+  x1 <- sol$M[, "Z"] * s                      # impact state deviation
+  n <- length(x1)
+  # at impact the controls' quadratic term uses the impact state
+  quad_c <- 0.5 * sum(matrix(sol$g_xx, 1, n * n)[1, ] * as.vector(x1 %o% x1))
+  expect_equal(even[up$variable == "C" & up$period == 1], quad_c,
+               tolerance = 1e-10)
+  expect_gt(abs(quad_c), 0)
+  # the states' quadratic term enters one period later (pruning)
+  expect_equal(even[up$variable == "K" & up$period == 1], 0, tolerance = 1e-14)
+  quad_k <- 0.5 * sum(matrix(sol$h_xx, n, n * n)[match("K", rownames(sol$H)), ] *
+                        as.vector(x1 %o% x1))
+  expect_equal(even[up$variable == "K" & up$period == 2], quad_k,
+               tolerance = 1e-10)
+})
+
+test_that("plot.dsge_irf_2nd draws the responses", {
+  sol <- rbc2()
+  ir <- irf_2nd_order(sol, shock = "Z", periods = 20)
+  grDevices::pdf(NULL)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  expect_no_error(plot(ir))
+  expect_no_error(plot(ir, variables = "C"))
+  expect_error(plot(ir, variables = "nope"), "Unknown variable")
+})

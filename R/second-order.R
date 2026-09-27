@@ -211,18 +211,25 @@ simulate_2nd_order <- function(sol, n = 200L, n_burn = 100L, seed = NULL) {
 
 #' Generalized IRFs Using Second-Order Approximation
 #'
-#' Computes impulse-response functions using the second-order solution.
-#' These differ from first-order IRFs because responses depend on the
-#' initial state and shock sign.
+#' Computes impulse-response functions using the second-order solution,
+#' simulated with pruning (Kim, Kim, Schaumburg and Sims 2008). These differ
+#' from first-order IRFs because responses depend on the initial state and
+#' on the size and sign of the shock.
+#'
+#' The response is the difference between a path with the shock in period 1
+#' and a path without it, both starting from `initial`. Period 1 is the
+#' impact period.
 #'
 #' @param sol A \code{dsge_solution} object with \code{order = 2}.
 #' @param shock Character. Name of the shock.
 #' @param size Numeric. Shock size in standard deviations. Default 1.
 #' @param periods Integer. Number of IRF periods. Default 40.
 #' @param initial Named numeric vector of initial state deviations.
-#'   Default is zero (ergodic mean under second-order).
+#'   Default is zero (the deterministic steady state).
 #'
-#' @return A data frame with columns: period, variable, response, type.
+#' @return A data frame of class \code{"dsge_irf_2nd"} with columns
+#'   \code{period}, \code{variable}, \code{response}, \code{shock},
+#'   \code{size} and \code{order}.
 #'
 #' @export
 irf_2nd_order <- function(sol, shock, size = 1, periods = 40L,
@@ -233,14 +240,13 @@ irf_2nd_order <- function(sol, shock, size = 1, periods = 40L,
   h_x <- sol$H
   g_x <- sol$G
   eta <- sol$M
-  g_xx <- sol$g_xx
-  h_xx <- sol$h_xx
-  g_ss <- sol$g_ss
-  h_ss <- sol$h_ss
-
   n_s <- nrow(h_x)
   n_c <- nrow(g_x)
   n_shocks <- ncol(eta)
+  hxx <- matrix(sol$h_xx, n_s, n_s * n_s)
+  gxx <- matrix(sol$g_xx, n_c, n_s * n_s)
+  h_ss <- sol$h_ss
+  g_ss <- sol$g_ss
 
   shock_names <- colnames(eta)
   shock_idx <- match(shock, shock_names)
@@ -248,14 +254,12 @@ irf_2nd_order <- function(sol, shock, size = 1, periods = 40L,
     stop("Unknown shock: '", shock, "'. Available: ",
          paste(shock_names, collapse = ", "), call. = FALSE)
 
-  # Build shock vector
+  # eta = M already includes the shock standard deviations, so a shock of
+  # `size` standard deviations is a unit innovation times `size`
   eps_vec <- rep(0, n_shocks)
-  sd_val <- sol$shock_sd[shock]
-  eps_vec[shock_idx] <- size * sd_val
+  eps_vec[shock_idx] <- size
 
-  # Initial state (at the stochastic SS = 0 + 0.5*sigma^2 correction)
   x1_init <- rep(0, n_s)
-  x2_init <- rep(0, n_s)
   if (!is.null(initial)) {
     for (nm in names(initial)) {
       idx <- match(nm, rownames(h_x))
@@ -263,86 +267,85 @@ irf_2nd_order <- function(sol, shock, size = 1, periods = 40L,
     }
   }
 
-  # Simulate WITH shock
-  x1_s <- x1_init; x2_s <- x2_init
-  states_shocked <- matrix(0, periods, n_s)
-  controls_shocked <- matrix(0, periods, n_c)
-  colnames(states_shocked) <- rownames(h_x)
-  colnames(controls_shocked) <- rownames(g_x)
-
-  for (t in seq_len(periods)) {
-    if (t == 1L) {
-      x1_new <- as.numeric(h_x %*% x1_s + eta %*% eps_vec)
-    } else {
-      x1_new <- as.numeric(h_x %*% x1_s)
+  # Pruned second-order simulation (x = x1 + x2):
+  #   x1_t = h_x x1_{t-1} + eta eps_t
+  #   x2_t = h_x x2_{t-1} + 1/2 h_xx (x1_{t-1} x x1_{t-1}) + 1/2 h_ss
+  #   y_t  = g_x (x1_t + x2_t) + 1/2 g_xx (x1_t x x1_t) + 1/2 g_ss
+  simulate <- function(eps_first) {
+    x1 <- x1_init
+    x2 <- rep(0, n_s)
+    states <- matrix(0, periods, n_s)
+    controls <- matrix(0, periods, n_c)
+    for (t in seq_len(periods)) {
+      x1_new <- as.numeric(h_x %*% x1) +
+        if (t == 1L) as.numeric(eta %*% eps_first) else 0
+      x2 <- as.numeric(h_x %*% x2) +
+        0.5 * as.numeric(hxx %*% as.vector(x1 %o% x1)) + 0.5 * h_ss
+      x1 <- x1_new
+      states[t, ] <- x1 + x2
+      controls[t, ] <- as.numeric(g_x %*% (x1 + x2)) +
+        0.5 * as.numeric(gxx %*% as.vector(x1 %o% x1)) + 0.5 * g_ss
     }
-    x2_quad <- numeric(n_s)
-    for (s in seq_len(n_s)) {
-      x2_quad[s] <- 0.5 * sum(h_xx[s, , ] * (x1_s %o% x1_s)) + 0.5 * h_ss[s]
-    }
-    x2_new <- as.numeric(h_x %*% x2_s) + x2_quad
-
-    states_shocked[t, ] <- x1_new + x2_new
-
-    y1 <- as.numeric(g_x %*% x1_new)
-    y2_quad <- numeric(n_c)
-    for (c_idx in seq_len(n_c)) {
-      y2_quad[c_idx] <- 0.5 * sum(g_xx[c_idx, , ] * (x1_s %o% x1_s)) + 0.5 * g_ss[c_idx]
-    }
-    y2 <- as.numeric(g_x %*% x2_new) + y2_quad
-    controls_shocked[t, ] <- y1 + y2
-
-    x1_s <- x1_new; x2_s <- x2_new
+    list(states = states, controls = controls)
   }
+  shocked <- simulate(eps_vec)
+  base <- simulate(rep(0, n_shocks))
 
-  # Simulate WITHOUT shock (baseline)
-  x1_b <- x1_init; x2_b <- x2_init
-  states_base <- matrix(0, periods, n_s)
-  controls_base <- matrix(0, periods, n_c)
+  all_irf <- cbind(shocked$controls - base$controls,
+                   shocked$states - base$states)
+  all_names <- c(rownames(g_x), rownames(h_x))
 
-  for (t in seq_len(periods)) {
-    x1_new <- as.numeric(h_x %*% x1_b)
-    x2_quad <- numeric(n_s)
-    for (s in seq_len(n_s)) {
-      x2_quad[s] <- 0.5 * sum(h_xx[s, , ] * (x1_b %o% x1_b)) + 0.5 * h_ss[s]
-    }
-    x2_new <- as.numeric(h_x %*% x2_b) + x2_quad
-
-    states_base[t, ] <- x1_new + x2_new
-
-    y1 <- as.numeric(g_x %*% x1_new)
-    y2_quad <- numeric(n_c)
-    for (c_idx in seq_len(n_c)) {
-      y2_quad[c_idx] <- 0.5 * sum(g_xx[c_idx, , ] * (x1_b %o% x1_b)) + 0.5 * g_ss[c_idx]
-    }
-    y2 <- as.numeric(g_x %*% x2_new) + y2_quad
-    controls_base[t, ] <- y1 + y2
-
-    x1_b <- x1_new; x2_b <- x2_new
-  }
-
-  # IRF = shocked - baseline
-  irf_states <- states_shocked - states_base
-  irf_controls <- controls_shocked - controls_base
-
-  all_irf <- cbind(irf_controls, irf_states)
-  all_names <- c(colnames(irf_controls), colnames(irf_states))
-
-  # Build data frame
-  rows <- list()
-  for (j in seq_along(all_names)) {
-    rows[[j]] <- data.frame(
-      period = seq_len(periods),
-      variable = all_names[j],
-      response = all_irf[, j],
-      stringsAsFactors = FALSE
-    )
-  }
-  result <- do.call(rbind, rows)
+  result <- data.frame(
+    period = rep(seq_len(periods), length(all_names)),
+    variable = rep(all_names, each = periods),
+    response = as.vector(all_irf),
+    stringsAsFactors = FALSE
+  )
   result$shock <- shock
   result$size <- size
   result$order <- 2L
 
   class(result) <- c("dsge_irf_2nd", "data.frame")
   result
+}
+
+#' Plot Second-Order Impulse Responses
+#'
+#' Plots the responses from [irf_2nd_order()], one panel per variable.
+#'
+#' @param x A `dsge_irf_2nd` object from [irf_2nd_order()].
+#' @param variables Optional character vector of variables to plot.
+#'   Default: all variables.
+#' @param ... Additional arguments passed to base plotting functions.
+#'
+#' @return No return value, called for the side effect of producing the
+#'   plots on the active graphics device.
+#'
+#' @export
+plot.dsge_irf_2nd <- function(x, variables = NULL, ...) {
+  vars <- unique(x$variable)
+  if (!is.null(variables)) {
+    bad <- setdiff(variables, vars)
+    if (length(bad) > 0L) {
+      stop("Unknown variable(s): ", paste(bad, collapse = ", "),
+           call. = FALSE)
+    }
+    vars <- variables
+  }
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par))
+  .dsge_par_grid(1L, length(vars))
+  shock <- x$shock[1L]
+  for (v in vars) {
+    sub <- x[x$variable == v, , drop = FALSE]
+    sub <- sub[order(sub$period), ]
+    graphics::plot(sub$period, sub$response, type = "n",
+                   xlab = "Period", ylab = "Response",
+                   main = sprintf("%s -> %s", shock, v), ...)
+    .dsge_grid()
+    .dsge_zero_line()
+    graphics::lines(sub$period, sub$response,
+                    col = .DSGE_INK_PRIMARY, lwd = 1.8)
+  }
+  invisible(x)
 }
