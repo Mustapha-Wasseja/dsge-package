@@ -46,6 +46,15 @@
 
 ## Bug fixes
 
+* `irf_2nd_order()` returned wrong responses: the shock was scaled by its
+  standard deviation twice (so responses were too small by that factor,
+  e.g. 100 times for a standard deviation of 0.01), and the quadratic term
+  of the controls used the previous period's state instead of the current
+  one. Its documentation listed a `type` column that does not exist, and
+  it now has a `plot()` method.
+* The `plot()` method for `simulate_perfect_foresight()` results now uses the
+  package's plot style (axis labels, grid, the new steady state as a dotted
+  line) and reports unknown variable names.
 * `simulate_perfect_foresight()` now starts from the file's
   `steady_state_model` block when computing the initial and terminal steady
   states, as Dynare's `steady` does. Previously it always started Newton's

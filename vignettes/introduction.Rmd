@@ -19,12 +19,26 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-The `dsge` package provides tools for specifying, solving, and estimating
-dynamic stochastic general equilibrium (DSGE) models by maximum likelihood
-and Bayesian methods. It supports linear models (formula interface),
-nonlinear models (first-order perturbation), and Bayesian estimation of
-linear models (adaptive RWMH). This vignette walks through examples
-demonstrating the core workflow.
+The `dsge` package specifies, solves and estimates dynamic stochastic
+general equilibrium (DSGE) models in R, without Dynare, MATLAB or Octave.
+It covers:
+
+- **Models**: linear models written with a formula interface
+  (`dsge_model()`), nonlinear models written as equations
+  (`dsgenl_model()`), and models imported from Dynare `.mod` files
+  (`read_dynare()`).
+- **Solutions**: first-order solutions, and second- and third-order
+  perturbation for nonlinear models; perfect-foresight simulations and
+  occasionally binding constraints (OccBin).
+- **Estimation**: maximum likelihood with the Kalman filter, and Bayesian
+  estimation by adaptive random-walk Metropolis-Hastings, sequential Monte
+  Carlo or particle MCMC.
+- **Analysis**: impulse responses, forecasts, conditional forecasts,
+  variance and historical shock decompositions, identification
+  diagnostics and optimal policy.
+
+This vignette walks through the core workflow, from a one-equation model
+to imported Dynare models.
 
 ## A Simple AR(1) Model
 
@@ -203,11 +217,30 @@ nk_fc <- forecast(nk_fit, horizon = 12)
 plot(nk_fc)
 ```
 
+### Variance and Historical Decompositions
+
+How much of each variable's variance does each shock explain? Without a
+horizon, `variance_decomposition()` gives the unconditional shares; with
+one, the forecast-error variance decomposition at those horizons.
+
+```{r nk-vd, fig.height=3.5}
+variance_decomposition(nk_fit, horizon = c(1, 4, 8))
+plot(variance_decomposition(nk_fit))
+```
+
+`shock_decomposition()` splits each observed series, period by period, into
+the contributions of the (smoothed) shocks:
+
+```{r nk-hd, fig.height=5}
+plot(shock_decomposition(nk_fit))
+```
+
 ## Nonlinear DSGE Models
 
-The package also supports nonlinear DSGE models via first-order perturbation
-(linearization around the deterministic steady state). Nonlinear models are
-specified using string-based equations with `VAR(+1)` notation for leads.
+Nonlinear models are written as equations in strings, with `VAR(+1)` for
+next-period values. They are solved by perturbation around the
+deterministic steady state: to first order by default, and to second or
+third order on request.
 
 ### A Simple RBC Model
 
@@ -254,12 +287,106 @@ plot(rbc_irfs)
 The IRF shows how consumption responds to a TFP shock, with the
 response decaying as capital adjusts back to steady state.
 
+### Higher-Order Solutions
+
+With `order = 2` (or `3`), `solve_dsge()` adds the second-order terms of the
+decision rules. The constant `g_ss` is the risk correction: how far
+precautionary behaviour moves the controls away from the deterministic
+steady state.
+
+```{r rbc-order2}
+sol2 <- solve_dsge(rbc, params = params, shock_sd = c(Z = 0.01), order = 2)
+sol2$g_ss
+```
+
+Second-order responses depend on the size and sign of the shock. For a
+large (five standard deviation) shock, the fall in consumption after a
+negative shock is not the mirror image of the rise after a positive one:
+
+```{r rbc-girf, fig.height=3}
+up <- irf_2nd_order(sol2, shock = "Z", size = 5, periods = 40)
+down <- irf_2nd_order(sol2, shock = "Z", size = -5, periods = 40)
+c_up <- up$response[up$variable == "C"]
+c_down <- down$response[down$variable == "C"]
+round(c(impact_up = c_up[1], impact_down = c_down[1],
+        asymmetry = c_up[1] + c_down[1]), 6)
+plot(up, variables = "C")
+```
+
+## Importing Dynare Models
+
+`read_dynare()` reads a Dynare `.mod` file (or model code given as text),
+including its calibration, steady state, shocks, priors and estimation
+settings, and returns a model that the functions above accept directly.
+
+```{r dynare-import}
+nk_mod <- read_dynare(text = "
+  var y pi i u;
+  varexo e_d e_m;
+  parameters beta sigma kappa phi_pi phi_y rho_i rho_u;
+  beta = 0.99; sigma = 1; kappa = 0.1;
+  phi_pi = 1.5; phi_y = 0.125; rho_i = 0.7; rho_u = 0.8;
+  model(linear);
+    y = y(+1) - 1/sigma * (i - pi(+1)) + u;
+    pi = beta * pi(+1) + kappa * y;
+    i = rho_i * i(-1) + (1 - rho_i) * (phi_pi * pi + phi_y * y) + e_m;
+    u = rho_u * u(-1) + e_d;
+  end;
+  shocks;
+    var e_d; stderr 0.01;
+    var e_m; stderr 0.0025;
+  end;
+")
+nk_sol <- solve_dsge(nk_mod)
+```
+
+```{r dynare-irf, fig.height=5}
+plot(irf(nk_sol, periods = 20, se = FALSE), response = c("y", "pi", "i"))
+```
+
+Files with `perfect_foresight_setup` and `perfect_foresight_solver` (or
+`simul`) are simulated with `simulate_perfect_foresight()`. Here capital and
+consumption move to a new steady state after a permanent 10% rise in
+productivity:
+
+```{r dynare-pf, fig.height=3}
+pf_mod <- read_dynare(text = "
+  var c k;
+  varexo a;
+  parameters alpha beta delta;
+  alpha = 0.33; beta = 0.99; delta = 0.025;
+  model;
+    1/c = beta/c(+1) * (alpha * exp(a(+1)) * k^(alpha - 1) + 1 - delta);
+    k = exp(a) * k(-1)^alpha + (1 - delta) * k(-1) - c;
+  end;
+  steady_state_model;
+    k = ((1/beta - 1 + delta)/(alpha*exp(a)))^(1/(alpha - 1));
+    c = exp(a)*k^alpha - delta*k;
+  end;
+  initval; a = 0; end;
+  steady;
+  endval; a = 0.1; end;
+  steady;
+  perfect_foresight_setup(periods = 200);
+  perfect_foresight_solver;
+")
+plot(simulate_perfect_foresight(pf_mod))
+```
+
+Occasionally binding constraints declared with Dynare's `occbin_constraints`
+are simulated with `simulate_occbin()`, and optimal-policy commands
+(`ramsey_model`, `discretionary_policy`, `osr`) are translated as well; see
+`?read_dynare`.
+
 ## Bayesian Estimation
 
-The package supports Bayesian estimation of both linear and nonlinear DSGE
-models via adaptive Random-Walk Metropolis-Hastings (RWMH). For nonlinear
-models, the steady state is re-solved and the model re-linearized at each
-candidate parameter draw.
+`bayes_dsge()` estimates linear and nonlinear models by adaptive
+random-walk Metropolis-Hastings (RWMH), with parallel chains. For
+nonlinear models, the steady state is re-solved and the model re-linearized
+at each candidate parameter draw. Alternatives are `bayes_smc()` (tempered
+sequential Monte Carlo) and `bayes_particle()` (particle marginal
+Metropolis-Hastings with a bootstrap particle filter), and
+`bayes_factor()` compares models by their marginal likelihoods.
 
 ### Specifying Priors
 
@@ -276,7 +403,8 @@ my_priors <- list(
 )
 ```
 
-Supported distributions: `normal`, `beta`, `gamma`, `uniform`, `inv_gamma`.
+Supported distributions: `normal`, `beta`, `gamma`, `uniform`, `inv_gamma`
+and `inv_gamma1` (Dynare's type-1 inverse gamma).
 
 ### Running the Sampler
 
@@ -328,10 +456,9 @@ The `pars` argument selects specific parameters (e.g.,
 `pars = c("kappa", "psi")`). Forecast plotting is not yet available
 for Bayesian fits.
 
-**Note:** Bayesian nonlinear estimation uses first-order perturbation
-(linearization around parameter-specific steady states). This is not
-a fully nonlinear filtering solution; higher-order approximations and
-particle filters are not yet implemented.
+**Note:** `bayes_dsge()` evaluates the likelihood of nonlinear models with
+the Kalman filter on the first-order solution around parameter-specific
+steady states.
 
 For examples:
 
@@ -341,35 +468,30 @@ For examples:
 - RBC with capital accumulation: `inst/examples/bayesian_rbc_capital_demo.R`
   (quick demo, ~2.5 min) or `bayesian_rbc_capital_full.R` (full, ~9 min)
 
-## What This Package Currently Supports
+## Other Tools
 
-**Included in v0.4.0:**
-
-- Linear DSGE models via formula interface
-- Nonlinear DSGE models via first-order perturbation
-- Bayesian estimation of linear and nonlinear DSGE models (adaptive RWMH)
-- Prior specification: normal, beta, gamma, uniform, inverse-gamma
-- MCMC diagnostics: ESS, R-hat, MCSE, acceptance rates
-- Posterior IRFs with credible bands
-- Deterministic steady-state solver
-- Solution via undetermined coefficients (Klein 2000)
-- Maximum likelihood estimation via the Kalman filter
-- Delta-method standard errors
-- IRFs with confidence bands; forecasts with fan charts
-- Policy/transition matrix extraction and stability diagnostics
-
-**Not yet supported:**
-
-- Higher-order perturbation (second-order, third-order)
-- Nonlinear filtering (particle filter)
-- Variance and historical shock decomposition
+- **Forecasting**: `conditional_forecast()` fixes the future path of some
+  variables; `predict()`, `fitted()` and `residuals()` work on fitted models.
+- **Filtering and smoothing**: `smooth_states()`, `smooth_shocks()`,
+  `particle_filter()`, and `kalman_filter_skewed()` for skew-normal shocks.
+- **Optimal policy**: `ramsey_policy()`, `discretionary_policy()` and
+  optimal simple rules with `osr()`.
+- **Other estimators**: `irf_match()`, `gmm_estimate()`, `smm_estimate()`,
+  DSGE-VAR (`bayes_dsge_var()`, `bayes_dsge_var_mh()`) and endogenous priors.
+- **Diagnostics**: `check_identification()`, `parameter_sensitivity()`,
+  `global_sensitivity()` and `robust_vcov()`.
+- **Nonlinear dynamics**: `perfect_foresight_nonlinear()`, `extended_path()`
+  and `simulate_occbin()`.
+- **Reporting**: `model_latex()` writes the model equations in LaTeX.
 
 ## Notes
 
 - For linear models, `lead()` or `E()` marks forward expectations.
 - For nonlinear models, `VAR(+1)` denotes the next-period value.
-- The number of exogenous state variables (with shocks) must equal
-  the number of observed control variables.
-- Nonlinear models are solved by first-order linearization around
-  the deterministic steady state. The resulting linear system uses
-  the same solver and estimation pipeline as linear models.
+- In linear models written with `dsge_model()`, the number of exogenous
+  state variables (with shocks) must equal the number of observed
+  variables. Nonlinear models and imported Dynare models may have more
+  shocks than observed variables, and measurement errors.
+- Nonlinear models are solved by perturbation around the deterministic
+  steady state. First-order solutions use the same solver and estimation
+  pipeline as linear models.

@@ -16,13 +16,21 @@ irf_2nd_order(sol, shock, size = 1, periods = 40L, initial = NULL)
 \item{periods}{Integer. Number of IRF periods. Default 40.}
 
 \item{initial}{Named numeric vector of initial state deviations.
-Default is zero (ergodic mean under second-order).}
+Default is zero (the deterministic steady state).}
 }
 \value{
-A data frame with columns: period, variable, response, type.
+A data frame of class \code{"dsge_irf_2nd"} with columns
+\code{period}, \code{variable}, \code{response}, \code{shock},
+\code{size} and \code{order}.
 }
 \description{
-Computes impulse-response functions using the second-order solution.
-These differ from first-order IRFs because responses depend on the
-initial state and shock sign.
+Computes impulse-response functions using the second-order solution,
+simulated with pruning (Kim, Kim, Schaumburg and Sims 2008). These differ
+from first-order IRFs because responses depend on the initial state and
+on the size and sign of the shock.
+}
+\details{
+The response is the difference between a path with the shock in period 1
+and a path without it, both starting from \code{initial}. Period 1 is the
+impact period.
 }
