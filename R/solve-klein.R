@@ -349,7 +349,13 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
   }
 
   # Shock impact matrix: M = (B0 - B1*G)^{-1} * C * diag(shock_sd)
-  M <- solve(B0_B1G, C %*% diag(shock_sd, nrow = length(shock_sd)))
+  # (a deterministic model, e.g. one used for perfect-foresight simulations,
+  # has no stochastic shocks: M then has no columns)
+  M <- if (length(shock_sd) == 0L) {
+    matrix(0, nrow(B0_B1G), 0L)
+  } else {
+    solve(B0_B1G, C %*% diag(shock_sd, nrow = length(shock_sd)))
+  }
   colnames(M) <- names(shock_sd)
 
   list(

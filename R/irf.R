@@ -46,6 +46,7 @@ irf.default <- function(x, periods = 20L, impulse = NULL, response = NULL,
   if (!sol$stable) {
     stop("Cannot compute IRFs for an unstable model.", call. = FALSE)
   }
+  .require_shocks(sol, "irf()")
 
   G <- sol$G
   H <- sol$H

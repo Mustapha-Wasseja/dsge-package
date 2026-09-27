@@ -100,6 +100,7 @@ variance_decomposition.dsge_bayes <- function(x, horizon = NULL, ...) {
 
 #' @noRd
 .variance_decomposition_impl <- function(sol, horizon = NULL) {
+  .require_shocks(sol, "variance_decomposition()")
   G <- sol$G
   H <- sol$H
   M <- sol$M

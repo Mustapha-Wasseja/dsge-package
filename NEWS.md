@@ -52,6 +52,11 @@
   of the controls used the previous period's state instead of the current
   one. Its documentation listed a `type` column that does not exist, and
   it now has a `plot()` method.
+* `solve_dsge()` failed with "no right-hand side in 'b'" on models without
+  stochastic shocks (no `varexo`), such as deterministic growth models. It
+  now solves them, and `irf()` and `variance_decomposition()` explain that
+  such models have no shocks to trace and point to
+  `simulate_perfect_foresight()`.
 * The `plot()` method for `simulate_perfect_foresight()` results now uses the
   package's plot style (axis labels, grid, the new steady state as a dotted
   line) and reports unknown variable names.
