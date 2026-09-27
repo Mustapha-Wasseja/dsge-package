@@ -27,7 +27,8 @@ scale_fill_dsge(...)
 A ggplot2 theme or scale.
 }
 \description{
-\code{theme_dsge()} is the ggplot2 theme used by the package's \code{\link[=autoplot]{autoplot()}}
+\code{theme_dsge()} is the ggplot2 theme used by the package's
+\code{\link[ggplot2:autoplot]{ggplot2::autoplot()}}
 methods: a light horizontal grid, no panel borders, bold left-aligned
 titles and facet labels, and the legend on top.
 \code{scale_colour_dsge()} and \code{scale_fill_dsge()} apply the package's

@@ -17,7 +17,8 @@
 
 #' ggplot2 Theme and Colour Scales for dsge Plots
 #'
-#' `theme_dsge()` is the ggplot2 theme used by the package's [autoplot()]
+#' `theme_dsge()` is the ggplot2 theme used by the package's
+#' [ggplot2::autoplot()]
 #' methods: a light horizontal grid, no panel borders, bold left-aligned
 #' titles and facet labels, and the legend on top.
 #' `scale_colour_dsge()` and `scale_fill_dsge()` apply the package's
@@ -425,7 +426,7 @@ autoplot.dsge_smoothed <- function(object, which = NULL, ...) {
     ggplot2::facet_wrap(ggplot2::vars(.data$state), scales = "free_y") +
     ggplot2::labs(title = "Smoothed states",
                   subtitle = if ("lower" %in% names(dat))
-                    "deviation from steady state, ± 2 s.d." else
+                    "deviation from steady state, \u00b1 2 s.d." else
                     "deviation from steady state",
                   x = "Period", y = NULL) +
     theme_dsge()
