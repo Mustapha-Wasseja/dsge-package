@@ -60,3 +60,23 @@ For nonlinear models, the solver first computes the deterministic
 steady state, then linearizes the model via first-order Taylor
 expansion, and finally solves the resulting linear system.
 }
+\examples{
+nk <- dsge_model(
+  obs(p   ~ beta * lead(p) + kappa * x),
+  unobs(x ~ lead(x) - (r - lead(p) - g)),
+  obs(r   ~ psi * p + u),
+  state(u ~ rhou * u),
+  state(g ~ rhog * g),
+  fixed = list(beta = 0.99),
+  start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+)
+sol <- solve_dsge(nk, params = c(kappa = 0.1, psi = 1.5, rhou = 0.7,
+                                 rhog = 0.9))
+sol
+
+# a nonlinear model from a Dynare file, solved to second order
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+sol2 <- solve_dsge(rbc, order = 2)
+sol2$g_ss
+
+}

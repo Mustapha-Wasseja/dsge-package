@@ -217,6 +217,21 @@ smooth_states_impl <- function(x) {
 #' shocks are recovered by projecting onto M:
 #' \eqn{\hat{\varepsilon}_{t+1} = (M'M)^{-1} M' (x_{t+1|T} - H x_{t|T})}.
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' fit <- estimate(m, data = data.frame(y = z))
+#' sm <- smooth_shocks(fit)
+#' head(sm$shocks)
+#' }
+#'
 #' @export
 smooth_shocks <- function(x, ...) {
   UseMethod("smooth_shocks")
@@ -544,6 +559,20 @@ print.dsge_decomposition <- function(x, ...) {
 #' @return No return value, called for the side effect of producing
 #'   smoothed state or fit plots on the active graphics device.
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' fit <- estimate(m, data = data.frame(y = z))
+#' plot(smooth_states(fit))
+#' }
+#'
 #' @export
 plot.dsge_smoothed <- function(x, which = NULL, type = c("states", "fit"),
                                 ...) {
@@ -642,6 +671,20 @@ plot_smoothed_fit <- function(x, ...) {
 #' @return No return value, called for the side effect of producing
 #'   stacked bar charts of the historical shock decomposition on the
 #'   active graphics device.
+#'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' fit <- estimate(m, data = data.frame(y = z))
+#' plot(shock_decomposition(fit))
+#' }
 #'
 #' @export
 plot.dsge_decomposition <- function(x, which = NULL, ...) {

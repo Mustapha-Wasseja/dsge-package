@@ -30,6 +30,16 @@ corresponds to \eqn{E_t[x_{t+1}]}.
 This function is not meant to be called directly. It is recognized by
 the equation parser inside \code{\link[=dsge_model]{dsge_model()}}.
 }
+\examples{
+# lead() is used inside dsge_model() equations, not called directly
+m <- dsge_model(
+  obs(p ~ beta * lead(p) + kappa * x),
+  state(x ~ rho * x),
+  fixed = list(beta = 0.99),
+  start = list(kappa = 0.1, rho = 0.5)
+)
+
+}
 \seealso{
 \code{\link[=E]{E()}} for a user-friendly alias, \code{\link[=dsge_model]{dsge_model()}}
 }

@@ -50,7 +50,9 @@ Raftery (1995), evidence strength is assessed via \eqn{2 \log BF_{12}}:
 < 0              \tab Negative (favours M2) \cr
 0 to 2           \tab Not worth more than a bare mention \cr
 2 to 6           \tab Positive \cr
-6 to 10          \tab Strong \cr10             \tab Very strong \cr}
+6 to 10          \tab Strong \cr
+more than 10     \tab Very strong \cr
+}
 
 When \code{prior_odds} is supplied the posterior model probability of
 model \eqn{i} is

@@ -18,3 +18,21 @@ An object of class \code{"dsge_mcmc_summary"}.
 Comprehensive MCMC diagnostic summary combining ESS, R-hat, Geweke,
 and acceptance rate information.
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+set.seed(42)
+z <- numeric(150)
+for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+dat <- data.frame(y = z)
+bfit <- bayes_dsge(m, data = dat,
+                   priors = list(rho = prior("beta", shape1 = 2, shape2 = 2)),
+                   chains = 2, iter = 1000, seed = 1)
+mcmc_diagnostics(bfit)
+}
+
+}

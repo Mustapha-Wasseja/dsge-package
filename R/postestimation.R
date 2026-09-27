@@ -17,6 +17,15 @@
 #' @return If `se = FALSE`, returns the G matrix. If `se = TRUE`, returns
 #'   a list with `matrix`, `se`, `lower`, `upper`, and a data frame `table`.
 #'
+#' @examples
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' sol <- solve_dsge(m, params = c(rho = 0.8))
+#' policy_matrix(sol)
+#'
 #' @export
 policy_matrix <- function(x, se = TRUE, level = 0.95) {
   sol <- extract_solution(x)
@@ -48,6 +57,15 @@ policy_matrix <- function(x, se = TRUE, level = 0.95) {
 #' @param level Confidence level for intervals. Default is 0.95.
 #'
 #' @return Same structure as [policy_matrix()].
+#'
+#' @examples
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' sol <- solve_dsge(m, params = c(rho = 0.8))
+#' transition_matrix(sol)
 #'
 #' @export
 transition_matrix <- function(x, se = TRUE, level = 0.95) {
@@ -84,6 +102,15 @@ transition_matrix <- function(x, se = TRUE, level = 0.95) {
 #'     \item{n_stable}{Number of stable eigenvalues.}
 #'     \item{n_states}{Number of state variables (required stable count).}
 #'   }
+#'
+#' @examples
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' sol <- solve_dsge(m, params = c(rho = 0.8))
+#' stability(sol)
 #'
 #' @export
 stability <- function(x) {

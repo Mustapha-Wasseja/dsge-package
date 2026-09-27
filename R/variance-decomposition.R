@@ -100,6 +100,7 @@ variance_decomposition.dsge_bayes <- function(x, horizon = NULL, ...) {
 
 #' @noRd
 .variance_decomposition_impl <- function(sol, horizon = NULL) {
+  .require_shocks(sol, "variance_decomposition()")
   G <- sol$G
   H <- sol$H
   M <- sol$M
@@ -257,6 +258,20 @@ print.dsge_variance_decomposition <- function(x, digits = 1, ...) {
 #'
 #' @return Invisibly returns \code{x}; called for the side effect of
 #'   producing a plot.
+#'
+#' @examples
+#' nk <- dsge_model(
+#'   obs(p   ~ beta * lead(p) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(p) - g)),
+#'   obs(r   ~ psi * p + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+#' )
+#' sol <- solve_dsge(nk, params = c(kappa = 0.1, psi = 1.5, rhou = 0.7,
+#'                                  rhog = 0.9))
+#' plot(variance_decomposition(sol, horizon = c(1, 4, 8)))
 #'
 #' @export
 plot.dsge_variance_decomposition <- function(x, ...) {

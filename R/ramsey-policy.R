@@ -309,6 +309,19 @@ ramsey_policy <- function(model, params = NULL, shock_sd = NULL,
 #'   \item{\code{stable}}{Logical: is the closed-loop system stable?}
 #' }
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.8)
+#' )
+#' ram <- ramsey_policy(m, params = c(rho = 0.8), shock_sd = c(z = 0.1),
+#'   instruments = "y",
+#'   welfare_weights = list(Q_yy = matrix(1, 1, 1, dimnames = list("y", "y"))))
+#' welfare_loss(ram)$welfare_loss
+#' }
+#'
 #' @export
 welfare_loss <- function(ramsey, F_alt = NULL) {
   if (!inherits(ramsey, "dsge_ramsey"))

@@ -34,3 +34,11 @@ The response is the difference between a path with the shock in period 1
 and a path without it, both starting from \code{initial}. Period 1 is the
 impact period.
 }
+\examples{
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+sol2 <- solve_dsge(rbc, order = 2)
+up   <- irf_2nd_order(sol2, shock = "e", size = 0.05)
+down <- irf_2nd_order(sol2, shock = "e", size = -0.05)
+head(up)
+
+}

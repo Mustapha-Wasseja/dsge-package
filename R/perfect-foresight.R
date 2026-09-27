@@ -836,6 +836,12 @@ print.dsge_perfect_foresight <- function(x, ...) {
 #' @return No return value, called for the side effect of producing
 #'   transition path plots on the active graphics device.
 #'
+#' @examples
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' pf <- perfect_foresight(solve_dsge(rbc), shocks = list(e = 0.01),
+#'                         horizon = 40)
+#' plot(pf)
+#'
 #' @export
 plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
                                         compare = NULL,
@@ -971,6 +977,12 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
 #' @return Invisibly returns the `dsge_perfect_foresight` object. Called
 #'   for the side effect of printing impact effects, peak deviations,
 #'   and convergence diagnostics to the console.
+#'
+#' @examples
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' pf <- perfect_foresight(solve_dsge(rbc), shocks = list(e = 0.01),
+#'                         horizon = 40)
+#' summary(pf)
 #'
 #' @export
 summary.dsge_perfect_foresight <- function(object, ...) {

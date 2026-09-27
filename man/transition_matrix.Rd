@@ -22,3 +22,13 @@ Returns the transition matrix H from a fitted or solved DSGE model.
 The transition matrix describes state evolution:
 \eqn{x_{t+1} = H x_t + M \varepsilon_{t+1}}.
 }
+\examples{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+sol <- solve_dsge(m, params = c(rho = 0.8))
+transition_matrix(sol)
+
+}

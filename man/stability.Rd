@@ -25,3 +25,13 @@ Checks saddle-path stability of the model by examining eigenvalues.
 A model is stable when the number of eigenvalues with modulus less
 than 1 equals the number of state variables.
 }
+\examples{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+sol <- solve_dsge(m, params = c(rho = 0.8))
+stability(sol)
+
+}

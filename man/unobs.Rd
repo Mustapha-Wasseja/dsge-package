@@ -17,6 +17,10 @@ and its type.
 Wraps a formula to mark it as an equation for an unobserved control variable
 in a linear DSGE model.
 }
+\examples{
+unobs(x ~ lead(x) - (r - lead(p)))
+
+}
 \seealso{
 \code{\link[=obs]{obs()}}, \code{\link[=state]{state()}}, \code{\link[=dsge_model]{dsge_model()}}
 }

@@ -36,3 +36,10 @@ Plot the deterministic transition paths from a \code{perfect_foresight}
 result, optionally overlaying a second path for comparison (e.g.
 linearized vs. nonlinear).
 }
+\examples{
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+pf <- perfect_foresight(solve_dsge(rbc), shocks = list(e = 0.01),
+                        horizon = 40)
+plot(pf)
+
+}

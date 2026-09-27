@@ -27,6 +27,11 @@
 #'     \item{iterations}{Number of iterations used.}
 #'   }
 #'
+#' @examples
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' steady_state(rbc)
+#' steady_state(rbc, params = c(beta = 0.98))$values
+#'
 #' @export
 steady_state <- function(model, ...) {
   UseMethod("steady_state")
@@ -179,4 +184,17 @@ assemble_params_nl <- function(model, params) {
     out[nm] <- param_vec[nm]
   }
   out
+}
+
+#' @rdname steady_state
+#' @export
+steady_state.dsge_dynare <- function(model, params = NULL, ...) {
+  # an imported Dynare model: use its calibration unless overridden
+  cal <- model$params[intersect(names(model$params), model$model$parameters)]
+  if (is.null(params)) {
+    params <- cal
+  } else {
+    params <- c(params, cal[setdiff(names(cal), names(params))])
+  }
+  steady_state(dyn_unfix(model$model, names(params)), params = params, ...)
 }

@@ -166,6 +166,12 @@ solve_3rd_order <- function(model, params, shock_sd, tol = 1e-6) {
 #' separately and combines them, avoiding explosive simulation paths.
 #'
 #' @importFrom stats rnorm
+#' @examples
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' sol3 <- solve_dsge(rbc, order = 3)
+#' sim <- simulate_3rd_order(sol3, n = 100, seed = 1)
+#' str(sim, max.level = 1)
+#'
 #' @export
 simulate_3rd_order <- function(sol, n = 200L, n_burn = 200L, seed = NULL) {
   if (is.null(sol$order) || sol$order < 3L)

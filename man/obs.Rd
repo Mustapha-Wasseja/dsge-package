@@ -17,6 +17,10 @@ and its type.
 Wraps a formula to mark it as an equation for an observed control variable
 in a linear DSGE model.
 }
+\examples{
+obs(y ~ z)
+
+}
 \seealso{
 \code{\link[=unobs]{unobs()}}, \code{\link[=state]{state()}}, \code{\link[=dsge_model]{dsge_model()}}
 }

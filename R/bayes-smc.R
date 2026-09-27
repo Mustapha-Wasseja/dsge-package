@@ -65,6 +65,22 @@
 #'   sampling for DSGE models. \emph{Journal of Applied Econometrics},
 #'   29(7), 1073-1098.
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' fit <- bayes_smc(m, data = data.frame(y = z),
+#'                  priors = list(rho = prior("beta", shape1 = 2, shape2 = 2)),
+#'                  n_particles = 200, n_phi = 15, seed = 1)
+#' fit
+#' }
+#'
 #' @export
 bayes_smc <- function(model, data, priors,
                       n_particles = 500L,

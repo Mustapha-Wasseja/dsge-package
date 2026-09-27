@@ -693,3 +693,12 @@ test_that("presample excludes initial periods from the likelihood", {
   }, 0)
   expect_equal(pre$loglik, full$loglik - sum(ll_t), tolerance = 1e-10)
 })
+
+test_that("steady_state works on imported Dynare models", {
+  rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+  ss <- steady_state(rbc)
+  expect_true(ss$converged)
+  expect_equal(ss$values[["k"]], solve_dsge(rbc)$steady_state[["k"]])
+  ss2 <- steady_state(rbc, params = c(beta = 0.98))
+  expect_lt(ss2$values[["k"]], ss$values[["k"]])
+})

@@ -20,6 +20,15 @@
 #'   throws an error. It is recognized as a syntactic marker by the
 #'   equation parser inside [dsge_model()].
 #' @seealso [E()] for a user-friendly alias, [dsge_model()]
+#' @examples
+#' # lead() is used inside dsge_model() equations, not called directly
+#' m <- dsge_model(
+#'   obs(p ~ beta * lead(p) + kappa * x),
+#'   state(x ~ rho * x),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, rho = 0.5)
+#' )
+#'
 #' @export
 lead <- function(x, k = 1L) {
   stop("`lead()` should only be used inside dsge_model() equation formulas.",
@@ -41,6 +50,15 @@ lead <- function(x, k = 1L) {
 #'   throws an error. It is recognized as a syntactic marker by the
 #'   equation parser inside [dsge_model()].
 #' @seealso [lead()], [dsge_model()]
+#' @examples
+#' # E(p) is the same as lead(p)
+#' m <- dsge_model(
+#'   obs(p ~ beta * E(p) + kappa * x),
+#'   state(x ~ rho * x),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, rho = 0.5)
+#' )
+#'
 #' @export
 E <- function(x) {
   stop("`E()` should only be used inside dsge_model() equation formulas.",
@@ -58,6 +76,9 @@ E <- function(x) {
 #'   and its type.
 #'
 #' @seealso [unobs()], [state()], [dsge_model()]
+#' @examples
+#' obs(y ~ z)
+#'
 #' @export
 obs <- function(formula) {
   if (!inherits(formula, "formula")) {
@@ -79,6 +100,9 @@ obs <- function(formula) {
 #'   and its type.
 #'
 #' @seealso [obs()], [state()], [dsge_model()]
+#' @examples
+#' unobs(x ~ lead(x) - (r - lead(p)))
+#'
 #' @export
 unobs <- function(formula) {
 
@@ -106,6 +130,10 @@ unobs <- function(formula) {
 #'   and its type.
 #'
 #' @seealso [obs()], [unobs()], [dsge_model()]
+#' @examples
+#' state(z ~ rho * z)               # exogenous state with a shock
+#' state(k ~ delta * k + x, shock = FALSE)  # endogenous state
+#'
 #' @export
 state <- function(formula, shock = TRUE) {
   if (!inherits(formula, "formula")) {

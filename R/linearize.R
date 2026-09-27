@@ -21,6 +21,20 @@
 #'   B3, C, D) plus the steady-state values. A4 captures lead-state
 #'   coefficients in control equations (often zero).
 #'
+#' @examples
+#' rbc <- dsgenl_model(
+#'   "1/C = beta / C(+1) * (alpha * exp(Z) * K^(alpha - 1) + 1 - delta)",
+#'   "K(+1) = exp(Z) * K^alpha - C + (1 - delta) * K",
+#'   "Z(+1) = rho * Z",
+#'   observed = "C", endo_state = "K", exo_state = "Z",
+#'   fixed = list(alpha = 0.33, beta = 0.99, delta = 0.025),
+#'   start = list(rho = 0.9),
+#'   ss_guess = c(C = 2, K = 30, Z = 0)
+#' )
+#' ss <- steady_state(rbc, params = c(rho = 0.9))
+#' lin <- linearize(rbc, ss)
+#' lin$A0
+#'
 #' @export
 linearize <- function(model, steady_state, params = NULL) {
   if (!inherits(model, "dsgenl_model")) {

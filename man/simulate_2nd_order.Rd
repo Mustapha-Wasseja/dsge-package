@@ -23,3 +23,10 @@ A list with \code{states}, \code{controls}, \code{state_levels},
 Simulates sample paths using the pruned second-order approximation
 following Kim, Kim, Schaumburg, and Sims (2008).
 }
+\examples{
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+sol2 <- solve_dsge(rbc, order = 2)
+sim <- simulate_2nd_order(sol2, n = 100, seed = 1)
+str(sim, max.level = 1)
+
+}

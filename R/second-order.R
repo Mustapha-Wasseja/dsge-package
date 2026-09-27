@@ -117,6 +117,12 @@ solve_2nd_order <- function(model, params, shock_sd, tol = 1e-6) {
 #'   \code{control_levels} matrices (n x n_vars).
 #'
 #' @importFrom stats rnorm
+#' @examples
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' sol2 <- solve_dsge(rbc, order = 2)
+#' sim <- simulate_2nd_order(sol2, n = 100, seed = 1)
+#' str(sim, max.level = 1)
+#'
 #' @export
 simulate_2nd_order <- function(sol, n = 200L, n_burn = 100L, seed = NULL) {
   if (is.null(sol$order) || sol$order < 2L)
@@ -231,6 +237,13 @@ simulate_2nd_order <- function(sol, n = 200L, n_burn = 100L, seed = NULL) {
 #'   \code{period}, \code{variable}, \code{response}, \code{shock},
 #'   \code{size} and \code{order}.
 #'
+#' @examples
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' sol2 <- solve_dsge(rbc, order = 2)
+#' up   <- irf_2nd_order(sol2, shock = "e", size = 0.05)
+#' down <- irf_2nd_order(sol2, shock = "e", size = -0.05)
+#' head(up)
+#'
 #' @export
 irf_2nd_order <- function(sol, shock, size = 1, periods = 40L,
                           initial = NULL) {
@@ -320,6 +333,11 @@ irf_2nd_order <- function(sol, shock, size = 1, periods = 40L,
 #'
 #' @return No return value, called for the side effect of producing the
 #'   plots on the active graphics device.
+#'
+#' @examples
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' sol2 <- solve_dsge(rbc, order = 2)
+#' plot(irf_2nd_order(sol2, shock = "e", size = 0.05), variables = c("c", "k"))
 #'
 #' @export
 plot.dsge_irf_2nd <- function(x, variables = NULL, ...) {

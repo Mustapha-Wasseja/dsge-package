@@ -42,3 +42,19 @@ the smoothed innovation is \eqn{x_{t+1|T} - H x_{t|T}}. The structural
 shocks are recovered by projecting onto M:
 \eqn{\hat{\varepsilon}_{t+1} = (M'M)^{-1} M' (x_{t+1|T} - H x_{t|T})}.
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+set.seed(42)
+z <- numeric(150)
+for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+fit <- estimate(m, data = data.frame(y = z))
+sm <- smooth_shocks(fit)
+head(sm$shocks)
+}
+
+}

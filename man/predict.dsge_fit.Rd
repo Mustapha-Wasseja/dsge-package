@@ -35,3 +35,18 @@ A matrix of predictions or state estimates.
 Computes one-step-ahead predictions or filtered state estimates
 from a fitted DSGE model.
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+set.seed(42)
+z <- numeric(150)
+for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+fit <- estimate(m, data = data.frame(y = z))
+head(predict(fit))
+}
+
+}

@@ -62,6 +62,25 @@
 #'   or 3 for third-order perturbation. Orders 2 and 3 require a
 #'   \code{dsgenl_model}.
 #'
+#' @examples
+#' nk <- dsge_model(
+#'   obs(p   ~ beta * lead(p) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(p) - g)),
+#'   obs(r   ~ psi * p + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+#' )
+#' sol <- solve_dsge(nk, params = c(kappa = 0.1, psi = 1.5, rhou = 0.7,
+#'                                  rhog = 0.9))
+#' sol
+#'
+#' # a nonlinear model from a Dynare file, solved to second order
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' sol2 <- solve_dsge(rbc, order = 2)
+#' sol2$g_ss
+#'
 #' @export
 solve_dsge <- function(model, params = NULL, shock_sd = NULL, tol = 1e-6,
                        order = 1L) {
@@ -349,7 +368,13 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
   }
 
   # Shock impact matrix: M = (B0 - B1*G)^{-1} * C * diag(shock_sd)
-  M <- solve(B0_B1G, C %*% diag(shock_sd, nrow = length(shock_sd)))
+  # (a deterministic model, e.g. one used for perfect-foresight simulations,
+  # has no stochastic shocks: M then has no columns)
+  M <- if (length(shock_sd) == 0L) {
+    matrix(0, nrow(B0_B1G), 0L)
+  } else {
+    solve(B0_B1G, C %*% diag(shock_sd, nrow = length(shock_sd)))
+  }
   colnames(M) <- names(shock_sd)
 
   list(
