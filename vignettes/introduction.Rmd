@@ -468,6 +468,61 @@ For examples:
 - RBC with capital accumulation: `inst/examples/bayesian_rbc_capital_demo.R`
   (quick demo, ~2.5 min) or `bayesian_rbc_capital_full.R` (full, ~9 min)
 
+## ggplot2 Graphics
+
+The `plot()` methods above use base graphics, so they work with no extra
+packages. If you use **ggplot2**, `autoplot()` draws the same results as
+ggplot objects: IRFs (including second order), forecasts, variance and
+historical decompositions, smoothed states, perfect-foresight and OccBin
+paths, and posterior traces and densities. ggplot2 is optional; the
+chunks below run only when it is installed.
+
+```{r gg-setup, include = FALSE}
+has_gg <- requireNamespace("ggplot2", quietly = TRUE)
+```
+
+```{r gg-irf, eval = has_gg, fig.height = 5}
+library(ggplot2)
+autoplot(nk_irfs)
+```
+
+```{r gg-forecast, eval = has_gg, fig.height = 4}
+autoplot(nk_fc)
+```
+
+Because the result is an ordinary ggplot, you can add layers, titles or
+facets, or replace the theme:
+
+```{r gg-fevd, eval = has_gg, fig.height = 3.5}
+autoplot(variance_decomposition(nk_fit, horizon = c(1, 4, 8, 20))) +
+  labs(subtitle = "Share of the forecast-error variance due to each shock")
+```
+
+```{r gg-hd, eval = has_gg, fig.height = 5}
+autoplot(shock_decomposition(nk_fit))
+```
+
+`theme_dsge()`, `scale_colour_dsge()` and `scale_fill_dsge()` give your
+own ggplots the same look. Here the second-order responses of consumption
+and capital from the RBC section are drawn with ggplot2 directly, one panel
+each:
+
+```{r gg-theme, eval = has_gg, fig.height = 3}
+rbc_up <- up[up$variable %in% c("C", "K"), ]
+ggplot(rbc_up, aes(period, response, colour = variable)) +
+  geom_hline(yintercept = 0, colour = "grey60") +
+  geom_line(linewidth = 0.9, show.legend = FALSE) +
+  facet_wrap(~ variable, scales = "free_y") +
+  scale_colour_dsge() +
+  labs(title = "Second-order responses to a 5 s.d. technology shock",
+       x = "Period", y = NULL) +
+  theme_dsge()
+```
+
+For a Bayesian fit, `autoplot(fit_bayes)` draws the MCMC traces and
+`autoplot(fit_bayes, type = "density")` the posterior densities with the
+priors overlaid.
+
 ## Other Tools
 
 - **Forecasting**: `conditional_forecast()` fixes the future path of some
@@ -483,11 +538,6 @@ For examples:
 - **Nonlinear dynamics**: `perfect_foresight_nonlinear()`, `extended_path()`
   and `simulate_occbin()`.
 - **Reporting**: `model_latex()` writes the model equations in LaTeX.
-- **ggplot2 graphics**: with ggplot2 installed, `ggplot2::autoplot()` draws
-  IRFs, forecasts, decompositions, smoothed states, perfect-foresight and
-  OccBin paths and posterior traces or densities as ggplot objects, which
-  you can extend with further layers; `theme_dsge()`, `scale_colour_dsge()`
-  and `scale_fill_dsge()` give other plots the same style.
 
 ## Notes
 
