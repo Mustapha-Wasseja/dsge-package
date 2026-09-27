@@ -881,6 +881,7 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
       message("No variables with non-trivial paths to plot.")
       return(invisible(x))
     }
+    vars <- .dsge_drop_aux(vars, x$shock_names)
   } else {
     bad <- setdiff(vars, all_names)
     if (length(bad) > 0) {
@@ -910,7 +911,7 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
     nr <- ceiling(n_page / nc)
     old_par <- graphics::par(no.readonly = TRUE)
     on.exit(graphics::par(old_par), add = TRUE)
-    .dsge_par_grid(nr, nc)
+    .dsge_par_grid(nr, nc, oma_top = if (has_cmp) 1.8 else 0)
 
     for (v_idx in seq_along(page_vars)) {
       v <- page_vars[v_idx]
@@ -928,11 +929,11 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
         if (!is.na(ss_val)) ylim <- range(c(ylim, ss_val))
       }
 
-      ylab <- if (type == "deviation") "Deviation from SS" else "Level"
-      graphics::plot(periods, y, type = "n",
-                     xlab = "Period", ylab = ylab,
-                     main = v, ylim = ylim)
-      .dsge_grid()
+      if (type == "deviation") ylim <- range(c(0, ylim))
+      .dsge_frame(range(periods), ylim, main = v,
+                  sub = if (type == "deviation") "deviation from steady state"
+                        else "level",
+                  xlab = if (v_idx > n_page - nc) "Period" else "")
       if (type == "deviation") {
         .dsge_zero_line()
       } else {
@@ -952,16 +953,13 @@ plot.dsge_perfect_foresight <- function(x, vars = NULL, type = "deviation",
 
       # Primary path
       graphics::lines(periods, y,
-                      col = .DSGE_INK_PRIMARY, lwd = 1.8)
-
-      # Legend on the first panel only
-      if (has_cmp && v_idx == 1L) {
-        .dsge_legend("topright",
-                     legend = c(primary_label, compare_label),
-                     col    = c(.DSGE_INK_PRIMARY, .DSGE_INK_NEUTRAL),
-                     lty    = c("solid", "dashed"),
-                     lwd    = c(1.8, 1.2))
-      }
+                      col = .DSGE_INK_PRIMARY, lwd = 2)
+    }
+    if (has_cmp) {
+      .dsge_top_legend(c(primary_label, compare_label),
+                       col = c(.DSGE_INK_PRIMARY, .DSGE_INK_NEUTRAL),
+                       lty = c("solid", "dashed"), lwd = c(2, 1.4),
+                       seg.len = 1.6)
     }
   }
 

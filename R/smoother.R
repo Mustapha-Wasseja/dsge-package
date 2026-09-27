@@ -597,64 +597,67 @@ plot_smoothed_states <- function(x, which = NULL, ...) {
   if (is.character(which)) which <- match(which, snames)
 
   n_plot <- length(which)
-  ncols <- ceiling(sqrt(n_plot))
+  ncols <- min(3L, ceiling(sqrt(n_plot)))
   nrows <- ceiling(n_plot / ncols)
 
   old_par <- graphics::par(no.readonly = TRUE)
   on.exit(graphics::par(old_par))
-  .dsge_par_grid(nrows, ncols)
+  .dsge_par_grid(nrows, ncols, oma_top = if (has_var) 1.8 else 0)
 
   t_idx <- seq_len(nrow(states))
+  line_args <- utils::modifyList(
+    list(col = .DSGE_INK_PRIMARY, lwd = 1.6), list(...))
 
-  for (i in which) {
+  for (k in seq_along(which)) {
+    i <- which[k]
     st <- states[, i]
     if (has_var) {
       sd_i  <- sqrt(pmax(vars[, i], 0))
       lower <- st - 2 * sd_i
       upper <- st + 2 * sd_i
-      ylim  <- range(c(lower, upper), na.rm = TRUE)
+      ylim  <- range(c(0, lower, upper), na.rm = TRUE)
     } else {
-      ylim  <- range(st, na.rm = TRUE)
+      ylim  <- range(c(0, st), na.rm = TRUE)
     }
-    graphics::plot(t_idx, st, type = "n",
-                   main = snames[i], xlab = "Period",
-                   ylab = "Deviation from SS",
-                   ylim = ylim, ...)
-    .dsge_grid()
+    .dsge_frame(range(t_idx), ylim, main = snames[i],
+                sub = "deviation from steady state",
+                xlab = if (k > n_plot - ncols) "Period" else "")
+    if (has_var) .dsge_band(t_idx, lower, upper)
     .dsge_zero_line()
-    if (has_var) {
-      .dsge_band(t_idx, lower, upper)
-    }
-    graphics::lines(t_idx, st, col = .DSGE_INK_PRIMARY, lwd = 1.6)
+    do.call(graphics::lines, c(list(t_idx, st), line_args))
+  }
+  if (has_var) {
+    .dsge_top_legend(c("Smoothed state", "\u00b1 2 s.d."),
+                     col = c(line_args$col, .DSGE_FILL_CI),
+                     lwd = c(2, 8), seg.len = 1.4)
   }
 }
 
 #' @noRd
 plot_smoothed_fit <- function(x, ...) {
   n_obs <- ncol(x$smoothed_obs)
-  ncols <- ceiling(sqrt(n_obs))
+  ncols <- min(3L, ceiling(sqrt(n_obs)))
   nrows <- ceiling(n_obs / ncols)
 
   obs_data <- x$residuals + x$smoothed_obs  # = original data
 
   old_par <- graphics::par(no.readonly = TRUE)
   on.exit(graphics::par(old_par))
-  .dsge_par_grid(nrows, ncols)
+  .dsge_par_grid(nrows, ncols, oma_top = 1.8)
 
+  t_idx <- seq_len(nrow(obs_data))
   for (j in seq_len(n_obs)) {
-    ylim <- range(c(obs_data[, j], x$smoothed_obs[, j]))
-    graphics::plot(obs_data[, j], type = "n",
-                   main = x$obs_names[j], xlab = "Period", ylab = "",
-                   ylim = ylim, ...)
-    .dsge_grid()
-    graphics::lines(obs_data[, j], col = .DSGE_INK_NEUTRAL, lwd = 1.0)
-    graphics::lines(x$smoothed_obs[, j],
-                    col = .DSGE_INK_PRIMARY, lwd = 1.8)
-    .dsge_legend("topright",
-                 legend = c("Data", "Smoothed"),
-                 col    = c(.DSGE_INK_NEUTRAL, .DSGE_INK_PRIMARY),
-                 lwd    = c(1.0, 1.8))
+    ylim <- range(c(obs_data[, j], x$smoothed_obs[, j]), na.rm = TRUE)
+    .dsge_frame(range(t_idx), ylim, main = x$obs_names[j],
+                xlab = if (j > n_obs - ncols) "Period" else "")
+    graphics::lines(t_idx, obs_data[, j], col = .DSGE_INK_NEUTRAL,
+                    lwd = 1.1)
+    graphics::lines(t_idx, x$smoothed_obs[, j],
+                    col = .DSGE_INK_PRIMARY, lwd = 1.8, ...)
   }
+  .dsge_top_legend(c("Data", "Smoothed"),
+                   col = c(.DSGE_INK_NEUTRAL, .DSGE_INK_PRIMARY),
+                   lwd = c(1.1, 2), seg.len = 1.4)
 }
 
 
@@ -702,66 +705,54 @@ plot.dsge_decomposition <- function(x, which = NULL, ...) {
 
   # Colour palette: structural shocks + initial conditions (last slot)
   n_shocks <- n_comp - 1
-  cols <- c(.dsge_palette(n_shocks), .DSGE_INK_NEUTRAL)
+  cols <- c(.dsge_palette(n_shocks), .DSGE_MUTED)
+  labels <- c(shock_names[seq_len(n_shocks)], "Initial conditions")
 
   old_par <- graphics::par(no.readonly = TRUE)
   on.exit(graphics::par(old_par))
-  .dsge_par_grid(n_plot, 1L)
-  graphics::par(mar = c(3.2, 3.6, 2.0, 8.5), xpd = TRUE)
+  .dsge_par_grid(n_plot, 1L, oma_top = 1.8)
 
+  half <- if (n_T > 80) 0.45 else 0.38
   for (j_idx in seq_along(which)) {
     j <- which[j_idx]
-    contrib <- decomp[, j, ]  # T x n_comp
+    contrib <- matrix(decomp[, j, ], n_T, n_comp)
 
-    # Separate positive and negative
     pos <- pmax(contrib, 0)
     neg <- pmin(contrib, 0)
+    ylim <- range(c(rowSums(neg), rowSums(pos), 0))
 
-    ylim <- c(min(colSums(t(neg))), max(colSums(t(pos)))) * 1.1
+    .dsge_frame(c(0.5, n_T + 0.5), ylim, main = obs_names[j],
+                sub = "contributions of each shock",
+                xlab = if (j_idx == n_plot) "Period" else "")
 
-    graphics::plot(NULL, xlim = c(1, n_T), ylim = ylim,
-                   main = obs_names[j], xlab = "Period",
-                   ylab = "Contribution")
-    .dsge_grid()
+    # stacked bars, positive and negative parts separately; one rect()
+    # call per component
+    t_idx <- seq_len(n_T)
+    cum_pos <- cum_neg <- rep(0, n_T)
+    for (k in seq_len(n_comp)) {
+      up <- pos[, k] > 1e-10
+      if (any(up)) {
+        graphics::rect(t_idx[up] - half, cum_pos[up], t_idx[up] + half,
+                       cum_pos[up] + pos[up, k], col = cols[k],
+                       border = NA)
+      }
+      dn <- neg[, k] < -1e-10
+      if (any(dn)) {
+        graphics::rect(t_idx[dn] - half, cum_neg[dn] + neg[dn, k],
+                       t_idx[dn] + half, cum_neg[dn], col = cols[k],
+                       border = NA)
+      }
+      cum_pos <- cum_pos + pos[, k]
+      cum_neg <- cum_neg + neg[, k]
+    }
     .dsge_zero_line()
-
-    # Stacked positive bars
-    cum_pos <- rep(0, n_T)
-    for (k in seq_len(n_comp)) {
-      top <- cum_pos + pos[, k]
-      for (t in seq_len(n_T)) {
-        if (pos[t, k] > 1e-10) {
-          graphics::rect(t - 0.4, cum_pos[t], t + 0.4, top[t],
-                         col = cols[k],
-                         border = "white", lwd = 0.3)
-        }
-      }
-      cum_pos <- top
-    }
-
-    # Stacked negative bars
-    cum_neg <- rep(0, n_T)
-    for (k in seq_len(n_comp)) {
-      bottom <- cum_neg + neg[, k]
-      for (t in seq_len(n_T)) {
-        if (neg[t, k] < -1e-10) {
-          graphics::rect(t - 0.4, bottom[t], t + 0.4, cum_neg[t],
-                         col = cols[k],
-                         border = "white", lwd = 0.3)
-        }
-      }
-      cum_neg <- bottom
-    }
-
-    # Overlay actual reconstructed series
-    recon <- rowSums(contrib)
-    graphics::lines(recon, col = .DSGE_INK_REF, lwd = 1.6)
-
-    # Legend (outside plot, in right margin)
-    if (j_idx == 1) {
-      .dsge_legend("topright", inset = c(-0.24, 0),
-                   legend = shock_names, fill = cols,
-                   title = "Shocks")
-    }
+    graphics::lines(t_idx, rowSums(contrib), col = .DSGE_INK_TITLE,
+                    lwd = 1.4)
   }
+  .dsge_top_legend(c(labels, "Series"),
+                   col = c(cols, .DSGE_INK_TITLE),
+                   pch = c(rep(15, n_comp), NA), pt.cex = 1.5,
+                   lty = c(rep(NA, n_comp), 1),
+                   lwd = c(rep(NA, n_comp), 1.4), seg.len = 1.2)
+  invisible(x)
 }

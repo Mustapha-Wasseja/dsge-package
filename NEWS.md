@@ -44,6 +44,28 @@
     second-order solutions, and the doubling algorithm for the generalized
     Sylvester equations, run in C++.
 
+## Plots
+
+* All plots have a cleaner, more modern look: no boxes around panels,
+  horizontal axis labels, a light solid grid, left-aligned panel titles,
+  and legends placed above the panels instead of over the data.
+* New colour palette. The previous one did not survive red-green colour
+  blindness (its red and green series were indistinguishable for
+  deuteranopes); the new order is checked for all common forms of colour
+  vision deficiency and keeps each series' colour fixed across plots.
+* `plot()` for IRFs: responses that are identically zero are shown as
+  blank panels and are dropped when zero for every shock (`drop_zero`);
+  shocks are labelled once per row; a single shock's responses wrap into
+  a grid (`ncol`); auxiliary lag states from `read_dynare()` models (e.g.
+  `k_lag1`) and shocks that enter as variables are hidden unless named in
+  `response`; extra arguments (e.g. `col`, `lwd`) style the lines.
+* Forecast fan charts grow out of the last observation, shade the
+  forecast period and label the 50/80/95% bands; forecast, smoothed-state,
+  historical decomposition, variance decomposition, OccBin and
+  perfect-foresight plots share the same layout and legends, and axis
+  labels avoid scientific notation for ordinary magnitudes.
+* `plot()` for `irf_2nd_order()` results uses the IRF layout above.
+
 ## Bug fixes
 
 * `irf_2nd_order()` returned wrong responses: the shock was scaled by its

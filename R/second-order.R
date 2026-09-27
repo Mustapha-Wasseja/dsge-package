@@ -348,22 +348,12 @@ plot.dsge_irf_2nd <- function(x, variables = NULL, ...) {
       stop("Unknown variable(s): ", paste(bad, collapse = ", "),
            call. = FALSE)
     }
-    vars <- variables
   }
-  old_par <- graphics::par(no.readonly = TRUE)
-  on.exit(graphics::par(old_par))
-  .dsge_par_grid(1L, length(vars))
-  shock <- x$shock[1L]
-  for (v in vars) {
-    sub <- x[x$variable == v, , drop = FALSE]
-    sub <- sub[order(sub$period), ]
-    graphics::plot(sub$period, sub$response, type = "n",
-                   xlab = "Period", ylab = "Response",
-                   main = sprintf("%s -> %s", shock, v), ...)
-    .dsge_grid()
-    .dsge_zero_line()
-    graphics::lines(sub$period, sub$response,
-                    col = .DSGE_INK_PRIMARY, lwd = 1.8)
-  }
+  ir <- structure(list(
+    data = data.frame(period = x$period, impulse = x$shock,
+                      response = x$variable, value = x$response,
+                      stringsAsFactors = FALSE)),
+    class = "dsge_irf")
+  plot.dsge_irf(ir, response = variables, ci = FALSE, ...)
   invisible(x)
 }
