@@ -65,6 +65,12 @@
   perfect-foresight plots share the same layout and legends, and axis
   labels avoid scientific notation for ordinary magnitudes.
 * `plot()` for `irf_2nd_order()` results uses the IRF layout above.
+* Optional ggplot2 versions: when ggplot2 is installed, `ggplot2::autoplot()`
+  draws IRFs (also second order), forecasts, variance and historical
+  decompositions, smoothed states, perfect-foresight and OccBin paths, and
+  posterior traces and densities as ggplot objects. `theme_dsge()`,
+  `scale_colour_dsge()` and `scale_fill_dsge()` apply the package style to
+  any ggplot. ggplot2 is suggested, not required.
 
 ## Bug fixes
 

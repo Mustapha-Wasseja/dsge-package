@@ -36,6 +36,7 @@ LinkingTo:
     RcppArmadillo
 Suggests:
     coda,
+    ggplot2 (>= 3.4.0),
     Matrix,
     R.matlab,
     readxl,

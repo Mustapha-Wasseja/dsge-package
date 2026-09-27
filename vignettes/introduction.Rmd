@@ -483,6 +483,11 @@ For examples:
 - **Nonlinear dynamics**: `perfect_foresight_nonlinear()`, `extended_path()`
   and `simulate_occbin()`.
 - **Reporting**: `model_latex()` writes the model equations in LaTeX.
+- **ggplot2 graphics**: with ggplot2 installed, `ggplot2::autoplot()` draws
+  IRFs, forecasts, decompositions, smoothed states, perfect-foresight and
+  OccBin paths and posterior traces or densities as ggplot objects, which
+  you can extend with further layers; `theme_dsge()`, `scale_colour_dsge()`
+  and `scale_fill_dsge()` give other plots the same style.
 
 ## Notes
 
