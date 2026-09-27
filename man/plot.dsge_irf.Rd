@@ -4,7 +4,15 @@
 \alias{plot.dsge_irf}
 \title{Plot Impulse-Response Functions}
 \usage{
-\method{plot}{dsge_irf}(x, impulse = NULL, response = NULL, ci = TRUE, ...)
+\method{plot}{dsge_irf}(
+  x,
+  impulse = NULL,
+  response = NULL,
+  ci = TRUE,
+  drop_zero = TRUE,
+  ncol = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{A \code{dsge_irf} object from \code{\link[=irf]{irf()}}.}
@@ -13,12 +21,24 @@
 If \code{NULL}, plots all.}
 
 \item{response}{Character vector of response variables to plot.
-If \code{NULL}, plots all.}
+If \code{NULL}, plots all except auxiliary lag states added when importing
+Dynare models (e.g. \code{k_lag1}) and shocks that enter as variables.}
 
 \item{ci}{Logical. If \code{TRUE} (default), plot confidence bands
 if available.}
 
-\item{...}{Additional arguments passed to base plotting functions.}
+\item{drop_zero}{Logical. If \code{TRUE} (default), responses that are
+identically zero (e.g. an exogenous state that a shock does not
+enter) are left blank instead of drawn as flat lines, and responses
+that are zero for every shock are dropped.}
+
+\item{ncol}{Number of panel columns. By default, with several shocks
+and at most five responses the panels form a grid with one row per
+shock; otherwise each shock gets its own figure with the responses
+wrapped into a grid.}
+
+\item{...}{Additional arguments passed to \code{\link[graphics:lines]{graphics::lines()}} for the
+response lines (e.g. \code{lwd}, \code{col}).}
 }
 \value{
 No return value, called for the side effect of producing

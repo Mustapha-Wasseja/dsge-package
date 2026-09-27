@@ -40,3 +40,30 @@ test_that("IRFs stay accurate when the states are linearly dependent", {
   ratio <- ir$value[-1] / ir$value[-nrow(ir)]
   expect_equal(ratio[-1], rep(lambda, length(ratio) - 1L), tolerance = 1e-5)
 })
+
+test_that("IRF plots hide zero, auxiliary and shock-spike responses", {
+  rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+  d <- irf(solve_dsge(rbc), periods = 10)$data
+  shown <- dsge:::.dsge_irf_default_responses(d)
+  expect_setequal(shown, c("y", "c", "k", "i", "a"))
+
+  pdf(NULL)
+  on.exit(grDevices::dev.off())
+  m <- dsge_model(
+    obs(p ~ beta * lead(p) + kappa * x),
+    unobs(x ~ lead(x) - (r - lead(p) - g)),
+    obs(r ~ psi * p + u),
+    state(u ~ rhou * u),
+    state(g ~ rhog * g),
+    fixed = list(beta = 0.99),
+    start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+  )
+  sol <- solve_dsge(m, params = c(kappa = 0.1, psi = 1.5, rhou = 0.7,
+                                  rhog = 0.9))
+  ir <- irf(sol, periods = 8)
+  expect_silent(plot(ir))
+  expect_silent(plot(ir, drop_zero = FALSE))
+  expect_silent(plot(ir, ncol = 2))
+  expect_silent(plot(ir, impulse = "u", col = "black", lwd = 1))
+  expect_error(plot(ir, response = "nope"), "Nothing to plot")
+})

@@ -287,23 +287,32 @@ plot.dsge_variance_decomposition <- function(x, ...) {
 #' @noRd
 .plot_vd_unconditional <- function(x) {
   pct <- x$contribution_pct       # n_o x n_e
+  pct <- pct[rev(seq_len(nrow(pct))), , drop = FALSE]  # first on top
   n_e <- ncol(pct)
   cols <- .dsge_palette(n_e)
 
   old_par <- graphics::par(no.readonly = TRUE)
   on.exit(graphics::par(old_par))
   .dsge_par_single()
-  graphics::par(mar = c(4.0, 5.0, 2.4, 8.5), xpd = TRUE)
+  lab_w <- max(graphics::strwidth(rownames(pct), units = "inches")) * 5 + 1
+  graphics::par(mar = c(3.6, max(4, lab_w), 3.6, 1.0))
 
-  # barplot expects rows = stack categories, columns = bars
-  graphics::barplot(t(pct), beside = FALSE, horiz = TRUE,
-                    col = cols, border = "white",
-                    xlim = c(0, 100), las = 1,
-                    main = "Unconditional Variance Decomposition",
-                    xlab = "Share (%)")
-  .dsge_grid(horizontal = FALSE, vertical = TRUE)
-  .dsge_legend("topright", inset = c(-0.22, 0),
-               legend = x$shock_names, fill = cols, title = "Shocks")
+  mids <- graphics::barplot(t(pct), horiz = TRUE, col = cols,
+                            border = "white", xlim = c(0, 100),
+                            axes = FALSE, space = 0.35, las = 1,
+                            xlab = "Share of variance (%)")
+  graphics::abline(v = seq(0, 100, 25), col = .DSGE_INK_GRID, lwd = 0.8)
+  graphics::barplot(t(pct), horiz = TRUE, col = cols, border = "white",
+                    axes = FALSE, space = 0.35, add = TRUE,
+                    names.arg = rep("", nrow(pct)))
+  graphics::axis(1, at = seq(0, 100, 25), lwd = 0, lwd.ticks = 0.8)
+  graphics::title(main = "Unconditional variance decomposition",
+                  adj = 0, line = 2.4)
+  graphics::legend("top", inset = c(0, -0.09), xpd = NA, horiz = TRUE,
+                   legend = x$shock_names, col = cols, pch = 15,
+                   pt.cex = 1.5, bty = "n", cex = 0.8,
+                   text.col = .DSGE_INK_AXIS)
+  invisible(mids)
 }
 
 
@@ -314,26 +323,24 @@ plot.dsge_variance_decomposition <- function(x, ...) {
   n_e <- length(x$shock_names)
   cols <- .dsge_palette(n_e)
 
-  nc <- min(2L, n_o)
+  nc <- min(3L, n_o)
   nr <- ceiling(n_o / nc)
 
   old_par <- graphics::par(no.readonly = TRUE)
   on.exit(graphics::par(old_par))
-  .dsge_par_grid(nr, nc)
-  graphics::par(mar = c(3.6, 3.8, 2.0, 7.5), xpd = TRUE)
+  .dsge_par_grid(nr, nc, oma_top = 1.8)
 
   for (i in seq_len(n_o)) {
     mat_i <- x$contribution_pct[, i, , drop = FALSE]
     dim(mat_i) <- dim(mat_i)[c(1, 3)]   # n_h x n_e
-    graphics::barplot(t(mat_i), beside = FALSE,
-                      col = cols, border = "white",
-                      names.arg = x$horizon,
-                      las = 1, ylim = c(0, 100),
-                      main = x$obs_names[i],
-                      xlab = "Horizon", ylab = "Share (%)")
-    if (i == 1L) {
-      .dsge_legend("topright", inset = c(-0.32, 0),
-                   legend = x$shock_names, fill = cols, title = "Shocks")
-    }
+    graphics::barplot(t(mat_i), col = cols, border = "white",
+                      names.arg = x$horizon, ylim = c(0, 100),
+                      axes = FALSE, space = 0.25,
+                      xlab = if (i > n_o - nc) "Horizon (periods)" else "")
+    graphics::axis(2, at = seq(0, 100, 25),
+                   labels = paste0(seq(0, 100, 25), "%"),
+                   lwd = 0, lwd.ticks = 0)
+    .dsge_title(x$obs_names[i])
   }
+  .dsge_top_legend(x$shock_names, col = cols, pch = 15, pt.cex = 1.5)
 }
