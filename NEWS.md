@@ -1,4 +1,4 @@
-# dsge (development version)
+# dsge 1.2.1
 
 ## Performance
 
