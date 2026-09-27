@@ -3,6 +3,7 @@
 \name{steady_state}
 \alias{steady_state}
 \alias{steady_state.dsgenl_model}
+\alias{steady_state.dsge_dynare}
 \title{Solve for the Deterministic Steady State}
 \usage{
 steady_state(model, ...)
@@ -15,6 +16,8 @@ steady_state(model, ...)
   tol = 1e-10,
   ...
 )
+
+\method{steady_state}{dsge_dynare}(model, params = NULL, ...)
 }
 \arguments{
 \item{model}{A \code{dsgenl_model} object.}
@@ -44,4 +47,10 @@ An object of class \code{"dsgenl_steady_state"} with:
 \description{
 Finds the steady-state values of all model variables by solving the
 system of nonlinear equations with all leads set equal to current values.
+}
+\examples{
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+steady_state(rbc)
+steady_state(rbc, params = c(beta = 0.98))$values
+
 }

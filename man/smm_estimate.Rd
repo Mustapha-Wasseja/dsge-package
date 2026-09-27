@@ -76,3 +76,19 @@ large-sample point estimates but SMM is noisier; prefer
 \code{\link{gmm_estimate}} unless you have a specific reason to
 simulate.
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z), state(z ~ rho * z), start = list(rho = 0.5)
+)
+set.seed(1)
+z <- numeric(300); for (i in 2:300) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+fit <- smm_estimate(m, data = data.frame(y = z),
+                    moments = c("sd:y", "ac1:y"),
+                    params_start = c(rho = 0.5),
+                    shock_sd_start = c(z = 1),
+                    sim_periods = 500)
+fit
+}
+
+}

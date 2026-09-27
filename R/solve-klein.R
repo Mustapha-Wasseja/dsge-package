@@ -62,6 +62,25 @@
 #'   or 3 for third-order perturbation. Orders 2 and 3 require a
 #'   \code{dsgenl_model}.
 #'
+#' @examples
+#' nk <- dsge_model(
+#'   obs(p   ~ beta * lead(p) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(p) - g)),
+#'   obs(r   ~ psi * p + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+#' )
+#' sol <- solve_dsge(nk, params = c(kappa = 0.1, psi = 1.5, rhou = 0.7,
+#'                                  rhog = 0.9))
+#' sol
+#'
+#' # a nonlinear model from a Dynare file, solved to second order
+#' rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+#' sol2 <- solve_dsge(rbc, order = 2)
+#' sol2$g_ss
+#'
 #' @export
 solve_dsge <- function(model, params = NULL, shock_sd = NULL, tol = 1e-6,
                        order = 1L) {

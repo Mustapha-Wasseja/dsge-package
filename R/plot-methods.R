@@ -17,6 +17,15 @@
 #' @return No return value, called for the side effect of producing
 #'   a multi-panel impulse-response plot on the active graphics device.
 #'
+#' @examples
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' sol <- solve_dsge(m, params = c(rho = 0.8))
+#' plot(irf(sol, periods = 12))
+#'
 #' @export
 plot.dsge_irf <- function(x, impulse = NULL, response = NULL,
                           ci = TRUE, ...) {
@@ -74,6 +83,20 @@ plot.dsge_irf <- function(x, impulse = NULL, response = NULL,
 #'
 #' @return No return value, called for the side effect of producing
 #'   forecast path plots on the active graphics device.
+#'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' fit <- estimate(m, data = data.frame(y = z))
+#' plot(forecast(fit, horizon = 8))
+#' }
 #'
 #' @export
 plot.dsge_forecast <- function(x, ...) {

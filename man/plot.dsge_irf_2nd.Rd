@@ -21,3 +21,9 @@ plots on the active graphics device.
 \description{
 Plots the responses from \code{\link[=irf_2nd_order]{irf_2nd_order()}}, one panel per variable.
 }
+\examples{
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+sol2 <- solve_dsge(rbc, order = 2)
+plot(irf_2nd_order(sol2, shock = "e", size = 0.05), variables = c("c", "k"))
+
+}

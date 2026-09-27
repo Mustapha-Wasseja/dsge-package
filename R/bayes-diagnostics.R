@@ -21,6 +21,24 @@
 #' @return An object of class \code{"dsge_ppc"} with posterior predictive
 #'   distributions and p-values for each statistic.
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' dat <- data.frame(y = z)
+#' bfit <- bayes_dsge(m, data = dat,
+#'                    priors = list(rho = prior("beta", shape1 = 2, shape2 = 2)),
+#'                    chains = 2, iter = 1000, seed = 1)
+#' ppc <- posterior_predictive(bfit, n_draws = 50)
+#' plot(ppc)
+#' }
+#'
 #' @export
 posterior_predictive <- function(object, ...) {
   UseMethod("posterior_predictive")
@@ -242,6 +260,23 @@ plot.dsge_ppc <- function(x, ...) {
 #' instability. Results should be interpreted with caution and compared
 #' across models only when both use similar MCMC settings.
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' dat <- data.frame(y = z)
+#' bfit <- bayes_dsge(m, data = dat,
+#'                    priors = list(rho = prior("beta", shape1 = 2, shape2 = 2)),
+#'                    chains = 2, iter = 1000, seed = 1)
+#' marginal_likelihood(bfit)
+#' }
+#'
 #' @export
 marginal_likelihood <- function(object, ...) {
   UseMethod("marginal_likelihood")
@@ -409,7 +444,7 @@ print.dsge_marginal_likelihood <- function(x, digits = 2, ...) {
 #'   0 to 2           \tab Not worth more than a bare mention \cr
 #'   2 to 6           \tab Positive \cr
 #'   6 to 10          \tab Strong \cr
-#'   > 10             \tab Very strong \cr
+#'   more than 10     \tab Very strong \cr
 #' }
 #'
 #' When \code{prior_odds} is supplied the posterior model probability of
@@ -603,6 +638,23 @@ print.dsge_bayes_factor <- function(x, digits = 3, ...) {
 #' @return An object of class \code{"dsge_geweke"} with z-scores and
 #'   p-values for each parameter and chain.
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' dat <- data.frame(y = z)
+#' bfit <- bayes_dsge(m, data = dat,
+#'                    priors = list(rho = prior("beta", shape1 = 2, shape2 = 2)),
+#'                    chains = 2, iter = 1000, seed = 1)
+#' geweke_test(bfit)
+#' }
+#'
 #' @export
 geweke_test <- function(object, ...) {
   UseMethod("geweke_test")
@@ -700,6 +752,23 @@ print.dsge_geweke <- function(x, digits = 4, ...) {
 #' @param ... Additional arguments passed to \code{geweke_test()}.
 #'
 #' @return An object of class \code{"dsge_mcmc_summary"}.
+#'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' dat <- data.frame(y = z)
+#' bfit <- bayes_dsge(m, data = dat,
+#'                    priors = list(rho = prior("beta", shape1 = 2, shape2 = 2)),
+#'                    chains = 2, iter = 1000, seed = 1)
+#' mcmc_diagnostics(bfit)
+#' }
 #'
 #' @export
 mcmc_diagnostics <- function(object, ...) {

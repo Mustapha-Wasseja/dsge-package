@@ -26,6 +26,20 @@
 #'       use in plotting forecasts alongside history.}
 #'   }
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.5)
+#' )
+#' set.seed(42)
+#' z <- numeric(150)
+#' for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+#' fit <- estimate(m, data = data.frame(y = z))
+#' forecast(fit, horizon = 8)
+#' }
+#'
 #' @export
 forecast.dsge_fit <- function(object, horizon = 12L, ...) {
   sol <- object$solution

@@ -69,6 +69,36 @@
 #'   \item{horizon, var_names}{Inputs.}
 #' }
 #'
+#' @examples
+#' \donttest{
+#' nk <- dsge_model(
+#'   obs(p   ~ beta * lead(p) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(p) - g)),
+#'   obs(r   ~ psi * p + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+#' )
+#' sol <- solve_dsge(nk,
+#'   params   = c(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9),
+#'   shock_sd = c(e.u = 1.0, e.g = 0.5))
+#' set.seed(1)
+#' TT <- 120
+#' xst <- matrix(0, TT, nrow(sol$H))
+#' y   <- matrix(0, TT, nrow(sol$G))
+#' for (t in 2:TT) {
+#'   e <- rnorm(ncol(sol$M)) * c(1, 0.5)
+#'   xst[t, ] <- as.numeric(sol$H %*% xst[t - 1, ] + sol$M %*% e)
+#'   y[t, ]   <- as.numeric(sol$G %*% xst[t, ])
+#' }
+#' colnames(y) <- rownames(sol$G)
+#' dat <- as.data.frame(y[, nk$variables$observed, drop = FALSE])
+#' fit <- bayes_dsge_var(sol, data = dat, p = 2, lambda = 1.0,
+#'                       n_draws = 100, seed = 1)
+#' fc <- forecast(fit, horizon = 8)
+#' }
+#'
 #' @export
 forecast.dsge_dsgevar <- function(object, horizon = 12L,
                                   n_paths = 1L, ...) {
@@ -333,6 +363,37 @@ forecast.dsge_dsgevar_mh <- function(object, horizon = 12L,
 #'
 #' @return An object inheriting from \code{dsge_forecast} with posterior
 #'   summary statistics of the conditional forecast.
+#'
+#' @examples
+#' \donttest{
+#' nk <- dsge_model(
+#'   obs(p   ~ beta * lead(p) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(p) - g)),
+#'   obs(r   ~ psi * p + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99),
+#'   start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+#' )
+#' sol <- solve_dsge(nk,
+#'   params   = c(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9),
+#'   shock_sd = c(e.u = 1.0, e.g = 0.5))
+#' set.seed(1)
+#' TT <- 120
+#' xst <- matrix(0, TT, nrow(sol$H))
+#' y   <- matrix(0, TT, nrow(sol$G))
+#' for (t in 2:TT) {
+#'   e <- rnorm(ncol(sol$M)) * c(1, 0.5)
+#'   xst[t, ] <- as.numeric(sol$H %*% xst[t - 1, ] + sol$M %*% e)
+#'   y[t, ]   <- as.numeric(sol$G %*% xst[t, ])
+#' }
+#' colnames(y) <- rownames(sol$G)
+#' dat <- as.data.frame(y[, nk$variables$observed, drop = FALSE])
+#' fit <- bayes_dsge_var(sol, data = dat, p = 2, lambda = 1.0,
+#'                       n_draws = 100, seed = 1)
+#' cf <- conditional_forecast(fit, horizon = 8,
+#'                            condition = list(r = c(0, 0, 0, 0, NA, NA, NA, NA)))
+#' }
 #'
 #' @export
 conditional_forecast.dsge_dsgevar <- function(object, horizon = 12L,

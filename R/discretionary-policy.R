@@ -72,6 +72,19 @@
 #'   \code{\link{osr}} (restricted simple rules),
 #'   \code{\link{welfare_loss}}.
 #'
+#' @examples
+#' \donttest{
+#' m <- dsge_model(
+#'   obs(y ~ z),
+#'   state(z ~ rho * z),
+#'   start = list(rho = 0.8)
+#' )
+#' disc <- discretionary_policy(m, params = c(rho = 0.8),
+#'   shock_sd = c(z = 0.1), instruments = "y",
+#'   welfare_weights = list(Q_yy = matrix(1, 1, 1, dimnames = list("y", "y"))))
+#' print(disc)
+#' }
+#'
 #' @export
 discretionary_policy <- function(model, params = NULL, shock_sd = NULL,
                                  instruments, welfare_weights,

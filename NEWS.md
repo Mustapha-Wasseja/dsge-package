@@ -57,6 +57,13 @@
   now solves them, and `irf()` and `variance_decomposition()` explain that
   such models have no shocks to trace and point to
   `simulate_perfect_foresight()`.
+* `steady_state()` now accepts models imported with `read_dynare()`, using
+  the file's calibration unless `params` overrides it.
+* The evidence table in `?bayes_factor` lost its last row ("more than 10:
+  very strong") to a documentation formatting error.
+* Examples added to the help pages of 40 exported functions that had none,
+  among them `solve_dsge()`, `steady_state()`, `linearize()`, the model
+  specification helpers, the `dsge_fit` methods and the plot methods.
 * The `plot()` method for `simulate_perfect_foresight()` results now uses the
   package's plot style (axis labels, grid, the new steady state as a dotted
   line) and reports unknown variable names.

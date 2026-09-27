@@ -18,3 +18,18 @@ A matrix of fitted values with columns named by observed variables.
 Returns filtered fitted values of observed variables (using all
 information up to and including time t).
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+set.seed(42)
+z <- numeric(150)
+for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+fit <- estimate(m, data = data.frame(y = z))
+head(fitted(fit))
+}
+
+}

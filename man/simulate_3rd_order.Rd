@@ -27,3 +27,10 @@ Andreasen, Fernandez-Villaverde, and Rubio-Ramirez (2018).
 Pruning tracks first-, second-, and third-order state components
 separately and combines them, avoiding explosive simulation paths.
 }
+\examples{
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+sol3 <- solve_dsge(rbc, order = 3)
+sim <- simulate_3rd_order(sol3, n = 100, seed = 1)
+str(sim, max.level = 1)
+
+}

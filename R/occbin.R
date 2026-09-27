@@ -444,6 +444,22 @@ summary.dsge_occbin <- function(object, ...) {
 #'   constraints bind.
 #'
 #' @importFrom graphics mtext
+#' @examples
+#' nk <- dsge_model(
+#'   obs(pi ~ beta * lead(pi) + kappa * x),
+#'   unobs(x ~ lead(x) - (r - lead(pi) - g)),
+#'   obs(r ~ psi * pi + u),
+#'   state(u ~ rhou * u),
+#'   state(g ~ rhog * g),
+#'   fixed = list(beta = 0.99, kappa = 0.1, psi = 1.5),
+#'   start = list(rhou = 0.5, rhog = 0.5)
+#' )
+#' sol <- solve_dsge(nk, params = list(rhou = 0.5, rhog = 0.5),
+#'                   shock_sd = c(u = 0.5, g = 0.5))
+#' obc <- simulate_occbin(sol, constraints = list("r >= 0"),
+#'                        shocks = list(g = -0.05), horizon = 40)
+#' plot(obc, vars = c("r", "x"))
+#'
 #' @export
 plot.dsge_occbin <- function(x, vars = NULL, compare = TRUE, shade = TRUE,
                               max_panels = 9L, ...) {

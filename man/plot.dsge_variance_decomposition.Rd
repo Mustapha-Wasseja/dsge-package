@@ -20,3 +20,18 @@ For unconditional decompositions, draws a horizontal stacked bar chart
 showing shock shares (in percent) for each observable.  For FEVD, draws
 one stacked-bar panel per observable with horizons on the x-axis.
 }
+\examples{
+nk <- dsge_model(
+  obs(p   ~ beta * lead(p) + kappa * x),
+  unobs(x ~ lead(x) - (r - lead(p) - g)),
+  obs(r   ~ psi * p + u),
+  state(u ~ rhou * u),
+  state(g ~ rhog * g),
+  fixed = list(beta = 0.99),
+  start = list(kappa = 0.1, psi = 1.5, rhou = 0.7, rhog = 0.9)
+)
+sol <- solve_dsge(nk, params = c(kappa = 0.1, psi = 1.5, rhou = 0.7,
+                                 rhog = 0.9))
+plot(variance_decomposition(sol, horizon = c(1, 4, 8)))
+
+}

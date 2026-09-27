@@ -19,3 +19,10 @@ and convergence diagnostics to the console.
 \description{
 Summary of Perfect Foresight Transition
 }
+\examples{
+rbc <- read_dynare(system.file("examples", "rbc.mod", package = "dsge"))
+pf <- perfect_foresight(solve_dsge(rbc), shocks = list(e = 0.01),
+                        horizon = 40)
+summary(pf)
+
+}

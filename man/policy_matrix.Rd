@@ -23,3 +23,13 @@ Returns the policy matrix G from a fitted or solved DSGE model.
 The policy matrix maps state variables to control variables:
 \eqn{y_t = G x_t}.
 }
+\examples{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+sol <- solve_dsge(m, params = c(rho = 0.8))
+policy_matrix(sol)
+
+}

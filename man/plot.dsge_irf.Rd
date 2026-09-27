@@ -28,3 +28,13 @@ a multi-panel impulse-response plot on the active graphics device.
 Creates a multi-panel plot of impulse-response functions with
 optional confidence bands.
 }
+\examples{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+sol <- solve_dsge(m, params = c(rho = 0.8))
+plot(irf(sol, periods = 12))
+
+}

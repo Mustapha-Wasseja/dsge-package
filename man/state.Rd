@@ -23,6 +23,11 @@ Wraps a formula to mark it as an equation for a state variable
 in a linear DSGE model. State equations describe the evolution of
 state variables one period ahead.
 }
+\examples{
+state(z ~ rho * z)               # exogenous state with a shock
+state(k ~ delta * k + x, shock = FALSE)  # endogenous state
+
+}
 \seealso{
 \code{\link[=obs]{obs()}}, \code{\link[=unobs]{unobs()}}, \code{\link[=dsge_model]{dsge_model()}}
 }

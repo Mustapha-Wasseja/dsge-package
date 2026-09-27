@@ -22,3 +22,22 @@ summary statistics (variance, autocorrelation) with the observed data.
 This helps assess whether the estimated model can reproduce key features
 of the data.
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.5)
+)
+set.seed(42)
+z <- numeric(150)
+for (i in 2:150) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+dat <- data.frame(y = z)
+bfit <- bayes_dsge(m, data = dat,
+                   priors = list(rho = prior("beta", shape1 = 2, shape2 = 2)),
+                   chains = 2, iter = 1000, seed = 1)
+ppc <- posterior_predictive(bfit, n_draws = 50)
+plot(ppc)
+}
+
+}

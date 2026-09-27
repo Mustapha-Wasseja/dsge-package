@@ -53,6 +53,20 @@ observation density \eqn{p(y_t | x_t^{(i)})}.
 sample size drops below \code{n_particles / 2}.
 }
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z), state(z ~ rho * z), start = list(rho = 0.8)
+)
+sol <- solve_dsge(m, params = c(rho = 0.8), shock_sd = c(z = 0.2))
+set.seed(1)
+z <- numeric(100); for (i in 2:100) z[i] <- 0.8 * z[i - 1] + rnorm(1)
+pf <- particle_filter(matrix(z - mean(z)), H = sol$H, M = sol$M,
+                      Z = sol$D \%*\% sol$G, n_particles = 500, seed = 1)
+pf$loglik
+}
+
+}
 \seealso{
 \code{\link{particle_filter_loglik}}, \code{\link{bayes_particle}}
 }

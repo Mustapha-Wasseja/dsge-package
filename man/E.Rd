@@ -22,6 +22,16 @@ model-consistent expectation of variable \code{x}.
 \code{E(x)} is equivalent to \code{lead(x, 1)}. The parser translates \code{E(x)} to
 \code{lead(x, 1)} internally.
 }
+\examples{
+# E(p) is the same as lead(p)
+m <- dsge_model(
+  obs(p ~ beta * E(p) + kappa * x),
+  state(x ~ rho * x),
+  fixed = list(beta = 0.99),
+  start = list(kappa = 0.1, rho = 0.5)
+)
+
+}
 \seealso{
 \code{\link[=lead]{lead()}}, \code{\link[=dsge_model]{dsge_model()}}
 }

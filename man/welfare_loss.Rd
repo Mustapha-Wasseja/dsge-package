@@ -24,3 +24,17 @@ A list with:
 Computes the unconditional expected welfare loss for an arbitrary
 (possibly non-optimal) linear feedback policy \eqn{u_t = F x_t}.
 }
+\examples{
+\donttest{
+m <- dsge_model(
+  obs(y ~ z),
+  state(z ~ rho * z),
+  start = list(rho = 0.8)
+)
+ram <- ramsey_policy(m, params = c(rho = 0.8), shock_sd = c(z = 0.1),
+  instruments = "y",
+  welfare_weights = list(Q_yy = matrix(1, 1, 1, dimnames = list("y", "y"))))
+welfare_loss(ram)$welfare_loss
+}
+
+}
