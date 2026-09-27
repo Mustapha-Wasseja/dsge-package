@@ -116,6 +116,12 @@
   `bind inot <= ilb`). The result now also stores the bound's numeric value
   (`bound_value`), which the plot and summary use.
 
+## Other changes
+
+* `coda` is no longer listed in Suggests: nothing in the package uses it
+  (MCMC diagnostics such as effective sample size, R-hat and the Geweke
+  test are computed by the package itself).
+
 # dsge 1.2.0
 
 This release collects the additions made between May and September 2026;
