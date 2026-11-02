@@ -14,6 +14,58 @@ NULL
 # Helper: extract the state-space matrices from a fit or bayes object
 # --------------------------------------------------------------------------
 
+#' Solve the model of a Bayesian fit at the posterior mean
+#'
+#' Re-solves `x$model` at the posterior mean of the estimated parameters,
+#' including the shock standard deviations (the `sd_e.*` columns of the
+#' posterior). Values in `params` replace the posterior mean of the
+#' parameters they name; the others keep their posterior mean.
+#' @param x A `dsge_bayes` object.
+#' @param params `NULL`, or a named numeric vector (or list) of values for
+#'   some or all of the estimated parameters (`x$param_names`).
+#' @return A stable `dsge_solution`.
+#' @noRd
+solve_at_posterior_mean <- function(x, params = NULL) {
+  theta <- apply(x$posterior, 2, function(col) mean(as.numeric(col)))
+  at <- "the posterior mean of the parameters"
+
+  if (!is.null(params)) {
+    params <- unlist(params)
+    nms <- names(params)
+    if (!is.numeric(params) || length(params) == 0L || is.null(nms) ||
+        any(!nzchar(nms)) || anyDuplicated(nms)) {
+      stop("`params` must be a named numeric vector with one value per ",
+           "parameter.", call. = FALSE)
+    }
+    unknown <- setdiff(nms, names(theta))
+    if (length(unknown) > 0L) {
+      stop("`params` can only set estimated parameters (",
+           paste(names(theta), collapse = ", "), "); not: ",
+           paste(unknown, collapse = ", "), ".", call. = FALSE)
+    }
+    if (any(!is.finite(params))) {
+      stop("`params` values must be finite.", call. = FALSE)
+    }
+    theta[nms] <- params
+    at <- "the supplied parameter values"
+  }
+
+  shock_names <- x$shock_names
+  shock_sd <- theta[paste0("sd_e.", shock_names)]
+  names(shock_sd) <- shock_names
+  if (any(shock_sd <= 0)) {
+    stop("Shock standard deviations (sd_e.*) must be positive.", call. = FALSE)
+  }
+
+  # Same parameter vector as the likelihood evaluation in bayes_dsge()
+  all_params <- c(theta[x$free_parameters], unlist(x$model$fixed))
+  sol <- solve_dsge(x$model, params = all_params, shock_sd = shock_sd)
+  if (!isTRUE(sol$stable)) {
+    stop("The model has no stable solution at ", at, ".", call. = FALSE)
+  }
+  sol
+}
+
 #' Extract state-space matrices from an estimated model
 #' @param x A `dsge_fit` or `dsge_bayes` object.
 #' @param params Optional named numeric parameter vector (for Bayesian, uses
@@ -25,32 +77,8 @@ extract_ss_matrices <- function(x, params = NULL) {
     sol <- x$solution
     y <- x$data
   } else if (inherits(x, "dsge_bayes")) {
-    # Resolve at posterior mean (or user-supplied params)
-    if (is.null(params)) {
-      post <- x$posterior
-      params_vec <- apply(post, 2, function(col) mean(as.numeric(col)))
-    } else {
-      params_vec <- params
-    }
-
-    # Split into structural + shock_sd
-    model <- x$model
-    free_params <- x$free_parameters
-    shock_names <- x$shock_names
-    sd_names <- paste0("sd_e.", shock_names)
-
-    structural_params <- params_vec[free_params]
-    shock_sd <- params_vec[sd_names]
-    names(shock_sd) <- shock_names
-
-    # Merge with fixed params
-    if (inherits(model, "dsgenl_model")) {
-      all_params <- c(unlist(model$fixed), structural_params)
-    } else {
-      all_params <- c(unlist(model$fixed), structural_params)
-    }
-
-    sol <- solve_dsge(model, params = all_params, shock_sd = shock_sd)
+    # Re-solve at the posterior mean (or user-supplied params)
+    sol <- solve_at_posterior_mean(x, params = params)
     y <- x$data
   } else {
     stop("`x` must be a dsge_fit or dsge_bayes object.", call. = FALSE)
