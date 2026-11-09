@@ -136,6 +136,10 @@ available from GitHub:
 remotes::install_github("Mustapha-Wasseja/dsge-package")
 ```
 
+Installing from GitHub compiles C++ code, so you need Rtools on Windows or
+the Xcode Command Line Tools (and gfortran) on macOS; CRAN installs do not
+need them.
+
 ## Quick Start: Maximum Likelihood
 
 ```r
