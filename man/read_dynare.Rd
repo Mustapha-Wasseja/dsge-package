@@ -33,8 +33,8 @@ declared variance, as in Dynare).}
 \code{estimated_params}, ready for \code{\link[=bayes_dsge]{bayes_dsge()}}, or \code{NULL}.}
 \item{bounds}{Named list of \code{c(lower, upper)} bounds from
 \code{estimated_params} and \code{estimated_params_bounds} (\code{NA} for an open
-side), with the same names as \code{priors}, or \code{NULL}. \code{\link[=bayes_dsge]{bayes_dsge()}}
-restricts the posterior to them, as Dynare does.}
+side), with the same names as \code{priors}, or \code{NULL}. \code{\link[=estimate]{estimate()}}
+and \code{\link[=bayes_dsge]{bayes_dsge()}} keep the parameters within them, as Dynare does.}
 \item{estimated_params}{Data frame describing each \code{estimated_params}
 entry and how it was translated.}
 \item{observed}{Observed variables (Dynare names).}
@@ -145,8 +145,9 @@ state vector (the observed and predetermined variables); other
 \code{lik_init} values are reported in \code{notes}. Set \code{x$model$kalman_init}
 to \code{NULL} to use the stationary initialisation instead. The bounds in
 \code{estimated_params} (overridden by an \code{estimated_params_bounds} block)
-are stored in \code{bounds}, and \code{\link[=bayes_dsge]{bayes_dsge()}} keeps every posterior draw
-within them, as Dynare does.
+are stored in \code{bounds}: \code{\link[=estimate]{estimate()}} maximises the likelihood within
+them and \code{\link[=bayes_dsge]{bayes_dsge()}} keeps every posterior draw within them, as
+Dynare does.
 
 \strong{Optimal policy.} With \code{planner_objective} and \code{ramsey_model} or
 \code{ramsey_policy}, the planner's first-order conditions are derived

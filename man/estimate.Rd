@@ -14,7 +14,8 @@ estimate(
   shock_start = NULL,
   demean = TRUE,
   hessian = TRUE,
-  presample = 0L
+  presample = 0L,
+  bounds = NULL
 )
 }
 \arguments{
@@ -32,7 +33,8 @@ any starting values specified in the model.}
 values specified in the model.}
 
 \item{method}{Optimization method passed to \code{\link[stats:optim]{stats::optim()}}.
-Default is \code{"BFGS"}.}
+Default is \code{"BFGS"}, or \code{"L-BFGS-B"} when \code{bounds} apply (the only
+method that can be combined with them).}
 
 \item{control}{Control list passed to \code{\link[stats:optim]{stats::optim()}}.}
 
@@ -50,9 +52,20 @@ at the solution for standard errors.}
 initialise the Kalman filter and excluded from the likelihood (as
 Dynare's \code{presample} option). Default 0; for a model imported with
 \code{\link[=read_dynare]{read_dynare()}}, the value in the file's \code{estimation} command.}
+
+\item{bounds}{Optional named list of \code{c(lower, upper)} vectors, one per
+bounded parameter (shock standard deviations as \code{"sd_e.shock_name"};
+\code{NA} for an open side). The likelihood is maximised within the bounds
+with \code{method = "L-BFGS-B"}, as Dynare keeps its mode search within
+the bounds in \code{estimated_params}. Starting values outside the bounds
+are moved inside with a warning, and bounds on parameters fixed in
+this estimation are ignored. For a model imported with
+\code{\link[=read_dynare]{read_dynare()}}, defaults to the file's bounds; pass \code{bounds = NULL}
+to estimate without them. Default \code{NULL} (no bounds) otherwise.}
 }
 \value{
-An object of class \code{"dsge_fit"}.
+An object of class \code{"dsge_fit"}. Its element \code{at_bound} names
+the parameters whose estimate lies at one of the \code{bounds}.
 }
 \description{
 Estimates the parameters of a linear DSGE model by maximizing the
@@ -62,6 +75,13 @@ log-likelihood computed via the Kalman filter.
 The estimator optimizes over the structural parameters and the log
 standard deviations of the shocks. Shock standard deviations are
 parameterized in log-space to ensure positivity.
+
+A parameter whose estimate lies at a bound gets no standard error (the
+usual asymptotic theory does not apply there) and a warning names it.
+The other standard errors come from the Hessian of the remaining
+parameters, and in \code{vcov} and the delta-method standard errors of
+postestimation functions such as \code{\link[=irf]{irf()}} the parameters at a bound are
+treated as known, like fixed parameters.
 
 If the optimizer encounters parameter values for which the model is
 not saddle-path stable, the log-likelihood is set to \code{-Inf}.

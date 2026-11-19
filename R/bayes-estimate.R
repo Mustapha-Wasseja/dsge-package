@@ -395,68 +395,6 @@ validate_priors <- function(priors, free_params, shock_names) {
   prior_list
 }
 
-#' Attach bounds to the priors of the estimated parameters
-#'
-#' Each bounded prior gets a `bounds` element c(lower, upper) (NA for an
-#' open side); the parameter transformations and dprior() then restrict
-#' the parameter to the intersection of the prior's support and the bounds.
-#' @noRd
-apply_bounds <- function(prior_list, bounds) {
-  if (is.null(bounds) || length(bounds) == 0L) return(prior_list)
-  if (!is.list(bounds) || is.null(names(bounds)) ||
-      any(!nzchar(names(bounds)))) {
-    stop("`bounds` must be a named list of c(lower, upper) vectors.",
-         call. = FALSE)
-  }
-  unknown <- setdiff(names(bounds), names(prior_list))
-  if (length(unknown) > 0L) {
-    stop("Bounds specified for unknown parameter(s): ",
-         paste(unknown, collapse = ", "), call. = FALSE)
-  }
-  for (nm in names(bounds)) {
-    b <- bounds[[nm]]
-    if ((!is.numeric(b) && !all(is.na(b))) || length(b) != 2L) {
-      stop("Bounds for '", nm, "' must be a vector c(lower, upper).",
-           call. = FALSE)
-    }
-    b <- as.numeric(b)
-    b[!is.finite(b)] <- NA_real_
-    if (all(is.na(b))) next
-    if (!anyNA(b) && b[1] >= b[2]) {
-      stop("The lower bound of '", nm, "' is not below its upper bound.",
-           call. = FALSE)
-    }
-    p <- prior_list[[nm]]
-    p$bounds <- b
-    iv <- param_interval(p)
-    if (!(iv[1] < iv[2])) {
-      stop("The bounds of '", nm, "' do not overlap the support of its ",
-           p$distribution, " prior.", call. = FALSE)
-    }
-    prior_list[[nm]] <- p
-  }
-  prior_list
-}
-
-#' Move starting values strictly inside the bounds of bounded parameters
-#' @noRd
-start_inside_bounds <- function(x, prior_list) {
-  for (j in seq_along(x)) {
-    p <- prior_list[[j]]
-    if (is.null(p$bounds)) next
-    iv <- param_interval(p)
-    if (x[j] > iv[1] && x[j] < iv[2]) next
-    margin <- if (all(is.finite(iv))) 0.01 * (iv[2] - iv[1])
-              else 0.01 * max(1, abs(iv[is.finite(iv)]))
-    new <- if (x[j] <= iv[1]) iv[1] + margin else iv[2] - margin
-    warning(sprintf(
-      "Starting value %s = %g lies outside its bounds [%g, %g]; using %g.",
-      names(prior_list)[j], x[j], iv[1], iv[2], new), call. = FALSE)
-    x[j] <- new
-  }
-  x
-}
-
 #' Compute MCMC diagnostics (ESS, R-hat, MCSE)
 #' @noRd
 compute_mcmc_diagnostics <- function(posterior) {

@@ -18,7 +18,8 @@
 #' @param fixed Named list of fixed parameter values. Overrides any fixed
 #'   values specified in the model.
 #' @param method Optimization method passed to [stats::optim()].
-#'   Default is `"BFGS"`.
+#'   Default is `"BFGS"`, or `"L-BFGS-B"` when `bounds` apply (the only
+#'   method that can be combined with them).
 #' @param control Control list passed to [stats::optim()].
 #' @param shock_start Named numeric vector of starting values for shock
 #'   standard deviations. If `NULL`, defaults are set based on data
@@ -31,13 +32,30 @@
 #'   [read_dynare()], the value in the file's `estimation` command.
 #' @param hessian Logical. If `TRUE` (default), the Hessian is computed
 #'   at the solution for standard errors.
+#' @param bounds Optional named list of `c(lower, upper)` vectors, one per
+#'   bounded parameter (shock standard deviations as `"sd_e.shock_name"`;
+#'   `NA` for an open side). The likelihood is maximised within the bounds
+#'   with `method = "L-BFGS-B"`, as Dynare keeps its mode search within
+#'   the bounds in `estimated_params`. Starting values outside the bounds
+#'   are moved inside with a warning, and bounds on parameters fixed in
+#'   this estimation are ignored. For a model imported with
+#'   [read_dynare()], defaults to the file's bounds; pass `bounds = NULL`
+#'   to estimate without them. Default `NULL` (no bounds) otherwise.
 #'
-#' @return An object of class `"dsge_fit"`.
+#' @return An object of class `"dsge_fit"`. Its element `at_bound` names
+#'   the parameters whose estimate lies at one of the `bounds`.
 #'
 #' @details
 #' The estimator optimizes over the structural parameters and the log
 #' standard deviations of the shocks. Shock standard deviations are
 #' parameterized in log-space to ensure positivity.
+#'
+#' A parameter whose estimate lies at a bound gets no standard error (the
+#' usual asymptotic theory does not apply there) and a warning names it.
+#' The other standard errors come from the Hessian of the remaining
+#' parameters, and in `vcov` and the delta-method standard errors of
+#' postestimation functions such as [irf()] the parameters at a bound are
+#' treated as known, like fixed parameters.
 #'
 #' If the optimizer encounters parameter values for which the model is
 #' not saddle-path stable, the log-likelihood is set to `-Inf`.
@@ -66,20 +84,24 @@
 estimate <- function(model, data, start = NULL, fixed = NULL,
                      method = "BFGS", control = list(),
                      shock_start = NULL,
-                     demean = TRUE, hessian = TRUE, presample = 0L) {
+                     demean = TRUE, hessian = TRUE, presample = 0L,
+                     bounds = NULL) {
   if (inherits(model, "dsge_dynare")) {
     if (missing(presample)) presample <- dyn_estimation_option(model, "presample")
+    if (missing(bounds)) bounds <- model$bounds
     data <- dyn_estimation_sample(model, dyn_map_data(model, data))
   }
   model <- unwrap_dynare(model)
   presample <- as.integer(presample)
+  method_given <- !missing(method)
 
   # Dispatch to nonlinear estimator if needed
   if (inherits(model, "dsgenl_model")) {
     return(estimate_dsgenl(model, data = data, start = start, fixed = fixed,
                            method = method, control = control,
                            shock_start = shock_start,
-                           hessian = hessian, presample = presample))
+                           hessian = hessian, presample = presample,
+                           bounds = bounds, method_given = method_given))
   }
 
   if (!inherits(model, "dsge_model")) {
@@ -131,14 +153,16 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
   # Set default control
   if (is.null(control$maxit)) control$maxit <- 500L
 
+  # Bounds on (free params, log shock SDs); with bounds, L-BFGS-B
+  tb <- theta_bounds(bounds, free_params, model$variables$exo_state,
+                     model$parameters)
+  method <- estimate_method(method, tb, method_given)
+  if (!is.null(tb)) start_vals <- theta_start_inside(start_vals, tb)
+
   # Optimize
-  opt <- optim(
-    par = start_vals,
-    fn = neg_loglik,
-    method = method,
-    control = control,
-    hessian = hessian
-  )
+  opt <- run_estimate_optim(start_vals, neg_loglik, method, control,
+                            hessian, tb)
+  at_bound <- theta_at_bound(opt$par, tb)
 
   # Unpack solution
   params_final <- unpack_theta(opt$par, free_params, all_fixed, n_shocks,
@@ -158,48 +182,16 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
   se <- rep(NA_real_, length(coefs))
   vcov_mat <- NULL
 
+  est_names <- c(free_params, shock_names)
   if (hessian && !is.null(opt$hessian)) {
-    # The Hessian is of the neg log-lik w.r.t. (free params, log_shock_sd)
-    # We need to transform the log_shock_sd part using delta method
-    hess <- opt$hessian
-
-    # Check if Hessian is positive definite (neg log-lik should be convex at max)
-    hess_ok <- tryCatch({
-      vcov_theta <- solve(hess)
-      all(is.finite(vcov_theta))
-    }, error = function(e) FALSE)
-
-    if (hess_ok) {
-      vcov_theta <- solve(hess)
-
-      # Delta method for shock SD transformation: d(exp(log_sd))/d(log_sd) = sd
-      n_free <- length(free_params)
-      n_total <- n_free + n_shocks
-      jacobian_diag <- rep(1, n_total)
-      # The last n_shocks elements are log(sd), transform to sd
-      for (j in seq_len(n_shocks)) {
-        jacobian_diag[n_free + j] <- params_final$shock_sd[j]
-      }
-      J <- diag(jacobian_diag)
-
-      vcov_coefs <- J %*% vcov_theta %*% t(J)
-
-      # Map to full coefficient vector (including fixed params)
-      n_all_params <- length(model$parameters)
-      n_coefs <- n_all_params + n_shocks
-      vcov_mat <- matrix(0, n_coefs, n_coefs)
-
-      # Index mapping: which positions in coefs correspond to free params?
-      free_idx <- match(free_params, names(coefs))
-      shock_idx <- (n_all_params + 1):n_coefs
-
-      est_idx <- c(free_idx, shock_idx)
-      vcov_mat[est_idx, est_idx] <- vcov_coefs
-
-      rownames(vcov_mat) <- colnames(vcov_mat) <- names(coefs)
+    vcov_mat <- coef_vcov(opt$hessian, at_bound, params_final$shock_sd,
+                          free_params, names(coefs), length(model$parameters))
+    if (!is.null(vcov_mat)) {
       se <- sqrt(pmax(diag(vcov_mat), 0))
+      se[match(est_names[at_bound], names(coefs))] <- NA_real_
     }
   }
+  warn_at_bound(est_names[at_bound])
 
   structure(
     list(
@@ -217,6 +209,8 @@ estimate <- function(model, data, start = NULL, fixed = NULL,
       kalman = kf,
       free_parameters = free_params,
       optim_result = opt,
+      at_bound = est_names[at_bound],
+      theta_at_bound = at_bound,
       call = match.call()
     ),
     class = "dsge_fit"
@@ -339,7 +333,8 @@ unpack_theta <- function(theta, free_params, fixed, n_shocks, shock_names) {
 estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
                             method = "BFGS", control = list(),
                             shock_start = NULL, hessian = TRUE,
-                            presample = 0L) {
+                            presample = 0L, bounds = NULL,
+                            method_given = TRUE) {
   all_fixed <- model$fixed
   if (!is.null(fixed)) all_fixed[names(fixed)] <- fixed
 
@@ -381,8 +376,15 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
 
   if (is.null(control$maxit)) control$maxit <- 500L
 
-  opt <- optim(par = start_vals, fn = neg_loglik,
-               method = method, control = control, hessian = hessian)
+  # Bounds on (free params, log shock SDs); with bounds, L-BFGS-B
+  tb <- theta_bounds(bounds, free_params, model$variables$exo_state,
+                     model$parameters)
+  method <- estimate_method(method, tb, method_given)
+  if (!is.null(tb)) start_vals <- theta_start_inside(start_vals, tb)
+
+  opt <- run_estimate_optim(start_vals, neg_loglik, method, control,
+                            hessian, tb)
+  at_bound <- theta_at_bound(opt$par, tb)
 
   # Unpack solution
   params_final <- unpack_theta(opt$par, free_params, all_fixed, n_shocks,
@@ -405,37 +407,16 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
   se <- rep(NA_real_, length(coefs))
   vcov_mat <- NULL
 
+  est_names <- c(free_params, shock_names)
   if (hessian && !is.null(opt$hessian)) {
-    hess <- opt$hessian
-    hess_ok <- tryCatch({
-      vcov_theta <- solve(hess)
-      all(is.finite(vcov_theta))
-    }, error = function(e) FALSE)
-
-    if (hess_ok) {
-      vcov_theta <- solve(hess)
-      n_free <- length(free_params)
-      n_total <- n_free + n_shocks
-      jacobian_diag <- rep(1, n_total)
-      for (j in seq_len(n_shocks)) {
-        jacobian_diag[n_free + j] <- params_final$shock_sd[j]
-      }
-      J <- diag(jacobian_diag)
-      vcov_coefs <- J %*% vcov_theta %*% t(J)
-
-      n_all_params <- length(model$parameters)
-      n_coefs <- n_all_params + n_shocks
-      vcov_mat <- matrix(0, n_coefs, n_coefs)
-
-      free_idx <- match(free_params, names(coefs))
-      shock_idx <- (n_all_params + 1):n_coefs
-      est_idx <- c(free_idx, shock_idx)
-      vcov_mat[est_idx, est_idx] <- vcov_coefs
-
-      rownames(vcov_mat) <- colnames(vcov_mat) <- names(coefs)
+    vcov_mat <- coef_vcov(opt$hessian, at_bound, params_final$shock_sd,
+                          free_params, names(coefs), length(model$parameters))
+    if (!is.null(vcov_mat)) {
       se <- sqrt(pmax(diag(vcov_mat), 0))
+      se[match(est_names[at_bound], names(coefs))] <- NA_real_
     }
   }
+  warn_at_bound(est_names[at_bound])
 
   structure(
     list(
@@ -453,6 +434,8 @@ estimate_dsgenl <- function(model, data, start = NULL, fixed = NULL,
       kalman = kf,
       free_parameters = free_params,
       optim_result = opt,
+      at_bound = est_names[at_bound],
+      theta_at_bound = at_bound,
       call = match.call()
     ),
     class = "dsge_fit"

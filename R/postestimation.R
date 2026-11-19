@@ -166,12 +166,9 @@ compute_matrix_se <- function(fit, which_matrix, level) {
     as.numeric(m)
   }
 
-  # Evaluate Jacobian at the optimized theta
-  theta_opt <- fit$optim_result$par
-  jac <- tryCatch(
-    numDeriv::jacobian(mat_fn, theta_opt),
-    error = function(e) NULL
-  )
+  # Delta method at the optimized theta; parameters estimated at a bound
+  # are held fixed
+  vcov_vec <- delta_method_vcov(fit, mat_fn)
 
   nr <- nrow(mat)
   nc <- ncol(mat)
@@ -179,15 +176,11 @@ compute_matrix_se <- function(fit, which_matrix, level) {
   lower_mat <- matrix(NA_real_, nr, nc)
   upper_mat <- matrix(NA_real_, nr, nc)
 
-  if (!is.null(jac) && !is.null(fit$optim_result$hessian)) {
-    vcov_theta <- tryCatch(solve(fit$optim_result$hessian), error = function(e) NULL)
-    if (!is.null(vcov_theta)) {
-      vcov_vec <- jac %*% vcov_theta %*% t(jac)
-      se_vec <- sqrt(pmax(diag(vcov_vec), 0))
-      se_mat <- matrix(se_vec, nr, nc)
-      lower_mat <- mat - z_crit * se_mat
-      upper_mat <- mat + z_crit * se_mat
-    }
+  if (!is.null(vcov_vec)) {
+    se_vec <- sqrt(pmax(diag(vcov_vec), 0))
+    se_mat <- matrix(se_vec, nr, nc)
+    lower_mat <- mat - z_crit * se_mat
+    upper_mat <- mat + z_crit * se_mat
   }
 
   dimnames(se_mat) <- dimnames(mat)

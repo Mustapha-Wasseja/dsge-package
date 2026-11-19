@@ -48,8 +48,8 @@
 #'     `estimated_params`, ready for [bayes_dsge()], or `NULL`.}
 #'   \item{bounds}{Named list of `c(lower, upper)` bounds from
 #'     `estimated_params` and `estimated_params_bounds` (`NA` for an open
-#'     side), with the same names as `priors`, or `NULL`. [bayes_dsge()]
-#'     restricts the posterior to them, as Dynare does.}
+#'     side), with the same names as `priors`, or `NULL`. [estimate()]
+#'     and [bayes_dsge()] keep the parameters within them, as Dynare does.}
 #'   \item{estimated_params}{Data frame describing each `estimated_params`
 #'     entry and how it was translated.}
 #'   \item{observed}{Observed variables (Dynare names).}
@@ -153,8 +153,9 @@
 #' `lik_init` values are reported in `notes`. Set `x$model$kalman_init`
 #' to `NULL` to use the stationary initialisation instead. The bounds in
 #' `estimated_params` (overridden by an `estimated_params_bounds` block)
-#' are stored in `bounds`, and [bayes_dsge()] keeps every posterior draw
-#' within them, as Dynare does.
+#' are stored in `bounds`: [estimate()] maximises the likelihood within
+#' them and [bayes_dsge()] keeps every posterior draw within them, as
+#' Dynare does.
 #'
 #' **Optimal policy.** With `planner_objective` and `ramsey_model` or
 #' `ramsey_policy`, the planner's first-order conditions are derived
@@ -281,7 +282,8 @@ print.dsge_dynare <- function(x, ...) {
     cat("  Priors:      ", length(x$priors), "\n")
   }
   if (!is.null(x$bounds)) {
-    cat("  Bounds:      ", length(x$bounds), "(used by bayes_dsge())\n")
+    cat("  Bounds:      ", length(x$bounds),
+        "(used by estimate() and bayes_dsge())\n")
   }
   if (length(x$commands) > 0L) {
     cat("  Commands:    ",

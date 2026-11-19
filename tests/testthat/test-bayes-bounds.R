@@ -87,7 +87,7 @@ test_that("bayes_dsge() keeps every draw within the bounds", {
     fit <- bayes_dsge(m, data = dat, priors = pri, chains = 1L, iter = 800L,
                       warmup = 300L, seed = 1, shock_start = c(z = 0.5),
                       bounds = list(rho = c(0.85, 0.95), sd_e.z = c(NA, 0.9))),
-    "rho = 0.5 lies outside its bounds")
+    "rho = 0.5 is not strictly inside its bounds")
   rho <- fit$posterior[, "rho", 1]
   sdz <- fit$posterior[, "sd_e.z", 1]
   expect_true(all(rho > 0.85 & rho < 0.95))
