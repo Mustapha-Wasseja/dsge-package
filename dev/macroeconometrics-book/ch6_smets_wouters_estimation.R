@@ -16,8 +16,12 @@
 #      Dynare's mode_compute = 1).
 #   2. Random-walk Metropolis-Hastings with bayes_dsge(), started at the
 #      mode. Dynare's file asks for 2 blocks x 2000 draws and itself warns
-#      that this is too short; the default here is 4 chains x 30000 draws
-#      (10000 warm-up), settable via SW_CHAINS, SW_ITER, SW_WARMUP, SW_CORES.
+#      that this is too short. Random-walk MH mixes slowly on this
+#      posterior (autocorrelation times of several hundred draws), so the
+#      default here is 4 chains x 125000 iterations (25000 warm-up, every
+#      5th draw kept), settable via SW_CHAINS, SW_ITER, SW_WARMUP, SW_THIN,
+#      SW_CORES. Per-chain means and log-posterior levels are printed so
+#      that a chain stuck in a minor mode is visible.
 #   3. Table 1A and Table 1B (as table1.m) and Figure 6.2 (prior vs
 #      posterior) from the posterior draws.
 #
@@ -34,8 +38,9 @@ local({
 
 env_int <- function(name, default) as.integer(Sys.getenv(name, default))
 n_chains <- env_int("SW_CHAINS", 4L)
-n_iter   <- env_int("SW_ITER", 30000L)
-n_warmup <- env_int("SW_WARMUP", 10000L)
+n_iter   <- env_int("SW_ITER", 125000L)
+n_warmup <- env_int("SW_WARMUP", 25000L)
+n_thin   <- env_int("SW_THIN", 5L)
 n_cores  <- env_int("SW_CORES", min(n_chains, parallel::detectCores()))
 seed     <- env_int("SW_SEED", 2007L)
 out      <- out_dir()
@@ -164,12 +169,12 @@ if (file.exists(fit_file) && !nzchar(Sys.getenv("SW_REFIT_MCMC"))) {
   m_start <- m
   m_start$model$start[key[!is_sd]] <- as.list(mode[!is_sd])
   sd_start <- split_theta(mode)$sd
-  cat(sprintf("\nbayes_dsge(): %d chains x %d iterations (%d warm-up) on %d cores...\n",
-              n_chains, n_iter, n_warmup, n_cores))
+  cat(sprintf("\nbayes_dsge(): %d chains x %d iterations (%d warm-up, thin %d) on %d cores...\n",
+              n_chains, n_iter, n_warmup, n_thin, n_cores))
   t0 <- Sys.time()
   fit <- bayes_dsge(m_start, data = dat, chains = n_chains, iter = n_iter,
-                    warmup = n_warmup, n_cores = n_cores, seed = seed,
-                    shock_start = sd_start)
+                    warmup = n_warmup, thin = n_thin, n_cores = n_cores,
+                    seed = seed, shock_start = sd_start)
   cat(sprintf("  done in %.1f minutes\n",
               as.numeric(difftime(Sys.time(), t0, units = "mins"))))
   saveRDS(fit, fit_file)
@@ -186,6 +191,21 @@ dg <- dg[match(key, dg$parameter), ]
 cat(sprintf("R-hat: max %.3f (%s); ESS: min %.0f (%s), median %.0f\n",
             max(dg$rhat), dg$parameter[which.max(dg$rhat)],
             min(dg$ess), dg$parameter[which.min(dg$ess)], stats::median(dg$ess)))
+
+# Per chain: log-likelihood and log posterior kernel at 150 evenly spaced
+# draws, and means of the parameters that separate the minor mode
+n_keep <- dim(fit$posterior)[1]
+pick <- round(seq(1, n_keep, length.out = min(150L, n_keep)))
+per_chain <- t(sapply(seq_len(fit$n_chains), function(ch) {
+  th <- fit$posterior[pick, key, ch, drop = FALSE][, , 1]
+  ll <- apply(th, 1, log_lik)
+  lp <- ll + apply(th, 1, log_prior)
+  c(mean_loglik = mean(ll), mean_logpost = mean(lp), max_logpost = max(lp),
+    colMeans(fit$posterior[, c("rho_a", "rho_b", "gamma_bar", "sigma_c"), ch]))
+}))
+rownames(per_chain) <- paste0("chain", seq_len(fit$n_chains))
+cat(sprintf("\nPer chain (log posterior at the mode: %.2f):\n", mode_ll + mode_lp))
+print(round(per_chain, 3))
 
 outside <- colMeans(sweep(draws, 2, lower, "<") | sweep(draws, 2, upper, ">"))
 if (any(outside > 0)) {
@@ -316,8 +336,8 @@ titles <- c(xi_p = "xi[p]~~'(price stickiness)'", xi_w = "xi[w]~~'(wage stickine
             r_pi = "r[pi]~~'(Taylor: inflation)'", rho = "rho~~'(interest smoothing)'")
 
 png(file.path(out, "figure_6_2_prior_posterior_dsge.png"),
-    width = 1500, height = 900, res = 150)
-par(mfrow = c(2, 3), mar = c(3, 1.5, 2.5, 1), oma = c(3.5, 0, 2.5, 0),
+    width = 1500, height = 950, res = 150)
+par(mfrow = c(2, 3), mar = c(3, 1.5, 2.5, 1), oma = c(5, 0, 2.5, 0),
     las = 1, bty = "l", col.axis = "#52514e")
 for (k in names(fig_map)) {
   nm <- fig_map[[k]]
@@ -327,7 +347,8 @@ for (k in names(fig_map)) {
   rng <- range(stats::quantile(x_draw, c(0.0005, 0.9995)),
                if (pr$distribution == "beta") stats::qbeta(c(0.005, 0.995),
                  pr$params$shape1, pr$params$shape2)
-               else pr$params$mean + c(-2.6, 2.6) * pr$params$sd)
+               else pr$params$mean + c(-2.6, 2.6) * pr$params$sd,
+               dens$x)
   xs <- seq(rng[1], rng[2], length.out = 400)
   pd <- prior_density(pr, xs)
   ylim <- c(0, max(dens$y, pd) * 1.08)
@@ -342,20 +363,23 @@ for (k in names(fig_map)) {
   lines(dens$x, dens$y, col = col_post, lwd = 2)
   abline(v = mode[[nm]], col = col_post, lty = 2, lwd = 1.3)
   abline(v = sw_pub[[k]]$mode, col = col_pub, lty = 1, lwd = 1.6)
-  if (k == "xi_p")
-    legend("topleft", c("Prior", "Posterior (dsge MCMC)", "Posterior mode (dsge)",
-                        "SW (2007) published mode"),
-           col = c(col_prior, col_post, col_post, col_pub),
-           lwd = c(6, 6, 1.3, 1.6), lty = c(1, 1, 2, 1),
-           seg.len = 1.4, bty = "n", cex = 0.78,
-           text.col = "#0b0b0b")
 }
 mtext("Figure 6.2  Bayesian estimation of Smets-Wouters (2007): prior vs posterior (dsge)",
       outer = TRUE, cex = 1.05, font = 2)
-mtext(sprintf("Book's sw_table1.mod and usmodel_data.mat estimated with dsge::bayes_dsge(): %d chains x %d draws after warm-up, %s-%s.",
-              fit$n_chains, dim(fit$posterior)[1], quarter(first + m$estimation$presample),
-              quarter(nrow(dat))),
-      side = 1, outer = TRUE, cex = 0.75, font = 3, line = 1.6, col = "#52514e")
+# Legend and source line in the outer bottom margin
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+plot.new()
+plot.window(c(0, 1), c(0, 1), xaxs = "i", yaxs = "i")
+legend("bottom", inset = c(0, 0.045), horiz = TRUE, bty = "n", cex = 0.85,
+       c("Prior", "Posterior (dsge MCMC)", "Posterior mode (dsge)",
+         "SW (2007) published mode"),
+       col = c(col_prior, col_post, col_post, col_pub),
+       lwd = c(7, 7, 1.3, 1.6), lty = c(1, 1, 2, 1), seg.len = 1.6,
+       text.col = "#0b0b0b")
+text(0.5, 0.018, cex = 0.72, font = 3, col = "#52514e",
+     sprintf("Book's sw_table1.mod and usmodel_data.mat estimated with dsge::bayes_dsge(): %d chains, %d kept draws each, %s-%s.",
+             fit$n_chains, dim(fit$posterior)[1],
+             quarter(first + m$estimation$presample), quarter(nrow(dat))))
 invisible(dev.off())
 cat("\nSaved", file.path(out, "figure_6_2_prior_posterior_dsge.png"), "\n")
 
