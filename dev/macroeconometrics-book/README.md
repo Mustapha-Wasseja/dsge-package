@@ -286,6 +286,57 @@ Results are in `output/dynare_vs_dsge.csv` and
 `output/dynare_kernel_comparison.csv`; Dynare's own logs are
 `output/dynare_sw_table1.log` and `output/dynare_octave_run.log`.
 
+### Smets-Wouters (2007): published vs Dynare vs dsge
+
+Posterior modes of all 36 estimated parameters: Smets and Wouters' own
+mode (`usmodel_mode.mat`), Dynare 6.0 running the book's `sw_table1.mod`
+(`ch6_compare_dynare.R`), and dsge running the same file
+(`ch6_smets_wouters_estimation.R`). dsge and Dynare agree to two or three
+decimals on every parameter. Against the published mode the only real
+differences are the two rows in bold, where the paper's mode is known not
+to be the true mode (Chib and Ramamurthy, 2010) and Dynare and dsge find
+the same, slightly higher-posterior point (log posterior -841.08 against
+-841.46).
+
+| Parameter | Published (SW 2007) | Dynare, book's file | dsge |
+|---|---:|---:|---:|
+| Investment adj. cost (phi) | 5.488 | 5.488 | 5.493 |
+| Risk aversion (sigma_c) | 1.395 | 1.422 | 1.421 |
+| Habit (h) | 0.712 | 0.706 | 0.707 |
+| Wage stickiness (xi_w) | 0.738 | 0.734 | 0.734 |
+| Labour supply elast. (sigma_l) | 1.920 | 1.875 | 1.880 |
+| Price stickiness (xi_p) | 0.656 | 0.654 | 0.654 |
+| Wage indexation (iota_w) | 0.592 | 0.598 | 0.598 |
+| Price indexation (iota_p) | 0.228 | 0.219 | 0.218 |
+| Capital utilisation (psi) | 0.547 | 0.545 | 0.545 |
+| Fixed cost (Phi) | 1.615 | 1.610 | 1.610 |
+| Taylor: inflation (r_pi) | 2.029 | 2.022 | 2.022 |
+| Interest smoothing (rho) | 0.815 | 0.815 | 0.815 |
+| Taylor: output gap (r_y) | 0.085 | 0.088 | 0.088 |
+| Taylor: d output gap (r_dy) | 0.223 | 0.222 | 0.222 |
+| **SS inflation (pi_bar)** | **0.818** | **0.765** | **0.764** |
+| Discount rate 100(1/beta-1) | 0.161 | 0.144 | 0.145 |
+| **SS hours (l_bar)** | **-0.103** | **0.726** | **0.736** |
+| Trend growth (gamma_bar) | 0.432 | 0.434 | 0.434 |
+| Capital share (alpha) | 0.193 | 0.191 | 0.191 |
+| SD productivity shock | 0.452 | 0.453 | 0.453 |
+| SD risk-premium shock | 0.242 | 0.242 | 0.242 |
+| SD spending shock | 0.520 | 0.521 | 0.521 |
+| SD investment shock | 0.450 | 0.455 | 0.455 |
+| SD monetary shock | 0.240 | 0.239 | 0.239 |
+| SD price mark-up shock | 0.141 | 0.140 | 0.140 |
+| SD wage mark-up shock | 0.244 | 0.247 | 0.247 |
+| Persistence: productivity | 0.959 | 0.961 | 0.961 |
+| Persistence: risk premium | 0.182 | 0.183 | 0.183 |
+| Persistence: spending | 0.976 | 0.976 | 0.976 |
+| Persistence: investment | 0.710 | 0.703 | 0.703 |
+| Persistence: monetary | 0.127 | 0.123 | 0.123 |
+| Persistence: price mark-up | 0.904 | 0.908 | 0.908 |
+| Persistence: wage mark-up | 0.972 | 0.974 | 0.974 |
+| MA: price mark-up | 0.745 | 0.744 | 0.744 |
+| MA: wage mark-up | 0.888 | 0.893 | 0.893 |
+| Spending-productivity link | 0.526 | 0.523 | 0.523 |
+
 ### Figure 6.2: prior vs posterior
 
 The book's figure draws a normal approximation around the published
