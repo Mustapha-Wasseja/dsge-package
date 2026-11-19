@@ -24,6 +24,7 @@ clone the repository into a temporary directory.
 export MACRO_BOOK_DIR=/path/to/Macroeconometrics_book
 Rscript dev/macroeconometrics-book/ch6_figure_6_1_rbc_irf.R
 Rscript dev/macroeconometrics-book/ch6_smets_wouters_estimation.R
+Rscript dev/macroeconometrics-book/ch6_compare_sw_mode.R
 ```
 
 The estimation needs `R.matlab` (to read `usmodel_data.mat`). Its posterior
@@ -32,6 +33,13 @@ redraws the tables and figures; set `SW_REFIT_MODE=1` / `SW_REFIT_MCMC=1` to
 recompute. The chain length is set with `SW_CHAINS`, `SW_ITER`, `SW_WARMUP`,
 `SW_THIN`, `SW_CORES` and `SW_SEED` (defaults: 4 chains x 150000 iterations,
 50000 warm-up, thin 5, about 1 hour on 4 cores).
+
+`ch6_compare_sw_mode.R` uses the estimation's cached mode and draws. It
+reads Smets and Wouters' mode file from Johannes Pfeifer's DSGE_mod
+repository: point `PFEIFER_DSGE_MOD_DIR` at a clone, or leave it unset and
+the script clones the `Smets_Wouters_2007` folder into a temporary
+directory. Its mode-search restart takes a few minutes on 4 cores (set
+`SW_SKIP_RESTART=1` to skip it).
 
 ## Results
 
@@ -162,6 +170,87 @@ few:
 The tables are also in `output/table_1a_structural.csv` and
 `output/table_1b_shocks.csv`; the full run is in
 `output/ch6_smets_wouters_estimation.log`.
+
+### Smets-Wouters (2007): all 36 parameters against Smets and Wouters' mode file
+
+`ch6_compare_sw_mode.R` compares dsge's posterior mode with the mode file
+`usmodel_mode.mat` from Johannes Pfeifer's replication
+(<https://github.com/JohannesPfeifer/DSGE_mod>, GPL, cloned rather than
+copied). That file holds Smets and Wouters' own mode; its risk-premium
+shock standard deviation of 0.24 is the value in Table 1B of the paper.
+
+- **Matching the parameters.** The book's file renames Smets and Wouters'
+  parameters (`csadjcost` is `phi`, `cprobp` is `xi_p`, ...). Both files
+  are imported with `read_dynare()` and each parameter is matched by its
+  full `estimated_params` entry (initial value, bounds, prior shape, mean
+  and sd); all 36 entries match one to one. The two files also use the
+  same data.
+- **Values.** 24 of the 36 modes are within 0.1 posterior standard
+  deviations of Smets and Wouters' mode, 33 within 0.2 and 34 within 0.3
+  (median 0.07). The two exceptions are steady-state inflation `pi_bar`
+  (0.764 against 0.818, 0.51 sd) and steady-state hours `l_bar` (0.736
+  against -0.103, 0.76 sd). Pfeifer's notes, citing Chib and Ramamurthy
+  (2010, *Journal of Econometrics* 155), say the mode reported in the
+  paper is not actually the mode, with `constepinf` (`pi_bar`) lower and
+  `constelab` (`l_bar`) higher at the true mode: the direction in which
+  dsge's mode differs.
+- **Posterior kernel.** Under the book's model and sample (1966Q1-2004Q4),
+  dsge's mode has the higher posterior:
+
+  | Point | Log-likelihood | Log-prior | Log posterior |
+  |---|---:|---:|---:|
+  | Smets and Wouters' mode file | -817.4680 | -23.9941 | -841.4621 |
+  | dsge mode (from the file's initial values) | -817.4396 | -23.6419 | -841.0815 |
+  | dsge mode, search restarted from Smets and Wouters' mode | -817.3886 | -23.6932 | -841.0818 |
+
+- **Same mode from either start.** Restarted from Smets and Wouters' mode,
+  the search reaches the same point; the largest difference is 0.035, in
+  `l_bar`, whose posterior standard deviation is 1.1. The log-prior at
+  Smets and Wouters' mode, -23.9941, equals the value Dynare reports for
+  Pfeifer's file at that mode (`dev/dynare-validation/README.md`), a check
+  on the parameter matching.
+
+| Parameter | SW name | SW (2007) mode | dsge mode | Difference | Difference / posterior sd | dsge, restarted from SW mode |
+|---|---|---:|---:|---:|---:|---:|
+| phi | csadjcost | 5.4882 | 5.4934 | +0.0053 | +0.01 | 5.4856 |
+| sigma_c | csigma | 1.3952 | 1.4213 | +0.0261 | +0.20 | 1.4208 |
+| lambda | chabb | 0.7124 | 0.7067 | -0.0057 | -0.13 | 0.7064 |
+| xi_w | cprobw | 0.7375 | 0.7344 | -0.0032 | -0.05 | 0.7341 |
+| sigma_l | csigl | 1.9199 | 1.8801 | -0.0398 | -0.07 | 1.8685 |
+| xi_p | cprobp | 0.6563 | 0.6540 | -0.0023 | -0.04 | 0.6549 |
+| iota_w | cindw | 0.5920 | 0.5976 | +0.0056 | +0.04 | 0.5986 |
+| iota_p | cindp | 0.2284 | 0.2181 | -0.0103 | -0.12 | 0.2182 |
+| psi | czcap | 0.5472 | 0.5445 | -0.0027 | -0.02 | 0.5447 |
+| phi_p | cfc | 1.6150 | 1.6096 | -0.0054 | -0.07 | 1.6095 |
+| r_pi | crpi | 2.0295 | 2.0219 | -0.0075 | -0.04 | 2.0208 |
+| rho | crr | 0.8153 | 0.8146 | -0.0007 | -0.03 | 0.8144 |
+| r_y | cry | 0.0847 | 0.0883 | +0.0036 | +0.16 | 0.0879 |
+| r_dy | crdy | 0.2229 | 0.2220 | -0.0010 | -0.03 | 0.2224 |
+| pi_bar | constepinf | 0.8180 | 0.7636 | -0.0544 | -0.51 | 0.7682 |
+| beta_const | constebeta | 0.1607 | 0.1446 | -0.0160 | -0.28 | 0.1442 |
+| l_bar | constelab | -0.1031 | 0.7358 | +0.8389 | +0.76 | 0.7011 |
+| gamma_bar | ctrend | 0.4320 | 0.4344 | +0.0024 | +0.16 | 0.4343 |
+| alpha | calfa | 0.1928 | 0.1911 | -0.0017 | -0.09 | 0.1910 |
+| sd_e.eta_a | sd_e.ea | 0.4518 | 0.4529 | +0.0011 | +0.04 | 0.4529 |
+| sd_e.eta_b | sd_e.eb | 0.2425 | 0.2418 | -0.0007 | -0.03 | 0.2416 |
+| sd_e.eta_g | sd_e.eg | 0.5200 | 0.5213 | +0.0013 | +0.04 | 0.5212 |
+| sd_e.eta_i | sd_e.eqs | 0.4501 | 0.4552 | +0.0051 | +0.10 | 0.4550 |
+| sd_e.eta_r | sd_e.em | 0.2398 | 0.2388 | -0.0010 | -0.07 | 0.2389 |
+| sd_e.eta_p | sd_e.epinf | 0.1411 | 0.1398 | -0.0013 | -0.08 | 0.1398 |
+| sd_e.eta_w | sd_e.ew | 0.2444 | 0.2466 | +0.0022 | +0.10 | 0.2464 |
+| rho_a | crhoa | 0.9588 | 0.9606 | +0.0019 | +0.16 | 0.9606 |
+| rho_b | crhob | 0.1824 | 0.1829 | +0.0005 | +0.01 | 0.1836 |
+| rho_g | crhog | 0.9762 | 0.9761 | -0.0001 | -0.01 | 0.9761 |
+| rho_i | crhoqs | 0.7096 | 0.7031 | -0.0065 | -0.11 | 0.7034 |
+| rho_r | crhoms | 0.1271 | 0.1226 | -0.0046 | -0.07 | 0.1227 |
+| rho_p | crhopinf | 0.9038 | 0.9079 | +0.0041 | +0.08 | 0.9072 |
+| rho_w | crhow | 0.9719 | 0.9744 | +0.0025 | +0.17 | 0.9742 |
+| Mu_p | cmap | 0.7449 | 0.7435 | -0.0013 | -0.01 | 0.7433 |
+| Mu_w | cmaw | 0.8881 | 0.8930 | +0.0048 | +0.08 | 0.8926 |
+| rho_ga | cgy | 0.5261 | 0.5231 | -0.0030 | -0.03 | 0.5233 |
+
+The table is also in `output/sw_mode_vs_published.csv`, and the run in
+`output/ch6_compare_sw_mode.log`.
 
 ### Figure 6.2: prior vs posterior
 

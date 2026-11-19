@@ -1,3 +1,88 @@
 All 36 estimated_params entries match one to one (same initial value, bounds and prior).
 
 Restarting the mode search from the Smets-Wouters mode...
+Posterior mode: Smets-Wouters mode file vs dsge (book's sw_table1.mod)
+  parameter    sw_name sw2007_mode dsge_mode difference posterior_sd diff_in_sd
+        phi  csadjcost      5.4882    5.4934   5.25e-03      1.03578    0.00507
+    sigma_c     csigma      1.3952    1.4213   2.61e-02      0.13269    0.19673
+     lambda      chabb      0.7124    0.7067  -5.70e-03      0.04253   -0.13410
+       xi_w     cprobw      0.7375    0.7344  -3.18e-03      0.06616   -0.04814
+    sigma_l      csigl      1.9199    1.8801  -3.98e-02      0.56528   -0.07046
+       xi_p     cprobp      0.6563    0.6540  -2.30e-03      0.05402   -0.04264
+     iota_w      cindw      0.5920    0.5976   5.62e-03      0.12603    0.04457
+     iota_p      cindp      0.2284    0.2181  -1.03e-02      0.08696   -0.11839
+        psi      czcap      0.5472    0.5445  -2.67e-03      0.11206   -0.02380
+      phi_p        cfc      1.6150    1.6096  -5.37e-03      0.07850   -0.06843
+       r_pi       crpi      2.0295    2.0219  -7.53e-03      0.17345   -0.04340
+        rho        crr      0.8153    0.8146  -6.96e-04      0.02498   -0.02785
+        r_y        cry      0.0847    0.0883   3.63e-03      0.02313    0.15672
+       r_dy       crdy      0.2229    0.2220  -9.73e-04      0.02782   -0.03499
+     pi_bar constepinf      0.8180    0.7636  -5.44e-02      0.10594   -0.51324
+ beta_const constebeta      0.1607    0.1446  -1.60e-02      0.05807   -0.27574
+      l_bar  constelab     -0.1031    0.7358   8.39e-01      1.10129    0.76175
+  gamma_bar     ctrend      0.4320    0.4344   2.42e-03      0.01478    0.16343
+      alpha      calfa      0.1928    0.1911  -1.66e-03      0.01801   -0.09226
+ sd_e.eta_a    sd_e.ea      0.4518    0.4529   1.10e-03      0.02872    0.03842
+ sd_e.eta_b    sd_e.eb      0.2425    0.2418  -6.94e-04      0.02482   -0.02799
+ sd_e.eta_g    sd_e.eg      0.5200    0.5213   1.26e-03      0.03088    0.04093
+ sd_e.eta_i   sd_e.eqs      0.4501    0.4552   5.11e-03      0.04999    0.10215
+ sd_e.eta_r    sd_e.em      0.2398    0.2388  -1.03e-03      0.01514   -0.06836
+ sd_e.eta_p sd_e.epinf      0.1411    0.1398  -1.35e-03      0.01683   -0.08009
+ sd_e.eta_w    sd_e.ew      0.2444    0.2466   2.18e-03      0.02252    0.09666
+      rho_a      crhoa      0.9588    0.9606   1.87e-03      0.01189    0.15771
+      rho_b      crhob      0.1824    0.1829   4.73e-04      0.09215    0.00513
+      rho_g      crhog      0.9762    0.9761  -9.38e-05      0.00856   -0.01095
+      rho_i     crhoqs      0.7096    0.7031  -6.47e-03      0.05996   -0.10785
+      rho_r     crhoms      0.1271    0.1226  -4.55e-03      0.06224   -0.07317
+      rho_p   crhopinf      0.9038    0.9079   4.13e-03      0.05038    0.08206
+      rho_w      crhow      0.9719    0.9744   2.51e-03      0.01454    0.17290
+       Mu_p       cmap      0.7449    0.7435  -1.32e-03      0.10220   -0.01294
+       Mu_w       cmaw      0.8881    0.8930   4.81e-03      0.06286    0.07647
+     rho_ga        cgy      0.5261    0.5231  -3.04e-03      0.08925   -0.03407
+ dsge_mode_from_sw
+            5.4856
+            1.4208
+            0.7064
+            0.7341
+            1.8685
+            0.6549
+            0.5986
+            0.2182
+            0.5447
+            1.6095
+            2.0208
+            0.8144
+            0.0879
+            0.2224
+            0.7682
+            0.1442
+            0.7011
+            0.4343
+            0.1910
+            0.4529
+            0.2416
+            0.5212
+            0.4550
+            0.2389
+            0.1398
+            0.2464
+            0.9606
+            0.1836
+            0.9761
+            0.7034
+            0.1227
+            0.9072
+            0.9742
+            0.7433
+            0.8926
+            0.5233
+
+Book's posterior kernel (sample 1966Q1-2004Q4):
+                                loglik logprior   logpost
+Smets-Wouters mode file      -817.4680 -23.9941 -841.4621
+dsge mode                    -817.4396 -23.6419 -841.0815
+dsge, restarted from SW mode -817.3886 -23.6932 -841.0818
+
+|difference| / posterior sd: median 0.07, max 0.76 (l_bar)
+Restarted search vs dsge mode: max |difference| 0.035 (l_bar)
+EXIT 0
