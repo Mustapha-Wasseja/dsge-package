@@ -1,0 +1,5 @@
+"point","loglik","logprior","logpost"
+"Dynare mode, Dynare's kernel",-817.4113207442,-23.6698014129,-841.0811221571
+"Dynare mode, dsge's kernel",-817.411320744195,-23.6698014128511,-841.081122157046
+"dsge mode, Dynare's kernel",-817.4396100495,-23.6418694869,-841.0814795364
+"dsge mode, dsge's kernel",-817.439610049542,-23.6418694868986,-841.081479536441

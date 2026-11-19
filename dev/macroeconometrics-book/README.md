@@ -25,6 +25,7 @@ export MACRO_BOOK_DIR=/path/to/Macroeconometrics_book
 Rscript dev/macroeconometrics-book/ch6_figure_6_1_rbc_irf.R
 Rscript dev/macroeconometrics-book/ch6_smets_wouters_estimation.R
 Rscript dev/macroeconometrics-book/ch6_compare_sw_mode.R
+Rscript dev/macroeconometrics-book/ch6_compare_dynare.R   # needs Octave + Dynare
 ```
 
 The estimation needs `R.matlab` (to read `usmodel_data.mat`). Its posterior
@@ -251,6 +252,39 @@ shock standard deviation of 0.24 is the value in Table 1B of the paper.
 
 The table is also in `output/sw_mode_vs_published.csv`, and the run in
 `output/ch6_compare_sw_mode.log`.
+
+### Smets-Wouters (2007): the book's file in Dynare
+
+`ch6_compare_dynare.R` runs the book's `sw_table1.mod` in Dynare 6.0
+(Octave 8.4; `apt-get install octave dynare` on Ubuntu 24.04) and compares
+it with dsge. One change is needed: the file's mode search
+(`mode_compute = 1` with `optim = ('Algorithm', 'active-set')`) calls
+MATLAB's `fmincon`, which Octave lacks, so it becomes `mode_compute = 4`
+(`csminwel`, Dynare's default). Everything else, including the 2 x 2000
+Metropolis-Hastings draws, is the book's. Dynare took 3.5 minutes.
+
+- **Log posterior kernel.** Dynare and dsge give the same log-likelihood
+  and log-prior at both programs' modes, to within 6e-11:
+
+  | Point | Log-likelihood | Log-prior | Log posterior |
+  |---|---:|---:|---:|
+  | Dynare's mode (Dynare and dsge agree) | -817.411321 | -23.669801 | -841.081122 |
+  | dsge's mode (Dynare and dsge agree) | -817.439610 | -23.641869 | -841.081480 |
+
+  At the file's initial values both report -946.8147.
+- **Posterior mode.** The two modes are the same point for practical
+  purposes: their log posteriors differ by 0.0004, and the 36 parameters
+  differ by a median of 0.004 and at most 0.015 posterior standard
+  deviations (`pi_bar`).
+- **Posterior means.** These differ by a median of 0.16 and at most 0.64
+  posterior standard deviations. That is the Monte Carlo error of the
+  book's short chains: 2 x 2000 draws with an acceptance rate of 52%
+  (`mh_jscale = 0.2` is too small for this model), against dsge's
+  4 x 20000 kept draws.
+
+Results are in `output/dynare_vs_dsge.csv` and
+`output/dynare_kernel_comparison.csv`; Dynare's own logs are
+`output/dynare_sw_table1.log` and `output/dynare_octave_run.log`.
 
 ### Figure 6.2: prior vs posterior
 
