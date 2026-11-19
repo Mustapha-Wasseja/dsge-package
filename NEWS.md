@@ -74,6 +74,21 @@
 
 ## Bug fixes
 
+* `bayes_dsge()` now keeps the parameters of a model imported with
+  `read_dynare()` within the bounds of its `estimated_params` block, as
+  Dynare does. Previously the bounds were read but ignored, so posterior
+  draws could fall outside them (for Smets-Wouters 2007, 0.2% of the draws
+  of the price Calvo parameter fell below its lower bound of 0.5).
+  * `read_dynare()` returns the bounds as `bounds` (named like `priors`),
+    and also reads `estimated_params_bounds` blocks.
+  * `bayes_dsge()` has a new argument `bounds`: a named list of
+    `c(lower, upper)` vectors (`NA` for an open side) for any model. It
+    defaults to the file's bounds for imported models; `bounds = NULL`
+    turns them off. Each bounded parameter is sampled on the intersection
+    of its prior's support and its bounds, so no draw can leave them. The
+    prior density inside the bounds is not renormalised, as in Dynare.
+    Starting values outside the bounds are moved inside with a warning.
+
 * `irf_2nd_order()` returned wrong responses: the shock was scaled by its
   standard deviation twice (so responses were too small by that factor,
   e.g. 100 times for a standard deviation of 0.01), and the quadratic term

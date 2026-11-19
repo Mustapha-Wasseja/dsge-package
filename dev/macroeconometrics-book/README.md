@@ -171,10 +171,12 @@ all 36 parameters with the package's own `plot(fit, type = "prior_posterior")`.
 - **Sampler:** `bayes_dsge()`'s adaptive random-walk MH (proposal tuned
   during warm-up, in an unconstrained parameterisation) instead of
   Dynare's fixed-scale RWMH with `mh_jscale = 0.2`, and far longer chains.
-- **Bounds:** `read_dynare()` records the `estimated_params` bounds but
-  `bayes_dsge()` does not truncate the posterior at them. 0.22% of the
-  `xi_p` draws fall below 0.5, and 0.02% of the `rho_r` and `sigma_l`
-  draws cross their bounds; all other parameters stay inside.
+- **Bounds:** the results above were produced before `bayes_dsge()`
+  enforced the `estimated_params` bounds: 0.22% of the `xi_p` draws fell
+  below 0.5, and 0.02% of the `rho_r` and `sigma_l` draws crossed their
+  bounds. `bayes_dsge()` now keeps every draw within the file's bounds,
+  as Dynare does, so re-running the script (`SW_REFIT_MCMC=1`) gives a
+  posterior that respects them.
 - **`table1.m`:** the book's script lists `eta_r` twice and fills the
   "mean" column of the shock standard deviations with the mode. The
   tables here do not repeat either slip.

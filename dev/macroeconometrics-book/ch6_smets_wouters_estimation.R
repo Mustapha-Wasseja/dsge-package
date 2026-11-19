@@ -209,7 +209,7 @@ print(round(per_chain, 3))
 
 outside <- colMeans(sweep(draws, 2, lower, "<") | sweep(draws, 2, upper, ">"))
 if (any(outside > 0)) {
-  cat("Share of draws outside the Dynare bounds (dsge does not truncate):\n")
+  cat("Share of draws outside the Dynare bounds:\n")
   print(round(outside[outside > 0], 4))
 } else {
   cat("All posterior draws lie within the estimated_params bounds.\n")

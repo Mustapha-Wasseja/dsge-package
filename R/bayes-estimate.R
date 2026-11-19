@@ -50,6 +50,16 @@
 #'   [endogenous_prior()].  If supplied, its log density is added to the
 #'   parameter log-prior at every MH evaluation.  Default `NULL` (no
 #'   endogenous prior, identical to the original behaviour).
+#' @param bounds Optional named list of `c(lower, upper)` vectors, one per
+#'   bounded parameter (names as in `priors`, `"sd_e.shock_name"` for shock
+#'   standard deviations; `NA` for an open side). The posterior is
+#'   restricted to the bounds, as Dynare restricts it to the bounds in
+#'   `estimated_params`: draws never leave them, and the prior density
+#'   inside them is not renormalised. Starting values outside the bounds
+#'   are moved inside with a warning. For a model imported with
+#'   [read_dynare()], defaults to the file's bounds (from `estimated_params`
+#'   and `estimated_params_bounds`); pass `bounds = NULL` to estimate
+#'   without them. Default `NULL` (no bounds) otherwise.
 #'
 #' @return An object of class `"dsge_bayes"` containing posterior draws
 #'   and diagnostics. For nonlinear models, the result also includes
@@ -59,8 +69,10 @@
 #' @details
 #' The sampler operates in unconstrained space with appropriate
 #' transformations (log for positive parameters, logit for unit-interval
-#' parameters) and Jacobian corrections. The proposal covariance is adapted
-#' during warmup to target approximately 25\% acceptance rate.
+#' parameters, and a scaled logit or shifted log onto the interval allowed
+#' by the prior's support and `bounds`) and Jacobian corrections. The
+#' proposal covariance is adapted during warmup to target approximately
+#' 25\% acceptance rate.
 #'
 #' Chains are initialized by drawing from the prior. If any draw yields
 #' a non-finite log-posterior, the starting values are jittered until
@@ -104,7 +116,7 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
                        warmup = floor(iter / 2), thin = 1L,
                        proposal_scale = 0.1, demean = TRUE, seed = NULL,
                        n_cores = 1L, endogenous_prior = NULL,
-                       presample = 0L, shock_start = NULL) {
+                       presample = 0L, shock_start = NULL, bounds = NULL) {
   if (!is.null(endogenous_prior) &&
       !inherits(endogenous_prior, "dsge_endog_prior"))
     stop("`endogenous_prior` must be a dsge_endog_prior object ",
@@ -112,6 +124,7 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
   if (inherits(model, "dsge_dynare")) {
     if (missing(priors)) priors <- model$priors
     if (missing(presample)) presample <- dyn_estimation_option(model, "presample")
+    if (missing(bounds)) bounds <- model$bounds
     if (is.null(shock_start)) shock_start <- model$shock_sd
     data <- dyn_estimation_sample(model, dyn_map_data(model, data))
     model <- model$model
@@ -133,8 +146,9 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
   n_shocks <- model$n_exo_states
   shock_names <- model$variables$exo_state
 
-  # Validate priors
+  # Validate priors; bounds restrict the support of the bounded parameters
   prior_list <- validate_priors(priors, free_params, shock_names)
+  prior_list <- apply_bounds(prior_list, bounds)
 
   # All estimated parameter names (structural + shock SDs)
   sd_names <- paste0("sd_e.", shock_names)
@@ -232,6 +246,7 @@ bayes_dsge <- function(model, data, priors, chains = 2L, iter = 5000L,
     s0 <- if (!is.null(shock_start)) shock_start[shock_names[k]] else NA
     init_nat[n_free + k] <- if (!is.na(s0) && s0 > 0) s0 else mean(data_sd)
   }
+  init_nat <- start_inside_bounds(init_nat, prior_list)
   init_u <- mapply(to_unconstrained, init_nat, prior_list)
 
   # Quick mode-finding via optim
@@ -378,6 +393,68 @@ validate_priors <- function(priors, free_params, shock_names) {
   }
 
   prior_list
+}
+
+#' Attach bounds to the priors of the estimated parameters
+#'
+#' Each bounded prior gets a `bounds` element c(lower, upper) (NA for an
+#' open side); the parameter transformations and dprior() then restrict
+#' the parameter to the intersection of the prior's support and the bounds.
+#' @noRd
+apply_bounds <- function(prior_list, bounds) {
+  if (is.null(bounds) || length(bounds) == 0L) return(prior_list)
+  if (!is.list(bounds) || is.null(names(bounds)) ||
+      any(!nzchar(names(bounds)))) {
+    stop("`bounds` must be a named list of c(lower, upper) vectors.",
+         call. = FALSE)
+  }
+  unknown <- setdiff(names(bounds), names(prior_list))
+  if (length(unknown) > 0L) {
+    stop("Bounds specified for unknown parameter(s): ",
+         paste(unknown, collapse = ", "), call. = FALSE)
+  }
+  for (nm in names(bounds)) {
+    b <- bounds[[nm]]
+    if ((!is.numeric(b) && !all(is.na(b))) || length(b) != 2L) {
+      stop("Bounds for '", nm, "' must be a vector c(lower, upper).",
+           call. = FALSE)
+    }
+    b <- as.numeric(b)
+    b[!is.finite(b)] <- NA_real_
+    if (all(is.na(b))) next
+    if (!anyNA(b) && b[1] >= b[2]) {
+      stop("The lower bound of '", nm, "' is not below its upper bound.",
+           call. = FALSE)
+    }
+    p <- prior_list[[nm]]
+    p$bounds <- b
+    iv <- param_interval(p)
+    if (!(iv[1] < iv[2])) {
+      stop("The bounds of '", nm, "' do not overlap the support of its ",
+           p$distribution, " prior.", call. = FALSE)
+    }
+    prior_list[[nm]] <- p
+  }
+  prior_list
+}
+
+#' Move starting values strictly inside the bounds of bounded parameters
+#' @noRd
+start_inside_bounds <- function(x, prior_list) {
+  for (j in seq_along(x)) {
+    p <- prior_list[[j]]
+    if (is.null(p$bounds)) next
+    iv <- param_interval(p)
+    if (x[j] > iv[1] && x[j] < iv[2]) next
+    margin <- if (all(is.finite(iv))) 0.01 * (iv[2] - iv[1])
+              else 0.01 * max(1, abs(iv[is.finite(iv)]))
+    new <- if (x[j] <= iv[1]) iv[1] + margin else iv[2] - margin
+    warning(sprintf(
+      "Starting value %s = %g lies outside its bounds [%g, %g]; using %g.",
+      names(prior_list)[j], x[j], iv[1], iv[2], new), call. = FALSE)
+    x[j] <- new
+  }
+  x
 }
 
 #' Compute MCMC diagnostics (ESS, R-hat, MCSE)
