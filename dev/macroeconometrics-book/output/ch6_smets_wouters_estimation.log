@@ -21,3 +21,9 @@ Data: 230 quarters (1947Q3-2004Q4); estimation sample from 1965Q1, likelihood fr
 At the file's initial values: log-likelihood -916.4593, log-prior -30.3554
 
 Searching for the posterior mode (L-BFGS-B within the bounds)...
+  round 1: log posterior -841.0815 (improved by 105.7332)
+  round 2: log posterior -841.0815 (improved by 0.0000)
+  done in 6.0 minutes
+At the mode: log-likelihood -817.4396, log-prior -23.6419, log posterior -841.0815
+
+bayes_dsge(): 4 chains x 30000 iterations (10000 warm-up) on 4 cores...
