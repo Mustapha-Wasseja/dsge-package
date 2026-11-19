@@ -1,0 +1,23 @@
+Dynare model imported from /tmp/claude-0/-home-user-dsge-package/807d3e7b-07d6-5cc2-b9db-d0987f0aaec2/scratchpad/book/Macroeconometrics_book/Chapter6/Codes_Empirical_Examples/sw_table1.mod 
+  Endogenous:   40 
+  Shocks:       7 
+  Parameters:   34 ( 29 estimated )
+  Auxiliary:    20 ( eta_w_ma_lag1, eta_p_ma_lag1, cf_lag1, invef_lag1, yf_lag1, c_lag1, i_lag1, y_lag1, pinf_lag1, w_lag1, r_lag1, eps_a_lag1, eps_b_lag1, eps_g_lag1, eps_i_lag1, eps_r_lag1, eps_p_lag1, eps_w_lag1, kpf_lag1, k_lag1 )
+  Observed:     dy, dc, dinve, labobs, pinfobs, dw, robs 
+  Priors:       36 
+  Commands:     estimation (recorded, not run)
+
+Use solve_dsge() on this object to solve at the calibration.
+
+Estimation options read from the file:
+List of 4
+ $ first_obs: int 71
+ $ presample: int 4
+ $ lik_init : int 2
+ $ datafile : chr "usmodel_data"
+
+Data: 230 quarters (1947Q3-2004Q4); estimation sample from 1965Q1, likelihood from 1966Q1 (presample 4)
+
+At the file's initial values: log-likelihood -916.4593, log-prior -30.3554
+
+Searching for the posterior mode (L-BFGS-B within the bounds)...
