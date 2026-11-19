@@ -18,7 +18,7 @@
 #      mode. Dynare's file asks for 2 blocks x 2000 draws and itself warns
 #      that this is too short. Random-walk MH mixes slowly on this
 #      posterior (autocorrelation times of several hundred draws), so the
-#      default here is 4 chains x 125000 iterations (25000 warm-up, every
+#      default here is 4 chains x 150000 iterations (50000 warm-up, every
 #      5th draw kept), settable via SW_CHAINS, SW_ITER, SW_WARMUP, SW_THIN,
 #      SW_CORES. Per-chain means and log-posterior levels are printed so
 #      that a chain stuck in a minor mode is visible.
@@ -38,8 +38,8 @@ local({
 
 env_int <- function(name, default) as.integer(Sys.getenv(name, default))
 n_chains <- env_int("SW_CHAINS", 4L)
-n_iter   <- env_int("SW_ITER", 125000L)
-n_warmup <- env_int("SW_WARMUP", 25000L)
+n_iter   <- env_int("SW_ITER", 150000L)
+n_warmup <- env_int("SW_WARMUP", 50000L)
 n_thin   <- env_int("SW_THIN", 5L)
 n_cores  <- env_int("SW_CORES", min(n_chains, parallel::detectCores()))
 seed     <- env_int("SW_SEED", 2007L)
