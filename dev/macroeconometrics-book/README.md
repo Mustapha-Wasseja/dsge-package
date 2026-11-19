@@ -30,8 +30,8 @@ The estimation needs `R.matlab` (to read `usmodel_data.mat`). Its posterior
 mode and draws are cached in `output/*.rds` (not committed), so a re-run only
 redraws the tables and figures; set `SW_REFIT_MODE=1` / `SW_REFIT_MCMC=1` to
 recompute. The chain length is set with `SW_CHAINS`, `SW_ITER`, `SW_WARMUP`,
-`SW_THIN`, `SW_CORES` and `SW_SEED` (defaults: 4 chains x 125000 iterations,
-25000 warm-up, thin 5, about 1 hour on 4 cores).
+`SW_THIN`, `SW_CORES` and `SW_SEED` (defaults: 4 chains x 150000 iterations,
+50000 warm-up, thin 5, about 1 hour on 4 cores).
 
 ## Results
 
@@ -71,77 +71,83 @@ Smets-Wouters mode (values read from the book's figure script):
 
 | Parameter | SW (2007) mode | dsge mode | SW 90% interval | dsge 90% HPD |
 |---|---:|---:|---|---|
-| xi_p (price stickiness) | 0.65 | 0.654 | [0.56, 0.74] | [0.566, 0.746] |
-| xi_w (wage stickiness) | 0.73 | 0.734 | [0.60, 0.81] | [0.594, 0.835] |
-| h (habit) | 0.71 | 0.707 | [0.64, 0.78] | [0.639, 0.782] |
-| phi (investment adj. cost) | 5.48 | 5.493 | [3.97, 7.42] | [4.045, 7.353] |
-| r_pi (Taylor: inflation) | 2.03 | 2.022 | [1.74, 2.33] | [1.735, 2.326] |
-| rho (interest smoothing) | 0.81 | 0.815 | [0.77, 0.85] | [0.771, 0.852] |
+| xi_p (price stickiness) | 0.65 | 0.654 | [0.56, 0.74] | [0.567, 0.743] |
+| xi_w (wage stickiness) | 0.73 | 0.734 | [0.60, 0.81] | [0.593, 0.809] |
+| h (habit) | 0.71 | 0.707 | [0.64, 0.78] | [0.646, 0.785] |
+| phi (investment adj. cost) | 5.48 | 5.493 | [3.97, 7.42] | [3.998, 7.373] |
+| r_pi (Taylor: inflation) | 2.03 | 2.022 | [1.74, 2.33] | [1.753, 2.321] |
+| rho (interest smoothing) | 0.81 | 0.815 | [0.77, 0.85] | [0.770, 0.850] |
 
-**MCMC.** `bayes_dsge()` with 4 chains of 125,000 iterations (25,000
-warm-up, every 5th draw kept: 80,000 draws), started at the mode, took 53
-minutes on 4 cores. Acceptance rates 0.20-0.22. All four chains settle in
-the same region (mean log posterior -858.7 to -860.3). R-hat is at most
-1.048 for 34 of the 36 parameters; the exceptions are `rho_w` (1.21) and
-`xi_w` (1.13), because chain 4 spent the first half of its kept draws
-drifting through the wage block (`rho_w` 0.93-0.95, `xi_w` 0.77-0.82;
-the two have posterior correlation -0.45) before joining the others. This
-moves the `xi_w` mean by about 0.01-0.02. ESS ranges from 303 to 1034
-(median 669). Longer warm-up would clean this up.
+**MCMC.** `bayes_dsge()` with 4 chains of 150,000 iterations (50,000
+warm-up, every 5th draw kept: 80,000 draws), started at the mode, took 62
+minutes on 4 cores. Acceptance rates 0.18-0.25. The four chains agree:
+mean log posterior -859.4 to -859.7, and the same means for the
+parameters that separate the minor mode below (`rho_a` 0.956-0.958,
+`rho_b` 0.220-0.223, `gamma_bar` 0.430-0.432). **R-hat is at most 1.010
+for all 36 parameters**, and the effective sample size ranges from 754
+to 1826 (median 1347).
 
-A first run of 4 x 30,000 iterations (log kept as
-`output/ch6_smets_wouters_estimation_30k_unconverged.log`) did not
-converge: one chain settled in a minor mode with productivity close to a
-unit root (`rho_a` 0.99, `rho_b` 0.64, `gamma_bar` 0.36), whose log
-posterior is about 10 points below the main mode, and the other three
-still had R-hat up to 1.23. Random-walk MH mixes slowly on this
-posterior; the file's 2 x 2,000 draws would be far too few.
+Two shorter runs came first, and their logs are kept in `output/`.
+Random-walk MH mixes slowly on this posterior (autocorrelation times of
+several hundred draws), and the file's 2 x 2,000 draws would be far too
+few:
+
+- 4 x 30,000 iterations (`ch6_smets_wouters_estimation_30k_unconverged.log`):
+  one chain settled in a minor mode with productivity close to a unit
+  root (`rho_a` 0.99, `rho_b` 0.64, `gamma_bar` 0.36), whose log
+  posterior is about 10 points below the main mode. The other three still
+  had R-hat up to 1.23.
+- 4 x 125,000 iterations with 25,000 warm-up
+  (`ch6_smets_wouters_estimation_125k.log`): all chains in the main mode,
+  but one was still settling in the wage block (`rho_w` and `xi_w`, which
+  trade off against each other), leaving R-hat at 1.21 and 1.13 for those
+  two. Doubling the warm-up removed this.
 
 #### Table 1A: structural parameters (5% / 95%: 90% HPD interval, as in `table1.m`)
 
 | Parameter | Prior | Mode | Mean | 5% | 95% | R-hat | ESS |
 |---|---|---:|---:|---:|---:|---:|---:|
-| phi (investment adj. cost) | N(4, 1.5) | 5.493 | 5.657 | 4.045 | 7.353 | 1.018 | 670 |
-| sigma_c (risk aversion) | N(1.5, 0.375) | 1.421 | 1.392 | 1.173 | 1.615 | 1.029 | 574 |
-| h (habit) | B(0.7, 0.1) | 0.707 | 0.709 | 0.639 | 0.782 | 1.011 | 716 |
-| xi_w (wage Calvo) | B(0.5, 0.1) | 0.734 | 0.717 | 0.594 | 0.835 | 1.133 | 303 |
-| sigma_l (labour supply elast.) | N(2, 0.75) | 1.880 | 1.847 | 0.918 | 2.770 | 1.010 | 1034 |
-| xi_p (price Calvo) | B(0.5, 0.1) | 0.654 | 0.654 | 0.566 | 0.746 | 1.048 | 391 |
-| iota_w (wage indexation) | B(0.5, 0.15) | 0.598 | 0.588 | 0.390 | 0.784 | 1.011 | 679 |
-| iota_p (price indexation) | B(0.5, 0.15) | 0.218 | 0.241 | 0.100 | 0.381 | 1.010 | 786 |
-| psi (capital utilisation) | B(0.5, 0.15) | 0.545 | 0.545 | 0.367 | 0.723 | 1.015 | 876 |
-| Phi (fixed cost) | N(1.25, 0.125) | 1.610 | 1.611 | 1.478 | 1.746 | 1.022 | 566 |
-| r_pi (Taylor: inflation) | N(1.5, 0.25) | 2.022 | 2.031 | 1.735 | 2.326 | 1.018 | 581 |
-| rho (interest smoothing) | B(0.75, 0.1) | 0.815 | 0.810 | 0.771 | 0.852 | 1.010 | 797 |
-| r_y (Taylor: output gap) | N(0.125, 0.05) | 0.088 | 0.088 | 0.048 | 0.123 | 1.006 | 755 |
-| r_dy (Taylor: d output gap) | N(0.125, 0.05) | 0.222 | 0.226 | 0.180 | 0.273 | 1.032 | 464 |
-| pi_bar (SS inflation) | G(0.625, 0.1) | 0.764 | 0.790 | 0.612 | 0.962 | 1.023 | 614 |
-| 100(1/beta - 1) | G(0.25, 0.1) | 0.145 | 0.171 | 0.074 | 0.259 | 1.024 | 668 |
-| l_bar (SS hours) | N(0, 2) | 0.736 | 0.439 | -1.342 | 2.191 | 1.015 | 736 |
-| gamma_bar (trend growth) | N(0.4, 0.1) | 0.434 | 0.432 | 0.408 | 0.455 | 1.003 | 843 |
-| alpha (capital share) | N(0.3, 0.05) | 0.191 | 0.191 | 0.162 | 0.221 | 1.026 | 636 |
+| phi (investment adj. cost) | N(4, 1.5) | 5.493 | 5.769 | 3.998 | 7.373 | 1.008 | 1175 |
+| sigma_c (risk aversion) | N(1.5, 0.375) | 1.421 | 1.383 | 1.165 | 1.592 | 1.002 | 1240 |
+| h (habit) | B(0.7, 0.1) | 0.707 | 0.714 | 0.646 | 0.785 | 1.003 | 1549 |
+| xi_w (wage Calvo) | B(0.5, 0.1) | 0.734 | 0.703 | 0.593 | 0.809 | 1.001 | 976 |
+| sigma_l (labour supply elast.) | N(2, 0.75) | 1.880 | 1.845 | 0.906 | 2.779 | 1.002 | 1437 |
+| xi_p (price Calvo) | B(0.5, 0.1) | 0.654 | 0.653 | 0.567 | 0.743 | 1.010 | 754 |
+| iota_w (wage indexation) | B(0.5, 0.15) | 0.598 | 0.581 | 0.378 | 0.785 | 1.005 | 1214 |
+| iota_p (price indexation) | B(0.5, 0.15) | 0.218 | 0.241 | 0.095 | 0.380 | 1.002 | 1649 |
+| psi (capital utilisation) | B(0.5, 0.15) | 0.545 | 0.547 | 0.358 | 0.731 | 1.003 | 1226 |
+| Phi (fixed cost) | N(1.25, 0.125) | 1.610 | 1.607 | 1.477 | 1.730 | 1.003 | 1777 |
+| r_pi (Taylor: inflation) | N(1.5, 0.25) | 2.022 | 2.036 | 1.753 | 2.321 | 1.004 | 1403 |
+| rho (interest smoothing) | B(0.75, 0.1) | 0.815 | 0.810 | 0.770 | 0.850 | 1.003 | 1171 |
+| r_y (Taylor: output gap) | N(0.125, 0.05) | 0.088 | 0.088 | 0.049 | 0.123 | 1.002 | 1399 |
+| r_dy (Taylor: d output gap) | N(0.125, 0.05) | 0.222 | 0.224 | 0.178 | 0.270 | 1.002 | 1349 |
+| pi_bar (SS inflation) | G(0.625, 0.1) | 0.764 | 0.787 | 0.604 | 0.957 | 1.003 | 1203 |
+| 100(1/beta - 1) | G(0.25, 0.1) | 0.145 | 0.167 | 0.074 | 0.254 | 1.003 | 1425 |
+| l_bar (SS hours) | N(0, 2) | 0.736 | 0.506 | -1.240 | 2.356 | 1.003 | 1400 |
+| gamma_bar (trend growth) | N(0.4, 0.1) | 0.434 | 0.431 | 0.406 | 0.455 | 1.002 | 1449 |
+| alpha (capital share) | N(0.3, 0.05) | 0.191 | 0.190 | 0.161 | 0.220 | 1.004 | 1374 |
 
 #### Table 1B: shock processes
 
 | Parameter | Prior | Mode | Mean | 5% | 95% | R-hat | ESS |
 |---|---|---:|---:|---:|---:|---:|---:|
-| sigma_a (productivity) | IG(0.1, 2) | 0.453 | 0.456 | 0.411 | 0.502 | 1.018 | 592 |
-| sigma_b (risk premium) | IG(0.1, 2) | 0.242 | 0.238 | 0.198 | 0.278 | 1.006 | 920 |
-| sigma_g (exogenous spending) | IG(0.1, 2) | 0.521 | 0.528 | 0.476 | 0.578 | 1.008 | 906 |
-| sigma_i (investment) | IG(0.1, 2) | 0.455 | 0.449 | 0.366 | 0.530 | 1.023 | 640 |
-| sigma_r (monetary policy) | IG(0.1, 2) | 0.239 | 0.246 | 0.221 | 0.272 | 1.025 | 671 |
-| sigma_p (price mark-up) | IG(0.1, 2) | 0.140 | 0.140 | 0.113 | 0.169 | 1.005 | 926 |
-| sigma_w (wage mark-up) | IG(0.1, 2) | 0.247 | 0.243 | 0.205 | 0.282 | 1.034 | 567 |
-| rho_a | B(0.5, 0.2) | 0.961 | 0.957 | 0.939 | 0.976 | 1.020 | 770 |
-| rho_b | B(0.5, 0.2) | 0.183 | 0.227 | 0.081 | 0.368 | 1.029 | 546 |
-| rho_g | B(0.5, 0.2) | 0.976 | 0.976 | 0.963 | 0.990 | 1.014 | 623 |
-| rho_i | B(0.5, 0.2) | 0.703 | 0.718 | 0.617 | 0.819 | 1.033 | 612 |
-| rho_r | B(0.5, 0.2) | 0.123 | 0.147 | 0.040 | 0.244 | 1.030 | 720 |
-| rho_p | B(0.5, 0.2) | 0.908 | 0.888 | 0.817 | 0.968 | 1.008 | 563 |
-| rho_w | B(0.5, 0.2) | 0.974 | 0.965 | 0.939 | 0.991 | 1.206 | 308 |
-| mu_p | B(0.5, 0.2) | 0.744 | 0.697 | 0.542 | 0.849 | 1.008 | 789 |
-| mu_w | B(0.5, 0.2) | 0.893 | 0.848 | 0.758 | 0.945 | 1.023 | 564 |
-| rho_ga | N(0.5, 0.25) | 0.523 | 0.515 | 0.367 | 0.665 | 1.004 | 849 |
+| sigma_a (productivity) | IG(0.1, 2) | 0.453 | 0.458 | 0.411 | 0.504 | 1.005 | 1279 |
+| sigma_b (risk premium) | IG(0.1, 2) | 0.242 | 0.239 | 0.200 | 0.279 | 1.002 | 1427 |
+| sigma_g (exogenous spending) | IG(0.1, 2) | 0.521 | 0.529 | 0.479 | 0.581 | 1.002 | 1252 |
+| sigma_i (investment) | IG(0.1, 2) | 0.455 | 0.451 | 0.368 | 0.532 | 1.002 | 1346 |
+| sigma_r (monetary policy) | IG(0.1, 2) | 0.239 | 0.244 | 0.219 | 0.268 | 1.002 | 1448 |
+| sigma_p (price mark-up) | IG(0.1, 2) | 0.140 | 0.140 | 0.112 | 0.169 | 1.003 | 1224 |
+| sigma_w (wage mark-up) | IG(0.1, 2) | 0.247 | 0.243 | 0.205 | 0.280 | 1.001 | 1247 |
+| rho_a | B(0.5, 0.2) | 0.961 | 0.957 | 0.938 | 0.976 | 1.001 | 1575 |
+| rho_b | B(0.5, 0.2) | 0.183 | 0.222 | 0.078 | 0.369 | 1.002 | 1026 |
+| rho_g | B(0.5, 0.2) | 0.976 | 0.977 | 0.963 | 0.990 | 1.004 | 1141 |
+| rho_i | B(0.5, 0.2) | 0.703 | 0.713 | 0.617 | 0.813 | 1.001 | 1406 |
+| rho_r | B(0.5, 0.2) | 0.123 | 0.150 | 0.045 | 0.246 | 1.003 | 1826 |
+| rho_p | B(0.5, 0.2) | 0.908 | 0.887 | 0.812 | 0.968 | 1.004 | 799 |
+| rho_w | B(0.5, 0.2) | 0.974 | 0.967 | 0.946 | 0.989 | 1.001 | 912 |
+| mu_p | B(0.5, 0.2) | 0.744 | 0.693 | 0.532 | 0.858 | 1.002 | 1061 |
+| mu_w | B(0.5, 0.2) | 0.893 | 0.842 | 0.749 | 0.938 | 1.001 | 1428 |
+| rho_ga | N(0.5, 0.25) | 0.523 | 0.521 | 0.374 | 0.664 | 1.005 | 1446 |
 
 The tables are also in `output/table_1a_structural.csv` and
 `output/table_1b_shocks.csv`; the full run is in
@@ -166,9 +172,9 @@ all 36 parameters with the package's own `plot(fit, type = "prior_posterior")`.
   during warm-up, in an unconstrained parameterisation) instead of
   Dynare's fixed-scale RWMH with `mh_jscale = 0.2`, and far longer chains.
 - **Bounds:** `read_dynare()` records the `estimated_params` bounds but
-  `bayes_dsge()` does not truncate the posterior at them. 0.19% of the
-  `xi_p` draws fall below 0.5, and 0.02% or fewer for `rho_r` and
-  `sigma_l`; all other parameters stay inside.
+  `bayes_dsge()` does not truncate the posterior at them. 0.22% of the
+  `xi_p` draws fall below 0.5, and 0.02% of the `rho_r` and `sigma_l`
+  draws cross their bounds; all other parameters stay inside.
 - **`table1.m`:** the book's script lists `eta_r` twice and fills the
   "mean" column of the shock standard deviations with the mode. The
   tables here do not repeat either slip.
