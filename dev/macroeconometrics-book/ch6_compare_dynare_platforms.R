@@ -31,7 +31,7 @@
 # sw_table1). The *_draws.csv files are not committed (about 90 MB).
 #
 # Run from the package root:
-#   Rscript dev/macroeconometrics-book/ch6_compare_dynare.R
+#   Rscript dev/macroeconometrics-book/ch6_compare_dynare_platforms.R
 
 suppressPackageStartupMessages(library(dsge))
 local({

@@ -4,7 +4,7 @@ Companion code: <https://github.com/AlessiaPaccagnini/Macroeconometrics_book>
 (De Gruyter, forthcoming). Chapter 6 is the book's only DSGE chapter. Its
 model-based examples are run here with dsge, in R, without Dynare or MATLAB.
 The Smets-Wouters estimation is then checked against Dynare 7.0 estimating
-the same file in MATLAB and in Octave (`ch6_compare_dynare.R`).
+the same file in MATLAB and in Octave (`ch6_compare_dynare_platforms.R`).
 
 | Book item | Book code | What it computes | Here |
 |---|---|---|---|
@@ -27,7 +27,7 @@ export MACRO_BOOK_DIR=/path/to/Macroeconometrics_book
 Rscript dev/macroeconometrics-book/ch6_figure_6_1_rbc_irf.R
 Rscript dev/macroeconometrics-book/ch6_smets_wouters_estimation.R
 Rscript dev/macroeconometrics-book/ch6_compare_sw_mode.R
-Rscript dev/macroeconometrics-book/ch6_compare_dynare.R   # needs Dynare's runs, see below
+Rscript dev/macroeconometrics-book/ch6_compare_dynare_platforms.R   # needs Dynare's runs, see below
 ```
 
 On Windows the mode search's gradient runs serially (`mclapply` cannot
@@ -262,7 +262,7 @@ The table is also in `output/sw_mode_vs_published.csv`, and the run in
 
 ### Smets-Wouters (2007): dsge against Dynare estimating the same file
 
-`ch6_compare_dynare.R` sets dsge's estimation of `sw_table1.mod` beside
+`ch6_compare_dynare_platforms.R` sets dsge's estimation of `sw_table1.mod` beside
 Dynare 7.0's own estimation of the same file, all run on one Windows 11
 laptop (2026-11-20):
 
@@ -378,7 +378,7 @@ in MATLAB and Octave.
 The kernel, mode and posterior comparisons are also in
 `output/dynare_kernel_at_points.csv`, `output/dynare_mode_comparison.csv`
 and `output/dynare_posterior_comparison.csv`; the run is in
-`output/ch6_compare_dynare.log`, and Dynare's own logs and exports are in
+`output/ch6_compare_dynare_platforms.log`, and Dynare's own logs and exports are in
 `output/dynare/` (the draws themselves, about 90 MB, are not committed).
 
 #### Running the comparison
@@ -398,10 +398,10 @@ set `DYNARE_ROOT` if Dynare is not in `C:\dynare\7.0`):
    `run folder|file name|results .mat|output folder|thinning`; output to
    `output/dynare/matlab` or `output/dynare/octave`, thinning 5 for the
    long chains).
-4. Run `ch6_smets_wouters_estimation.R`, then `ch6_compare_dynare.R`. It
+4. Run `ch6_smets_wouters_estimation.R`, then `ch6_compare_dynare_platforms.R`. It
    writes `points.csv` into the Dynare output folders; re-run step 3 for
    the two book runs (so Dynare evaluates its kernel at those points) and
-   then `ch6_compare_dynare.R` again.
+   then `ch6_compare_dynare_platforms.R` again.
 
 ### Figure 6.2: prior vs posterior
 
