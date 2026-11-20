@@ -1,0 +1,32 @@
+Steady state (levels):
+  Y = 2.8220, C = 2.1587, I = 0.6633, K = 26.5305, N = 0.9359
+  C/Y = 0.765, I/Y = 0.235, K/Y = 9.40
+
+DSGE Solution
+  Stable:  TRUE 
+  Stable eigenvalues:  2 / 2 
+
+Policy matrix (G):
+         a         k
+y 1.309024  0.217624
+c 0.386565  0.553075
+i 4.311319 -0.874157
+n 0.461229 -0.167725
+
+Transition matrix (H):
+         a        k
+a 0.950000 0.000000
+k 0.107783 0.953146
+
+Figure 6.1: dsge vs the book's Blanchard-Kahn solution (percent)
+ variable dsge_impact book_impact dsge_peak peak_q max_abs_diff_40q
+        Y     1.30902     1.30902   1.30902      0       3.4084e-14
+        C     0.38657     0.38657   0.62628     14       7.5495e-14
+        I     4.31132     4.31132   4.31132      0       3.1530e-13
+        N     0.46123     0.46123   0.46123      0       4.2133e-14
+        K     0.10778     0.10778   0.83955     19       1.0925e-13
+        A     1.00000     1.00000   1.00000      0       1.6653e-16
+
+Largest difference over all variables and 40 quarters: 3.15e-13
+
+Saved /home/user/dsge-package/dev/macroeconometrics-book/output/figure_6_1_rbc_irf_dsge.png 

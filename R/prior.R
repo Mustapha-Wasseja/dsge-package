@@ -83,7 +83,7 @@ prior <- function(distribution, ...) {
 #' @noRd
 dprior <- function(p, x) {
   pars <- p$params
-  switch(p$distribution,
+  out <- switch(p$distribution,
     normal    = stats::dnorm(x, mean = pars$mean, sd = pars$sd, log = TRUE),
     beta      = stats::dbeta(x, shape1 = pars$shape1, shape2 = pars$shape2, log = TRUE),
     gamma     = stats::dgamma(x, shape = pars$shape, rate = pars$rate, log = TRUE),
@@ -91,6 +91,12 @@ dprior <- function(p, x) {
     inv_gamma = dinvgamma_log(x, shape = pars$shape, scale = pars$scale),
     inv_gamma1 = dinvgamma1_log(x, s = pars$s, nu = pars$nu)
   )
+  # Bounds restrict the support; as in Dynare, the density inside them is
+  # not renormalised
+  b <- p$bounds
+  if (!is.null(b))
+    out[(!is.na(b[1]) & x < b[1]) | (!is.na(b[2]) & x > b[2])] <- -Inf
+  out
 }
 
 #' Draw from prior distribution
@@ -150,15 +156,78 @@ inv_gamma1_from_moments <- function(mean, sd) {
 #' @export
 print.dsge_prior <- function(x, ...) {
   pstr <- paste(names(x$params), "=", x$params, collapse = ", ")
-  cat(x$distribution, "(", pstr, ")\n", sep = "")
+  cat(x$distribution, "(", pstr, ")", sep = "")
+  if (!is.null(x$bounds)) {
+    b <- x$bounds
+    b[is.na(b)] <- c(-Inf, Inf)[is.na(b)]
+    cat(" bounded to [", format(b[1]), ", ", format(b[2]), "]", sep = "")
+  }
+  cat("\n")
   invisible(x)
 }
 
 # --- Parameter transformations for unconstrained MCMC ---
+#
+# A prior may carry `bounds`, c(lower, upper) with NA for an open side, set
+# by bayes_dsge() from its `bounds` argument (Dynare's estimated_params
+# bounds). The parameter then lives on the intersection of the prior's
+# support and the bounds, and the transformation maps the real line onto
+# that interval, so that no draw can leave it.
+
+#' Interval on which a parameter lives: prior support intersected with bounds
+#' @noRd
+param_interval <- function(prior_obj) {
+  iv <- switch(prior_obj$support,
+    unbounded = c(-Inf, Inf),
+    positive  = c(0, Inf),
+    unit      = c(0, 1),
+    bounded   = c(prior_obj$params$min, prior_obj$params$max)
+  )
+  b <- prior_obj$bounds
+  if (!is.null(b)) {
+    if (!is.na(b[1])) iv[1] <- max(iv[1], b[1])
+    if (!is.na(b[2])) iv[2] <- min(iv[2], b[2])
+  }
+  iv
+}
+
+#' Transformations between an interval and the real line
+#' @noRd
+interval_to_u <- function(x, iv) {
+  lo <- iv[1]; hi <- iv[2]
+  if (is.finite(lo) && is.finite(hi)) stats::qlogis((x - lo) / (hi - lo))
+  else if (is.finite(lo)) log(x - lo)
+  else if (is.finite(hi)) log(hi - x)
+  else x
+}
+
+#' @noRd
+interval_from_u <- function(u, iv) {
+  lo <- iv[1]; hi <- iv[2]
+  if (is.finite(lo) && is.finite(hi)) lo + (hi - lo) * stats::plogis(u)
+  else if (is.finite(lo)) lo + exp(u)
+  else if (is.finite(hi)) hi - exp(u)
+  else u
+}
+
+#' @noRd
+interval_log_jacobian <- function(u, iv) {
+  lo <- iv[1]; hi <- iv[2]
+  if (is.finite(lo) && is.finite(hi)) {
+    p <- stats::plogis(u)
+    log(hi - lo) + log(p) + log(1 - p)
+  } else if (is.finite(lo) || is.finite(hi)) {
+    u  # |d/du (lo + exp(u))| = |d/du (hi - exp(u))| = exp(u)
+  } else {
+    0
+  }
+}
 
 #' Transform parameter from natural to unconstrained space
 #' @noRd
 to_unconstrained <- function(x, prior_obj) {
+  if (!is.null(prior_obj$bounds))
+    return(interval_to_u(x, param_interval(prior_obj)))
   switch(prior_obj$support,
     unbounded = x,
     positive  = log(x),
@@ -174,6 +243,8 @@ to_unconstrained <- function(x, prior_obj) {
 #' Transform parameter from unconstrained to natural space
 #' @noRd
 from_unconstrained <- function(u, prior_obj) {
+  if (!is.null(prior_obj$bounds))
+    return(interval_from_u(u, param_interval(prior_obj)))
   switch(prior_obj$support,
     unbounded = u,
     positive  = exp(u),
@@ -189,6 +260,8 @@ from_unconstrained <- function(u, prior_obj) {
 #' Log Jacobian of unconstrained-to-natural transformation
 #' @noRd
 log_jacobian <- function(u, prior_obj) {
+  if (!is.null(prior_obj$bounds))
+    return(interval_log_jacobian(u, param_interval(prior_obj)))
   switch(prior_obj$support,
     unbounded = 0,
     positive  = u,  # d/du exp(u) = exp(u), log|J| = u

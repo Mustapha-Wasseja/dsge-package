@@ -46,6 +46,10 @@
 #'     declared variance, as in Dynare).}
 #'   \item{priors}{Named list of [prior()] objects translated from
 #'     `estimated_params`, ready for [bayes_dsge()], or `NULL`.}
+#'   \item{bounds}{Named list of `c(lower, upper)` bounds from
+#'     `estimated_params` and `estimated_params_bounds` (`NA` for an open
+#'     side), with the same names as `priors`, or `NULL`. [estimate()]
+#'     and [bayes_dsge()] keep the parameters within them, as Dynare does.}
 #'   \item{estimated_params}{Data frame describing each `estimated_params`
 #'     entry and how it was translated.}
 #'   \item{observed}{Observed variables (Dynare names).}
@@ -147,7 +151,11 @@
 #' `lik_init = 2`, from Dynare's covariance of 10 times the identity on its
 #' state vector (the observed and predetermined variables); other
 #' `lik_init` values are reported in `notes`. Set `x$model$kalman_init`
-#' to `NULL` to use the stationary initialisation instead.
+#' to `NULL` to use the stationary initialisation instead. The bounds in
+#' `estimated_params` (overridden by an `estimated_params_bounds` block)
+#' are stored in `bounds`: [estimate()] maximises the likelihood within
+#' them and [bayes_dsge()] keeps every posterior draw within them, as
+#' Dynare does.
 #'
 #' **Optimal policy.** With `planner_objective` and `ramsey_model` or
 #' `ramsey_policy`, the planner's first-order conditions are derived
@@ -272,6 +280,10 @@ print.dsge_dynare <- function(x, ...) {
   cat("  Observed:    ", paste(x$observed, collapse = ", "), "\n")
   if (!is.null(x$priors)) {
     cat("  Priors:      ", length(x$priors), "\n")
+  }
+  if (!is.null(x$bounds)) {
+    cat("  Bounds:      ", length(x$bounds),
+        "(used by estimate() and bayes_dsge())\n")
   }
   if (length(x$commands) > 0L) {
     cat("  Commands:    ",
@@ -1099,7 +1111,8 @@ dyn_build <- function(p, observed = NULL) {
   # --- estimated parameters and priors -----------------------------------
   est <- dyn_parse_estimated(p$blocks$estimated_params,
                              p$blocks$estimated_params_init,
-                             p$params, exo, cal_env, endo = endo)
+                             p$params, exo, cal_env, endo = endo,
+                             bounds_statements = p$blocks$estimated_params_bounds)
   notes <- c(notes, est$notes)
 
   # --- leads and lags -----------------------------------------------------
@@ -1379,6 +1392,8 @@ dyn_build <- function(p, observed = NULL) {
       "Estimated parameter(s) not used in the model equations were dropped: ",
       paste(unused, collapse = ", "), "."))
     est$priors <- est$priors[setdiff(names(est$priors), unused)]
+    est$bounds <- est$bounds[setdiff(names(est$bounds), unused)]
+    if (length(est$bounds) == 0L) est$bounds <- NULL
   }
   start <- list()
   for (nm in est_names) {
@@ -1462,17 +1477,21 @@ dyn_build <- function(p, observed = NULL) {
       if (!is.na(v) && is.finite(v)) shock_sd[key] <- v
     }
   }
-  if (!is.null(est$priors)) {
-    keep <- names(est$priors)
-    me_keys <- dyn_suffix("sd_e.", me_est, prefix = TRUE)
+  # Measurement-error standard deviations are the shocks y_me
+  me_keys <- dyn_suffix("sd_e.", me_est, prefix = TRUE)
+  rename_me <- function(x) {
+    if (is.null(x)) return(NULL)
+    keep <- names(x)
     for (k in which(keep %in% me_keys)) {
       v <- sub("^sd_e\\.", "", keep[k])
       keep[k] <- if (v %in% me_vars) paste0("sd_e.", v, "_me") else NA
     }
-    names(est$priors) <- keep
-    est$priors <- est$priors[!is.na(keep)]
-    if (length(est$priors) == 0L) est$priors <- NULL
+    names(x) <- keep
+    x <- x[!is.na(keep)]
+    if (length(x) == 0L) NULL else x
   }
+  est$priors <- rename_me(est$priors)
+  est$bounds <- rename_me(est$bounds)
 
   zero_sd <- intersect(names(shock_sd)[shock_sd == 0], stoch)
   if (length(zero_sd) > 0L && length(zero_sd) < length(stoch)) {
@@ -1504,7 +1523,8 @@ dyn_build <- function(p, observed = NULL) {
   ignored_blocks <- setdiff(names(p$blocks), c(
     "initval", "initval_opts", "steady_state_model",
     "steady_state_model_opts", "shocks", "shocks_opts", "estimated_params",
-    "estimated_params_init", "osr_params_bounds", "optim_weights",
+    "estimated_params_init", "estimated_params_bounds", "osr_params_bounds",
+    "optim_weights",
     "occbin_constraints", "endval", "histval"))
   if (length(ignored_blocks) > 0L) {
     notes <- c(notes, paste0("Block(s) not translated: ",
@@ -1537,6 +1557,7 @@ dyn_build <- function(p, observed = NULL) {
     params = params,
     shock_sd = shock_sd,
     priors = est$priors,
+    bounds = est$bounds,
     estimated_params = est$table,
     observed = obs[seq_along(obs_model)],
     data_map = data_map,
@@ -2203,7 +2224,8 @@ dyn_prior_shapes <- c(
 
 #' @noRd
 dyn_parse_estimated <- function(statements, init_statements, params, exo,
-                                cal_env, endo = character(0)) {
+                                cal_env, endo = character(0),
+                                bounds_statements = NULL) {
   table <- data.frame(
     name = character(0), type = character(0), init = numeric(0),
     lower = numeric(0), upper = numeric(0), shape = character(0),
@@ -2308,6 +2330,31 @@ dyn_parse_estimated <- function(statements, init_statements, params, exo,
     }
   }
 
+  # estimated_params_bounds overrides the bounds
+  for (st in bounds_statements) {
+    fields <- dyn_split_commas(st)
+    tg <- target(fields, st)
+    idx <- which(table$name == tg$name & table$type == tg$type)
+    if (length(idx) == 1L) {
+      table$lower[idx] <- num(tg$rest[1], "estimated_params_bounds entry")
+      table$upper[idx] <- num(tg$rest[2], "estimated_params_bounds entry")
+    }
+  }
+
+  # Bounds keyed as the priors; bayes_dsge() restricts the posterior to
+  # them, as Dynare does
+  bounds <- list()
+  for (k in seq_len(nrow(table))) {
+    if (table$type[k] == "corr") next
+    b <- c(table$lower[k], table$upper[k])
+    b[!is.finite(b)] <- NA_real_
+    if (all(is.na(b))) next
+    key <- if (table$type[k] %in% c("stderr", "me"))
+             paste0("sd_e.", table$name[k]) else table$name[k]
+    bounds[[key]] <- b
+  }
+  if (length(bounds) == 0L) bounds <- NULL
+
   n_param <- sum(table$type == "param")
   n_with_prior <- sum(table$type == "param" & !is.na(table$shape))
   if (n_with_prior > 0L && n_with_prior < n_param) {
@@ -2316,7 +2363,7 @@ dyn_parse_estimated <- function(statements, init_statements, params, exo,
   }
   if (length(priors) == 0L) priors <- NULL
 
-  list(table = table, priors = priors, notes = notes)
+  list(table = table, priors = priors, bounds = bounds, notes = notes)
 }
 
 #' Convert a Dynare prior (mean, sd, p3, p4) into a dsge prior

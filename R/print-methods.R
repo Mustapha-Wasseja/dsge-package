@@ -113,11 +113,14 @@ print_coef_table <- function(fit) {
               "", "Estimate", "Std. Err.", "z", "P>|z|", "95% CI"))
   cat(paste(rep("-", 78), collapse = ""), "\n")
 
+  at_bound <- fit$at_bound
   for (nm in param_names) {
     idx <- match(nm, names(coefs))
     if (nm %in% names(fit$model$fixed)) {
       cat(sprintf("  %-15s %12.6f %12s %8s %8s\n",
                   nm, coefs[idx], "(fixed)", "", ""))
+    } else if (nm %in% at_bound) {
+      cat(sprintf("  %-15s %12.6f %12s\n", nm, coefs[idx], "(at bound)"))
     } else {
       cat(sprintf("  %-15s %12.6f %12.6f %8.2f %8.4f   [%8.4f, %8.4f]\n",
                   nm, coefs[idx], se[idx], z_vals[idx], p_vals[idx],
@@ -128,6 +131,10 @@ print_coef_table <- function(fit) {
   cat("\nShock standard deviations:\n")
   for (nm in shock_names) {
     idx <- match(nm, names(coefs))
+    if (nm %in% at_bound) {
+      cat(sprintf("  %-15s %12.6f %12s\n", nm, coefs[idx], "(at bound)"))
+      next
+    }
     cat(sprintf("  %-15s %12.6f %12.6f %8.2f %8.4f   [%8.4f, %8.4f]\n",
                 nm, coefs[idx], se[idx], z_vals[idx], p_vals[idx],
                 lower[idx], upper[idx]))

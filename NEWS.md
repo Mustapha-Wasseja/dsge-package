@@ -74,6 +74,32 @@
 
 ## Bug fixes
 
+* `estimate()` and `bayes_dsge()` now keep the parameters of a model
+  imported with `read_dynare()` within the bounds of its
+  `estimated_params` block, as Dynare does. Previously the bounds were
+  read but ignored, so estimates and posterior draws could fall outside
+  them (for Smets-Wouters 2007, 0.2% of the draws of the price Calvo
+  parameter fell below its lower bound of 0.5).
+  * `read_dynare()` returns the bounds as `bounds` (named like `priors`),
+    and also reads `estimated_params_bounds` blocks.
+  * Both functions have a new argument `bounds`: a named list of
+    `c(lower, upper)` vectors (`NA` for an open side; shock standard
+    deviations as `"sd_e.shock"`) for any model. It defaults to the file's
+    bounds for imported models; `bounds = NULL` turns them off. Starting
+    values that are not strictly inside the bounds are moved inside with a
+    warning.
+  * `bayes_dsge()` samples each bounded parameter on the intersection of
+    its prior's support and its bounds, so no draw can leave them. The
+    prior density inside the bounds is not renormalised, as in Dynare.
+  * `estimate()` maximises the likelihood within the bounds with
+    `method = "L-BFGS-B"` (the default when bounds apply; other methods
+    cannot be combined with them). An estimate at a bound gets no standard
+    error, with a warning, and is shown as "(at bound)"; the fit's
+    `at_bound` names such parameters. The other standard errors, and the
+    delta-method standard errors of `irf()`, `policy_matrix()`,
+    `transition_matrix()` and `robust_vcov()`, treat them as known, like
+    fixed parameters. Without bounds, results are unchanged.
+
 * `irf_2nd_order()` returned wrong responses: the shock was scaled by its
   standard deviation twice (so responses were too small by that factor,
   e.g. 100 times for a standard deviation of 0.01), and the quadratic term
