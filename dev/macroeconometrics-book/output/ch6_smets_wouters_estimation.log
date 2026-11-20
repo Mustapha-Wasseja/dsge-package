@@ -1,4 +1,4 @@
-Dynare model imported from <work>/book/Macroeconometrics_book/Chapter6/Codes_Empirical_Examples/sw_table1.mod 
+Dynare model imported from $MACRO_BOOK_DIR/Chapter6/Codes_Empirical_Examples/sw_table1.mod 
   Endogenous:   40 
   Shocks:       7 
   Parameters:   34 ( 29 estimated )

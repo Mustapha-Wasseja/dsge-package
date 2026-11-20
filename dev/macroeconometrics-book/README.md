@@ -3,8 +3,10 @@
 Companion code: <https://github.com/AlessiaPaccagnini/Macroeconometrics_book>
 (De Gruyter, forthcoming). Chapter 6 is the book's only DSGE chapter. Its
 model-based examples are run here with dsge, in R, without Dynare or MATLAB.
-The Smets-Wouters estimation is then checked against Dynare 7.0 estimating
-the same file in MATLAB and in Octave (`ch6_compare_dynare_platforms.R`).
+The Smets-Wouters estimation is then checked against Dynare estimating
+the same file: Dynare 6.0 in Octave with the book's own settings
+(`ch6_compare_dynare.R`), and Dynare 7.0 in MATLAB and Octave with long
+chains (`ch6_compare_dynare_platforms.R`).
 
 | Book item | Book code | What it computes | Here |
 |---|---|---|---|
@@ -27,6 +29,7 @@ export MACRO_BOOK_DIR=/path/to/Macroeconometrics_book
 Rscript dev/macroeconometrics-book/ch6_figure_6_1_rbc_irf.R
 Rscript dev/macroeconometrics-book/ch6_smets_wouters_estimation.R
 Rscript dev/macroeconometrics-book/ch6_compare_sw_mode.R
+Rscript dev/macroeconometrics-book/ch6_compare_dynare.R   # needs Octave + Dynare
 Rscript dev/macroeconometrics-book/ch6_compare_dynare_platforms.R   # needs Dynare's runs, see below
 ```
 
@@ -260,7 +263,96 @@ shock standard deviation of 0.24 is the value in Table 1B of the paper.
 The table is also in `output/sw_mode_vs_published.csv`, and the run in
 `output/ch6_compare_sw_mode.log`.
 
-### Smets-Wouters (2007): dsge against Dynare estimating the same file
+### Smets-Wouters (2007): the book's file in Dynare
+
+`ch6_compare_dynare.R` runs the book's `sw_table1.mod` in Dynare 6.0
+(Octave 8.4; `apt-get install octave dynare` on Ubuntu 24.04) and compares
+it with dsge. One change is needed: the file's mode search
+(`mode_compute = 1` with `optim = ('Algorithm', 'active-set')`) calls
+MATLAB's `fmincon`, which Octave lacks, so it becomes `mode_compute = 4`
+(`csminwel`, Dynare's default). Everything else, including the 2 x 2000
+Metropolis-Hastings draws, is the book's. Dynare took 3.5 minutes.
+
+- **Log posterior kernel.** Dynare and dsge give the same log-likelihood
+  and log-prior at both programs' modes, to within 6e-11:
+
+  | Point | Log-likelihood | Log-prior | Log posterior |
+  |---|---:|---:|---:|
+  | Dynare's mode (Dynare and dsge agree) | -817.411321 | -23.669801 | -841.081122 |
+  | dsge's mode (Dynare and dsge agree) | -817.439610 | -23.641869 | -841.081480 |
+
+  At the file's initial values both report -946.8147.
+- **Posterior mode.** The two modes are the same point for practical
+  purposes: their log posteriors differ by 0.0004, and the 36 parameters
+  differ by a median of 0.004 and at most 0.015 posterior standard
+  deviations (`pi_bar`).
+- **Posterior means.** These differ by a median of 0.16 and at most 0.64
+  posterior standard deviations. That is the Monte Carlo error of the
+  book's short chains: 2 x 2000 draws with an acceptance rate of 52%
+  (`mh_jscale = 0.2` is too small for this model), against dsge's
+  4 x 20000 kept draws.
+
+Results are in `output/dynare_vs_dsge.csv` and
+`output/dynare_kernel_comparison.csv`; Dynare's own logs are
+`output/dynare_sw_table1.log` and `output/dynare_octave_run.log`.
+
+### Smets-Wouters (2007): published vs Dynare vs dsge
+
+Posterior modes of all 36 estimated parameters: Smets and Wouters' own
+mode (`usmodel_mode.mat`), Dynare 6.0 running the book's `sw_table1.mod`
+(`ch6_compare_dynare.R`), and dsge running the same file
+(`ch6_smets_wouters_estimation.R`). dsge and Dynare agree to two or three
+decimals on every parameter. Against the published mode the only real
+differences are the two rows in bold, where the paper's mode is known not
+to be the true mode (Chib and Ramamurthy, 2010) and Dynare and dsge find
+the same, slightly higher-posterior point (log posterior -841.08 against
+-841.46).
+
+| Parameter | Published (SW 2007) | Dynare, book's file | dsge |
+|---|---:|---:|---:|
+| Investment adj. cost (phi) | 5.488 | 5.488 | 5.493 |
+| Risk aversion (sigma_c) | 1.395 | 1.422 | 1.421 |
+| Habit (h) | 0.712 | 0.706 | 0.707 |
+| Wage stickiness (xi_w) | 0.738 | 0.734 | 0.734 |
+| Labour supply elast. (sigma_l) | 1.920 | 1.875 | 1.880 |
+| Price stickiness (xi_p) | 0.656 | 0.654 | 0.654 |
+| Wage indexation (iota_w) | 0.592 | 0.598 | 0.598 |
+| Price indexation (iota_p) | 0.228 | 0.219 | 0.218 |
+| Capital utilisation (psi) | 0.547 | 0.545 | 0.545 |
+| Fixed cost (Phi) | 1.615 | 1.610 | 1.610 |
+| Taylor: inflation (r_pi) | 2.029 | 2.022 | 2.022 |
+| Interest smoothing (rho) | 0.815 | 0.815 | 0.815 |
+| Taylor: output gap (r_y) | 0.085 | 0.088 | 0.088 |
+| Taylor: d output gap (r_dy) | 0.223 | 0.222 | 0.222 |
+| **SS inflation (pi_bar)** | **0.818** | **0.765** | **0.764** |
+| Discount rate 100(1/beta-1) | 0.161 | 0.144 | 0.145 |
+| **SS hours (l_bar)** | **-0.103** | **0.726** | **0.736** |
+| Trend growth (gamma_bar) | 0.432 | 0.434 | 0.434 |
+| Capital share (alpha) | 0.193 | 0.191 | 0.191 |
+| SD productivity shock | 0.452 | 0.453 | 0.453 |
+| SD risk-premium shock | 0.242 | 0.242 | 0.242 |
+| SD spending shock | 0.520 | 0.521 | 0.521 |
+| SD investment shock | 0.450 | 0.455 | 0.455 |
+| SD monetary shock | 0.240 | 0.239 | 0.239 |
+| SD price mark-up shock | 0.141 | 0.140 | 0.140 |
+| SD wage mark-up shock | 0.244 | 0.247 | 0.247 |
+| Persistence: productivity | 0.959 | 0.961 | 0.961 |
+| Persistence: risk premium | 0.182 | 0.183 | 0.183 |
+| Persistence: spending | 0.976 | 0.976 | 0.976 |
+| Persistence: investment | 0.710 | 0.703 | 0.703 |
+| Persistence: monetary | 0.127 | 0.123 | 0.123 |
+| Persistence: price mark-up | 0.904 | 0.908 | 0.908 |
+| Persistence: wage mark-up | 0.972 | 0.974 | 0.974 |
+| MA: price mark-up | 0.745 | 0.744 | 0.744 |
+| MA: wage mark-up | 0.888 | 0.893 | 0.893 |
+| Spending-productivity link | 0.526 | 0.523 | 0.523 |
+
+### Smets-Wouters (2007): Dynare 7.0 in MATLAB and Octave, with long chains
+
+The check above uses the book's 2 x 2000 draws, whose Monte Carlo error
+dominates the comparison of posteriors. This one adds long Dynare chains,
+runs Dynare in MATLAB with the book's exact settings as well as in
+Octave, and compares the posterior distributions item by item.
 
 `ch6_compare_dynare_platforms.R` sets dsge's estimation of `sw_table1.mod` beside
 Dynare 7.0's own estimation of the same file, all run on one Windows 11
