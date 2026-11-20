@@ -151,3 +151,60 @@ test_that("print.dsge_variance_decomposition works for both types", {
   expect_output(print(vd), "Unconditional Variance Decomposition")
   expect_output(print(fv), "Forecast Error Variance Decomposition")
 })
+
+
+test_that("dsge_bayes method solves at the posterior mean", {
+  skip_on_cran()
+  tm <- make_test_model()
+  sol <- tm$sol
+  set.seed(7)
+  TT <- 120
+  xs <- matrix(0, TT, nrow(sol$H))
+  y  <- matrix(0, TT, nrow(sol$G), dimnames = list(NULL, rownames(sol$G)))
+  for (t in 2:TT) {
+    xs[t, ] <- sol$H %*% xs[t - 1, ] + sol$M %*% rnorm(ncol(sol$M))
+    y[t, ]  <- sol$G %*% xs[t, ]
+  }
+  fit <- bayes_dsge(tm$model, data = as.data.frame(y[, c("p", "r")]),
+                    priors = list(kappa = prior("gamma", shape = 2, rate = 20),
+                                  psi   = prior("normal", mean = 1.5, sd = 0.25),
+                                  rhou  = prior("beta", shape1 = 2, shape2 = 2),
+                                  rhog  = prior("beta", shape1 = 2, shape2 = 2)),
+                    chains = 2, iter = 300, warmup = 150, seed = 1)
+
+  vd <- variance_decomposition(fit)
+  expect_s3_class(vd, "dsge_variance_decomposition")
+  expect_identical(vd$obs_names, c("p", "r"))
+  expect_identical(vd$shock_names, c("u", "g"))
+  expect_equal(unname(rowSums(vd$contribution_pct)) / 100, c(1, 1),
+               tolerance = 1e-10)
+
+  fv <- variance_decomposition(fit, horizon = c(1, 8))
+  expect_equal(unname(apply(fv$contribution_pct, c(1, 2), sum)) / 100,
+               matrix(1, 2, 2), tolerance = 1e-10)
+
+  # Same as solving at the posterior mean, shock SDs included
+  pm <- apply(fit$posterior, 2, function(col) mean(as.numeric(col)))
+  sol_pm <- solve_dsge(tm$model, params = pm[fit$free_parameters],
+                       shock_sd = c(u = pm[["sd_e.u"]], g = pm[["sd_e.g"]]))
+  expect_equal(vd$contribution, variance_decomposition(sol_pm)$contribution)
+
+  # `params` replaces the posterior mean of the parameters it names
+  vd_u <- variance_decomposition(fit, params = c(sd_e.u = 3 * pm[["sd_e.u"]]))
+  expect_gt(vd_u$contribution_pct["p", "u"], vd$contribution_pct["p", "u"])
+  expect_equal(variance_decomposition(fit, params = pm)$contribution,
+               vd$contribution)
+  expect_error(variance_decomposition(fit, params = c(beta = 0.98)),
+               "only set estimated parameters")
+  expect_error(variance_decomposition(fit, params = c(sd_e.u = -1)),
+               "must be positive")
+  expect_error(variance_decomposition(fit, params = c(rhou = 1.5)),
+               "no stable solution")
+
+  expect_silent({
+    pdf(tempfile())
+    plot(vd)
+    plot(fv)
+    dev.off()
+  })
+})

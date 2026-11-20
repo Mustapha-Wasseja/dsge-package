@@ -115,6 +115,13 @@
   `read_dynare()` failed when the constraint's bound was a parameter (e.g.
   `bind inot <= ilb`). The result now also stores the bound's numeric value
   (`bound_value`), which the plot and summary use.
+* `variance_decomposition()` failed on every `bayes_dsge()` fit ("requires
+  the dsge_bayes object to carry a $solution component"), because
+  `bayes_dsge()` does not store a solution. It now re-solves the model at
+  the posterior mean of the parameters, including the shock standard
+  deviations, as `shock_decomposition()` does. A new `params` argument
+  evaluates the decomposition at other values of the estimated parameters,
+  such as a single posterior draw.
 
 ## Other changes
 

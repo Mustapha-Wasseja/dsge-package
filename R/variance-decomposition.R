@@ -23,10 +23,23 @@
 #'     \eqn{\sum_{k=0}^{h-1} H^k M \Sigma_\varepsilon M' (H^k)'}.
 #' }
 #'
+#' For a \code{dsge_bayes} fit (from \code{\link{bayes_dsge}()}), the
+#' model is re-solved at the posterior mean of the estimated parameters,
+#' including the shock standard deviations (the \code{sd_e.*} columns of
+#' the posterior), as \code{\link{shock_decomposition}()} does. The result
+#' is therefore the decomposition at a point estimate, not the posterior
+#' mean of the decomposition. Use \code{params} to evaluate it at other
+#' values, such as the posterior median or a single draw.
+#'
 #' @param x A \code{dsge_solution}, \code{dsge_fit}, or \code{dsge_bayes}
 #'   object.
 #' @param horizon \code{NULL} (default) for the unconditional
 #'   decomposition, or an integer vector of horizons for FEVD.
+#' @param params For \code{dsge_bayes} objects: \code{NULL} (default) to
+#'   use the posterior mean, or a named numeric vector (or list) of values
+#'   for some or all of the estimated parameters, named as the columns of
+#'   the posterior (e.g. \code{c(kappa = 0.2, sd_e.u = 0.5)}). Parameters
+#'   not named keep their posterior mean. Fixed parameters cannot be set.
 #' @param ... Additional arguments (currently unused).
 #'
 #' @return An object of class \code{"dsge_variance_decomposition"}
@@ -86,14 +99,10 @@ variance_decomposition.dsge_fit <- function(x, horizon = NULL, ...) {
 
 #' @rdname variance_decomposition
 #' @export
-variance_decomposition.dsge_bayes <- function(x, horizon = NULL, ...) {
-  # Use the underlying solution stored on first model solve at posterior mode/mean.
-  # Fall back to first stored solution if available.
-  sol <- x$solution
-  if (is.null(sol)) {
-    stop("variance_decomposition.dsge_bayes requires the dsge_bayes object ",
-         "to carry a $solution component.", call. = FALSE)
-  }
+variance_decomposition.dsge_bayes <- function(x, horizon = NULL,
+                                              params = NULL, ...) {
+  # bayes_dsge() stores no solution: re-solve at the posterior mean
+  sol <- solve_at_posterior_mean(x, params = params)
   .variance_decomposition_impl(sol, horizon = horizon)
 }
 

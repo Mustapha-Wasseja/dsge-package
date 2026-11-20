@@ -13,7 +13,7 @@ variance_decomposition(x, horizon = NULL, ...)
 
 \method{variance_decomposition}{dsge_fit}(x, horizon = NULL, ...)
 
-\method{variance_decomposition}{dsge_bayes}(x, horizon = NULL, ...)
+\method{variance_decomposition}{dsge_bayes}(x, horizon = NULL, params = NULL, ...)
 }
 \arguments{
 \item{x}{A \code{dsge_solution}, \code{dsge_fit}, or \code{dsge_bayes}
@@ -23,6 +23,12 @@ object.}
 decomposition, or an integer vector of horizons for FEVD.}
 
 \item{...}{Additional arguments (currently unused).}
+
+\item{params}{For \code{dsge_bayes} objects: \code{NULL} (default) to
+use the posterior mean, or a named numeric vector (or list) of values
+for some or all of the estimated parameters, named as the columns of
+the posterior (e.g. \code{c(kappa = 0.2, sd_e.u = 0.5)}). Parameters
+not named keep their posterior mean. Fixed parameters cannot be set.}
 }
 \value{
 An object of class \code{"dsge_variance_decomposition"}
@@ -61,6 +67,14 @@ the observable variance share is
 horizons.  Forecast-error variance at horizon \eqn{h} is
 \eqn{\sum_{k=0}^{h-1} H^k M \Sigma_\varepsilon M' (H^k)'}.
 }
+
+For a \code{dsge_bayes} fit (from \code{\link{bayes_dsge}()}), the
+model is re-solved at the posterior mean of the estimated parameters,
+including the shock standard deviations (the \code{sd_e.*} columns of
+the posterior), as \code{\link{shock_decomposition}()} does. The result
+is therefore the decomposition at a point estimate, not the posterior
+mean of the decomposition. Use \code{params} to evaluate it at other
+values, such as the posterior median or a single draw.
 }
 \examples{
 \donttest{
