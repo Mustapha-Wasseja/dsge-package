@@ -78,7 +78,9 @@ harness and `read_dynare()` fixes described under the higher-order
 section): 55 files match, none differ, 9 are perfect-foresight files, and
 Dynare fails in Octave on 4 (`verLessThan`, `ksdensity`, a missing `.mat`
 file, and Smets-Wouters, whose parameters only `estimated_params` sets).
-Per-file results and one dsge script per file are kept outside this
+The first two run in Dynare 7.0 under MATLAB R2023b, and both match there
+too (Gali_2010_calib_target to 4.8e-15, Smets_Wouters_2007_45 to 1.8e-14
+relative), so 57 files match. Per-file results and one dsge script per file are kept outside this
 repository (the collection is GPL).
 
 `read_dynare()` imports 67 of the 68 files unchanged; the exception loads
