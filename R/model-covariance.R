@@ -209,6 +209,13 @@ model_covariance.dsge_bayes <- function(x, variables = NULL,
   r_0 <- sqrt(rowSums((Zsel %*% M)^2))
   nonstat <- !is.finite(r_inf) | r_inf > 1e-6 * max(1, max(r_0))
   stat <- !nonstat
+  # A stationary row's responses settle at the rounding leak of the unit
+  # root (about r_inf, typically 1e-14), not at zero. A variable no shock
+  # moves has a variance at rounding level itself, so the relative test
+  # below could never pass, and the sum ran to max_iter and warned (9 of the
+  # 22 unit-root models of DSGE_mod). Such a row has converged once its
+  # increment is down to that leak.
+  leak_inc <- (4 * r_inf)^2
 
   gam <- replicate(n_lags + 1L, matrix(0, n, n), simplify = FALSE)
   buf <- vector("list", n_lags + 1L)   # buf[[j + 1]] = R_{k - j}
@@ -223,7 +230,7 @@ model_covariance.dsge_bayes <- function(x, variables = NULL,
     X <- H %*% X
     if (k >= n_lags + 10L) {
       inc <- rowSums(R^2)[stat]
-      if (all(inc <= tol * pmax(diag(gam[[1L]])[stat], 1e-300))) {
+      if (all(inc <= pmax(tol * pmax(diag(gam[[1L]])[stat], 1e-300), leak_inc[stat]))) {
         converged <- TRUE
         break
       }

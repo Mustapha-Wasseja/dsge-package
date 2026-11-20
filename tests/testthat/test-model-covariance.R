@@ -160,3 +160,21 @@ test_that("model_covariance() flags a double unit root (an HP-filter trend)", {
   cv <- model_covariance(solve_dsge(m), variables = c("y", "g"))
   expect_identical(unname(cv$std_dev), c(Inf, Inf))
 })
+
+test_that("a variable carrying only the unit root's rounding leak converges", {
+  # State 1 is a random walk, state 2 an AR(1). Row 1 loads on the random
+  # walk with 1e-14, as a variable no shock moves picks up rounding from a
+  # unit root (Gali 2015 ch. 4, Gali-Monacelli 2005, SGU 2003). Its
+  # responses stay at 1e-14 forever, so a test relative to its own
+  # (rounding-level) variance never passed: the sum ran 200000 periods and
+  # warned.
+  H <- diag(c(1, 0.5))
+  M <- diag(2)
+  Zsel <- rbind(c(1e-14, 0), c(0, 1), c(1, 0))
+  expect_no_warning(gam <- dsge:::.covariance_irf_sum(Zsel, H, M, n_lags = 1L))
+  v <- diag(gam[[1L]])
+  expect_lt(v[1], 1e-20)
+  expect_equal(v[2], 1 / (1 - 0.25), tolerance = 1e-12)
+  expect_identical(v[3], Inf)
+  expect_equal(gam[[2L]][2, 2], 0.5 / (1 - 0.25), tolerance = 1e-12)
+})

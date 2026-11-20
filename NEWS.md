@@ -137,8 +137,11 @@
   33.3). With a unit root, covariances and autocovariances are now sums of
   impulse-response products, which converge for stationary variables;
   variables whose responses do not die out get an infinite variance and
-  `NA` correlations, as in Dynare. Across the 55 comparable DSGE_mod
-  models, all standard deviations now match Dynare 7.0's.
+  `NA` correlations, as in Dynare. A variable that no shock moves counts as
+  converged once its responses are down to the unit root's rounding leak,
+  so such models no longer warn that the sums did not converge. Across the
+  57 comparable DSGE_mod models, all standard deviations now match Dynare
+  7.0's.
 
 * `irf_2nd_order()` returned wrong responses: the shock was scaled by its
   standard deviation twice (so responses were too small by that factor,
