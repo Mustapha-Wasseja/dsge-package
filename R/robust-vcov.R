@@ -110,8 +110,10 @@ robust_vcov.dsge_fit <- function(object, step = 1e-5, ...) {
   n_T <- nrow(y)
   ll_base <- obs_loglik(theta_hat)
 
+  # Parameters estimated at a bound are held fixed (zero score columns)
+  keep <- fit_theta_keep(object)
   score_matrix <- matrix(0, n_T, n_theta)
-  for (j in seq_len(n_theta)) {
+  for (j in which(keep)) {
     theta_plus <- theta_hat
     theta_minus <- theta_hat
     h <- max(abs(theta_hat[j]) * step, step)
@@ -135,9 +137,10 @@ robust_vcov.dsge_fit <- function(object, step = 1e-5, ...) {
     stop("Hessian not available. Re-estimate with hessian = TRUE.")
   }
 
-  H_inv <- tryCatch(solve(hess), error = function(e) {
+  H_inv <- inv_hessian_inner(hess, keep)
+  if (is.null(H_inv)) {
     stop("Hessian is singular; cannot compute robust vcov.")
-  })
+  }
 
   # Sandwich: V_robust = H^{-1} B H^{-1} (in theta space)
   V_robust_theta <- H_inv %*% B %*% H_inv
@@ -152,6 +155,7 @@ robust_vcov.dsge_fit <- function(object, step = 1e-5, ...) {
   pnames <- c(free_params, sd_names)
   rownames(V_robust) <- colnames(V_robust) <- pnames
   se_robust <- sqrt(pmax(diag(V_robust), 0))
+  se_robust[!keep] <- NA_real_
   names(se_robust) <- pnames
 
   # Conventional SEs for comparison

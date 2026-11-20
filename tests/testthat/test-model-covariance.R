@@ -133,3 +133,30 @@ test_that("model_covariance multi-variable NK model", {
   expect_true(all(mc$correlation >= -1 - 1e-10))
   expect_true(all(mc$correlation <= 1 + 1e-10))
 })
+
+test_that("model_covariance() handles a unit root as Dynare does", {
+  # p is the cumulated sum of an AR(1) growth rate dp: dp is stationary,
+  # p has no unconditional variance. The Lyapunov solution used to give p a
+  # large finite variance and could contaminate the stationary variables.
+  m <- read_dynare(text = "var p dp; varexo e; parameters rho; rho = 0.5;
+                           model; dp = rho*dp(-1) + e; p = p(-1) + dp; end;
+                           steady_state_model; dp = 0; p = 0; end;
+                           shocks; var e; stderr 0.1; end;")
+  cv <- model_covariance(solve_dsge(m), variables = c("dp", "p"), n_lags = 1)
+  expect_equal(unname(cv$std_dev[1]), 0.1 / sqrt(1 - 0.5^2), tolerance = 1e-10)
+  expect_identical(unname(cv$std_dev[2]), Inf)
+  expect_true(is.na(cv$correlation[1, 2]))
+  expect_equal(unname(cv$autocovariances$lag_1[1, 1]), 0.5 * 0.01 / (1 - 0.5^2),
+               tolerance = 1e-10)
+})
+
+test_that("model_covariance() flags a double unit root (an HP-filter trend)", {
+  # g = 2 g(-1) - g(-2) + v is I(2); rounding puts its Jordan block a hair
+  # inside the unit circle, which a very long horizon mistook for stationary
+  m <- read_dynare(text = "var y g; varexo v c; parameters a; a = 1;
+                           model; g = 2*g(-1) - g(-2) + v; y = a*g + c; end;
+                           steady_state_model; g = 0; y = 0; end;
+                           shocks; var v; stderr 0.01; var c; stderr 1; end;")
+  cv <- model_covariance(solve_dsge(m), variables = c("y", "g"))
+  expect_identical(unname(cv$std_dev), c(Inf, Inf))
+})

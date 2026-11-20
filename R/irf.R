@@ -119,7 +119,6 @@ compute_irf_values <- function(G, H, M, controls, states, shocks,
 #' @noRd
 add_irf_se <- function(fit, irf_data, impulse, response, periods, level) {
   z_crit <- qnorm(1 - (1 - level) / 2)
-  theta_opt <- fit$optim_result$par
   free_params <- fit$free_parameters
   n_shocks <- fit$model$n_exo_states
 
@@ -154,21 +153,14 @@ add_irf_se <- function(fit, irf_data, impulse, response, periods, level) {
     vals
   }
 
-  jac <- tryCatch(
-    numDeriv::jacobian(irf_fn, theta_opt),
-    error = function(e) NULL
-  )
-
-  if (!is.null(jac)) {
-    vcov_theta <- tryCatch(solve(fit$optim_result$hessian), error = function(e) NULL)
-    if (!is.null(vcov_theta)) {
-      vcov_irf <- jac %*% vcov_theta %*% t(jac)
-      se_vals <- sqrt(pmax(diag(vcov_irf), 0))
-      irf_data$se <- se_vals
-      irf_data$lower <- irf_data$value - z_crit * se_vals
-      irf_data$upper <- irf_data$value + z_crit * se_vals
-      return(irf_data)
-    }
+  # Delta method; parameters estimated at a bound are held fixed
+  vcov_irf <- delta_method_vcov(fit, irf_fn)
+  if (!is.null(vcov_irf)) {
+    se_vals <- sqrt(pmax(diag(vcov_irf), 0))
+    irf_data$se <- se_vals
+    irf_data$lower <- irf_data$value - z_crit * se_vals
+    irf_data$upper <- irf_data$value + z_crit * se_vals
+    return(irf_data)
   }
 
   irf_data$se <- NA_real_

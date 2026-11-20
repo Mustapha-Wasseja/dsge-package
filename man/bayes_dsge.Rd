@@ -18,7 +18,8 @@ bayes_dsge(
   n_cores = 1L,
   endogenous_prior = NULL,
   presample = 0L,
-  shock_start = NULL
+  shock_start = NULL,
+  bounds = NULL
 )
 }
 \arguments{
@@ -76,6 +77,17 @@ Dynare's \code{presample} option). Default 0; for a model imported with
 the shock standard deviations (names as the shocks). Defaults to the
 standard deviation of the data; for a model imported with
 \code{\link[=read_dynare]{read_dynare()}}, the shock standard deviations from the file.}
+
+\item{bounds}{Optional named list of \code{c(lower, upper)} vectors, one per
+bounded parameter (names as in \code{priors}, \code{"sd_e.shock_name"} for shock
+standard deviations; \code{NA} for an open side). The posterior is
+restricted to the bounds, as Dynare restricts it to the bounds in
+\code{estimated_params}: draws never leave them, and the prior density
+inside them is not renormalised. Starting values outside the bounds
+are moved inside with a warning. For a model imported with
+\code{\link[=read_dynare]{read_dynare()}}, defaults to the file's bounds (from \code{estimated_params}
+and \code{estimated_params_bounds}); pass \code{bounds = NULL} to estimate
+without them. Default \code{NULL} (no bounds) otherwise.}
 }
 \value{
 An object of class \code{"dsge_bayes"} containing posterior draws
@@ -94,8 +106,10 @@ vector.
 \details{
 The sampler operates in unconstrained space with appropriate
 transformations (log for positive parameters, logit for unit-interval
-parameters) and Jacobian corrections. The proposal covariance is adapted
-during warmup to target approximately 25\\% acceptance rate.
+parameters, and a scaled logit or shifted log onto the interval allowed
+by the prior's support and \code{bounds}) and Jacobian corrections. The
+proposal covariance is adapted during warmup to target approximately
+25\\% acceptance rate.
 
 Chains are initialized by drawing from the prior. If any draw yields
 a non-finite log-posterior, the starting values are jittered until

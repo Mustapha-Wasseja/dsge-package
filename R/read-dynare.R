@@ -46,6 +46,10 @@
 #'     declared variance, as in Dynare).}
 #'   \item{priors}{Named list of [prior()] objects translated from
 #'     `estimated_params`, ready for [bayes_dsge()], or `NULL`.}
+#'   \item{bounds}{Named list of `c(lower, upper)` bounds from
+#'     `estimated_params` and `estimated_params_bounds` (`NA` for an open
+#'     side), with the same names as `priors`, or `NULL`. [estimate()]
+#'     and [bayes_dsge()] keep the parameters within them, as Dynare does.}
 #'   \item{estimated_params}{Data frame describing each `estimated_params`
 #'     entry and how it was translated.}
 #'   \item{observed}{Observed variables (Dynare names).}
@@ -147,7 +151,11 @@
 #' `lik_init = 2`, from Dynare's covariance of 10 times the identity on its
 #' state vector (the observed and predetermined variables); other
 #' `lik_init` values are reported in `notes`. Set `x$model$kalman_init`
-#' to `NULL` to use the stationary initialisation instead.
+#' to `NULL` to use the stationary initialisation instead. The bounds in
+#' `estimated_params` (overridden by an `estimated_params_bounds` block)
+#' are stored in `bounds`: [estimate()] maximises the likelihood within
+#' them and [bayes_dsge()] keeps every posterior draw within them, as
+#' Dynare does.
 #'
 #' **Optimal policy.** With `planner_objective` and `ramsey_model` or
 #' `ramsey_policy`, the planner's first-order conditions are derived
@@ -234,7 +242,7 @@ read_dynare <- function(file, text = NULL, observed = NULL, defines = NULL) {
     if (!file.exists(file)) {
       stop("File not found: ", file, call. = FALSE)
     }
-    src <- readLines(file, warn = FALSE)
+    src <- dyn_read_lines(file)
     source_name <- file
     src_dir <- dirname(file)
   } else {
@@ -258,6 +266,21 @@ read_dynare <- function(file, text = NULL, observed = NULL, defines = NULL) {
   structure(build, class = "dsge_dynare")
 }
 
+# Read a Dynare or MATLAB source file. These files declare no encoding and
+# are often Latin-1 (an accented author name in a header comment is
+# enough); in a UTF-8 locale such a byte is an invalid string and R's
+# regular expressions then fail or return NA. Lines that are not valid
+# UTF-8 are therefore read as Latin-1, which always converts, and a UTF-8
+# byte-order mark is dropped.
+dyn_read_lines <- function(path) {
+  x <- readLines(path, warn = FALSE, encoding = "UTF-8")
+  bad <- !validUTF8(x)
+  if (any(bad)) x[bad] <- iconv(x[bad], from = "latin1", to = "UTF-8")
+  bom <- intToUtf8(0xFEFF)
+  if (length(x) && startsWith(x[1L], bom)) x[1L] <- substring(x[1L], 2L)
+  x
+}
+
 #' @export
 print.dsge_dynare <- function(x, ...) {
   cat("Dynare model imported from", x$file, "\n")
@@ -272,6 +295,10 @@ print.dsge_dynare <- function(x, ...) {
   cat("  Observed:    ", paste(x$observed, collapse = ", "), "\n")
   if (!is.null(x$priors)) {
     cat("  Priors:      ", length(x$priors), "\n")
+  }
+  if (!is.null(x$bounds)) {
+    cat("  Bounds:      ", length(x$bounds),
+        "(used by estimate() and bayes_dsge())\n")
   }
   if (length(x$commands) > 0L) {
     cat("  Commands:    ",
@@ -588,6 +615,7 @@ dyn_parse_statements <- function(statements) {
   i <- 1L
   n <- length(statements)
   computed <- FALSE
+  simulated <- FALSE
   while (i <= n) {
     st <- statements[i]
     if (startsWith(st, "%native% ")) {
@@ -635,6 +663,18 @@ dyn_parse_statements <- function(statements) {
       }
       if (j > n) {
         stop("Block '", kw, "' is not closed with 'end;'.", call. = FALSE)
+      }
+      if (kw == "shocks" && simulated) {
+        # As for parameters, the model is imported with the shocks in force
+        # when the file first simulates it: a later shocks block (e.g.
+        # Guerrieri-Iacoviello's second shocks(surprise, overwrite), or
+        # Born-Pfeifer 2018's variances for a second stoch_simul) used to
+        # be merged in and override the first.
+        p$notes <- c(p$notes, paste0(
+          "shocks block after the first computing command ignored: ",
+          substr(paste(body, collapse = " "), 1L, 60L)))
+        i <- j + 1L
+        next
       }
       p$sequence <- c(p$sequence, paste0("block:", kw))
       if (kw == "model") {
@@ -721,6 +761,8 @@ dyn_parse_statements <- function(statements) {
                                                   statement = st)
     p$sequence <- c(p$sequence, paste0("cmd:", kw))
     if (kw %in% dyn_compute_cmds) computed <- TRUE
+    # commands that use the shocks (steady and check do not)
+    if (kw %in% setdiff(dyn_compute_cmds, c("steady", "check"))) simulated <- TRUE
     i <- i + 1L
   }
 
@@ -960,8 +1002,10 @@ dyn_build <- function(p, observed = NULL) {
       })
       if (!inherits(val, "error")) {
         dyn_matlab_sync(mctx, cal_env)
-        if (pe$name %in% p$params &&
-            !(is.numeric(val) || is.logical(val)) || length(val) != 1L) {
+        # A non-number for a model parameter is an error; any other
+        # non-number (a MATLAB string such as country_string = 'Argentina')
+        # stays a MATLAB value and is not coerced (that gave NA + a warning)
+        if (!(is.numeric(val) || is.logical(val)) || length(val) != 1L) {
           if (pe$name %in% p$params) {
             stop("Parameter '", pe$name, "' is not assigned a number: ",
                  pe$expr, call. = FALSE)
@@ -1099,7 +1143,8 @@ dyn_build <- function(p, observed = NULL) {
   # --- estimated parameters and priors -----------------------------------
   est <- dyn_parse_estimated(p$blocks$estimated_params,
                              p$blocks$estimated_params_init,
-                             p$params, exo, cal_env, endo = endo)
+                             p$params, exo, cal_env, endo = endo,
+                             bounds_statements = p$blocks$estimated_params_bounds)
   notes <- c(notes, est$notes)
 
   # --- leads and lags -----------------------------------------------------
@@ -1379,6 +1424,8 @@ dyn_build <- function(p, observed = NULL) {
       "Estimated parameter(s) not used in the model equations were dropped: ",
       paste(unused, collapse = ", "), "."))
     est$priors <- est$priors[setdiff(names(est$priors), unused)]
+    est$bounds <- est$bounds[setdiff(names(est$bounds), unused)]
+    if (length(est$bounds) == 0L) est$bounds <- NULL
   }
   start <- list()
   for (nm in est_names) {
@@ -1435,8 +1482,15 @@ dyn_build <- function(p, observed = NULL) {
         stop("No value assigned to parameter(s): ",
              paste(miss, collapse = ", "), call. = FALSE)
       }
-      make_model(eq_set, as.list(params[setdiff(prm, est_names)]),
-                 start[intersect(names(start), prm)])
+      regime <- make_model(eq_set, as.list(params[setdiff(prm, est_names)]),
+                           start[intersect(names(start), prm)])
+      # STEADY_STATE(x) in a regime refers to the reference model's steady
+      # state, as in Dynare; without the link its constants had no value
+      # ("Missing parameter values: iv__ss, ...", Guerrieri-Iacoviello 2015)
+      if (length(ss_links) > 0L) {
+        regime <- dyn_link_steady_state(regime, ss_model, ss_links)
+      }
+      regime
     }, all_eqs)
 
   # Calibrated values of estimated parameters complete the calibration
@@ -1462,17 +1516,21 @@ dyn_build <- function(p, observed = NULL) {
       if (!is.na(v) && is.finite(v)) shock_sd[key] <- v
     }
   }
-  if (!is.null(est$priors)) {
-    keep <- names(est$priors)
-    me_keys <- dyn_suffix("sd_e.", me_est, prefix = TRUE)
+  # Measurement-error standard deviations are the shocks y_me
+  me_keys <- dyn_suffix("sd_e.", me_est, prefix = TRUE)
+  rename_me <- function(x) {
+    if (is.null(x)) return(NULL)
+    keep <- names(x)
     for (k in which(keep %in% me_keys)) {
       v <- sub("^sd_e\\.", "", keep[k])
       keep[k] <- if (v %in% me_vars) paste0("sd_e.", v, "_me") else NA
     }
-    names(est$priors) <- keep
-    est$priors <- est$priors[!is.na(keep)]
-    if (length(est$priors) == 0L) est$priors <- NULL
+    names(x) <- keep
+    x <- x[!is.na(keep)]
+    if (length(x) == 0L) NULL else x
   }
+  est$priors <- rename_me(est$priors)
+  est$bounds <- rename_me(est$bounds)
 
   zero_sd <- intersect(names(shock_sd)[shock_sd == 0], stoch)
   if (length(zero_sd) > 0L && length(zero_sd) < length(stoch)) {
@@ -1504,7 +1562,8 @@ dyn_build <- function(p, observed = NULL) {
   ignored_blocks <- setdiff(names(p$blocks), c(
     "initval", "initval_opts", "steady_state_model",
     "steady_state_model_opts", "shocks", "shocks_opts", "estimated_params",
-    "estimated_params_init", "osr_params_bounds", "optim_weights",
+    "estimated_params_init", "estimated_params_bounds", "osr_params_bounds",
+    "optim_weights",
     "occbin_constraints", "endval", "histval"))
   if (length(ignored_blocks) > 0L) {
     notes <- c(notes, paste0("Block(s) not translated: ",
@@ -1537,6 +1596,7 @@ dyn_build <- function(p, observed = NULL) {
     params = params,
     shock_sd = shock_sd,
     priors = est$priors,
+    bounds = est$bounds,
     estimated_params = est$table,
     observed = obs[seq_along(obs_model)],
     data_map = data_map,
@@ -1710,7 +1770,9 @@ dyn_link_steady_state <- function(model, ss_model, links) {
   inner_resolve <- model$resolve_values
   resolve <- function(values) {
     if (is.function(inner_resolve)) values <- inner_resolve(values)
-    pv <- values[param_names]
+    # an OccBin regime may lack a parameter of the reference model; the
+    # reference model's own calibration then supplies it
+    pv <- values[intersect(param_names, names(values))]
     if (is.null(cache$key) || !identical(cache$key, pv)) {
       ss <- steady_state(ss_model, params = pv)
       cache$key <- pv
@@ -2203,7 +2265,8 @@ dyn_prior_shapes <- c(
 
 #' @noRd
 dyn_parse_estimated <- function(statements, init_statements, params, exo,
-                                cal_env, endo = character(0)) {
+                                cal_env, endo = character(0),
+                                bounds_statements = NULL) {
   table <- data.frame(
     name = character(0), type = character(0), init = numeric(0),
     lower = numeric(0), upper = numeric(0), shape = character(0),
@@ -2308,6 +2371,31 @@ dyn_parse_estimated <- function(statements, init_statements, params, exo,
     }
   }
 
+  # estimated_params_bounds overrides the bounds
+  for (st in bounds_statements) {
+    fields <- dyn_split_commas(st)
+    tg <- target(fields, st)
+    idx <- which(table$name == tg$name & table$type == tg$type)
+    if (length(idx) == 1L) {
+      table$lower[idx] <- num(tg$rest[1], "estimated_params_bounds entry")
+      table$upper[idx] <- num(tg$rest[2], "estimated_params_bounds entry")
+    }
+  }
+
+  # Bounds keyed as the priors; bayes_dsge() restricts the posterior to
+  # them, as Dynare does
+  bounds <- list()
+  for (k in seq_len(nrow(table))) {
+    if (table$type[k] == "corr") next
+    b <- c(table$lower[k], table$upper[k])
+    b[!is.finite(b)] <- NA_real_
+    if (all(is.na(b))) next
+    key <- if (table$type[k] %in% c("stderr", "me"))
+             paste0("sd_e.", table$name[k]) else table$name[k]
+    bounds[[key]] <- b
+  }
+  if (length(bounds) == 0L) bounds <- NULL
+
   n_param <- sum(table$type == "param")
   n_with_prior <- sum(table$type == "param" & !is.na(table$shape))
   if (n_with_prior > 0L && n_with_prior < n_param) {
@@ -2316,7 +2404,7 @@ dyn_parse_estimated <- function(statements, init_statements, params, exo,
   }
   if (length(priors) == 0L) priors <- NULL
 
-  list(table = table, priors = priors, notes = notes)
+  list(table = table, priors = priors, bounds = bounds, notes = notes)
 }
 
 #' Convert a Dynare prior (mean, sd, p3, p4) into a dsge prior

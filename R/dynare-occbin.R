@@ -202,6 +202,12 @@ dyn_occbin_simulate <- function(x, shocks = NULL, horizon = 40L,
   env <- new.env(parent = baseenv())
   for (nm in names(x$params)) assign(nm, x$params[[nm]], envir = env)
   for (nm in names(pv)) assign(nm, pv[[nm]], envir = env)
+  # steady_state(x) / STEADY_STATE(x) in a constraint (e.g. Guerrieri and
+  # Iacoviello's "bind iv < PHI*steady_state(iv)"): x's steady-state level,
+  # taken by name, not from the current value of x
+  ss_fun <- function(x) unname(ss[[deparse(substitute(x))]])
+  assign("steady_state", ss_fun, envir = env)
+  assign("STEADY_STATE", ss_fun, envir = env)
   cond_exprs <- lapply(cons, function(cn) {
     list(bind = parse(text = dyn_translate_math(cn$bind))[[1]],
          relax = if (is.null(cn$relax)) NULL
@@ -211,6 +217,45 @@ dyn_occbin_simulate <- function(x, shocks = NULL, horizon = 40L,
     e <- new.env(parent = env)
     for (nm in names(levels)) assign(nm, levels[[nm]], envir = e)
     isTRUE(as.logical(eval(expr, envir = e)))
+  }
+
+  # Shadow values for relax conditions. When the binding and relaxed
+  # equations of a constraint set the same variable (Guerrieri-Iacoviello's
+  # "r = ZLB" vs "r = Taylor rule"), a relax condition on that variable
+  # ("relax r > ZLB") is evaluated, as in Dynare, at the value the relaxed
+  # equation implies (the notional rate); otherwise r sits at the bound and
+  # the regimes only flip on rounding error. shadow = value - residual of
+  # the relaxed equation "v = RHS"; equations with leads are left alone.
+  for (nm in names(x$model$ss_links)) {
+    assign(nm, unname(ss[[x$model$ss_links[[nm]]]]), envir = env)
+  }
+  base_eqs <- x$model$equations
+  shadow <- lapply(seq_len(n_con), function(k) {
+    r_k <- which(apply(ob$regimes, 1L, function(r) r[k] && sum(r) == 1L))
+    alt <- if (length(r_k) == 1L) ob$models[[r_k]] else NULL
+    if (is.null(alt) || length(alt$equations) != length(base_eqs)) return(list())
+    out <- list()
+    for (i in seq_along(base_eqs)) {
+      b <- base_eqs[[i]]
+      a <- alt$equations[[i]]
+      if (identical(b$original, a$original) || is.null(b$lhs_str)) next
+      lhs <- trimws(b$lhs_str)
+      if (!identical(lhs, trimws(a$lhs_str)) ||
+          !grepl("^[A-Za-z_][A-Za-z0-9_]*$", lhs) ||
+          any(grepl("__f$", b$all_names))) next
+      out[[lhs]] <- b$expression[[1]]
+    }
+    out
+  })
+  with_shadow <- function(levels, k) {
+    sh <- shadow[[k]]
+    if (!length(sh)) return(levels)
+    e <- new.env(parent = env)
+    for (nm in names(levels)) assign(nm, levels[[nm]], envir = e)
+    for (v in intersect(names(sh), names(levels))) {
+      levels[[v]] <- levels[[v]] - eval(sh[[v]], envir = e)
+    }
+    levels
   }
   regime_row <- function(bind_vec) {
     which(apply(ob$regimes, 1L, function(r) all(r == bind_vec)))
@@ -266,7 +311,7 @@ dyn_occbin_simulate <- function(x, shocks = NULL, horizon = 40L,
         } else if (is.null(cond_exprs[[k]]$relax)) {
           new[t, k] <- eval_cond(cond_exprs[[k]]$bind, lv)
         } else {
-          new[t, k] <- !eval_cond(cond_exprs[[k]]$relax, lv)
+          new[t, k] <- !eval_cond(cond_exprs[[k]]$relax, with_shadow(lv, k))
         }
       }
     }

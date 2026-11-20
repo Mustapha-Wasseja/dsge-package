@@ -74,6 +74,72 @@
 
 ## Bug fixes
 
+* `estimate()` and `bayes_dsge()` now keep the parameters of a model
+  imported with `read_dynare()` within the bounds of its
+  `estimated_params` block, as Dynare does. Previously the bounds were
+  read but ignored, so estimates and posterior draws could fall outside
+  them (for Smets-Wouters 2007, 0.2% of the draws of the price Calvo
+  parameter fell below its lower bound of 0.5).
+  * `read_dynare()` returns the bounds as `bounds` (named like `priors`),
+    and also reads `estimated_params_bounds` blocks.
+  * Both functions have a new argument `bounds`: a named list of
+    `c(lower, upper)` vectors (`NA` for an open side; shock standard
+    deviations as `"sd_e.shock"`) for any model. It defaults to the file's
+    bounds for imported models; `bounds = NULL` turns them off. Starting
+    values that are not strictly inside the bounds are moved inside with a
+    warning.
+  * `bayes_dsge()` samples each bounded parameter on the intersection of
+    its prior's support and its bounds, so no draw can leave them. The
+    prior density inside the bounds is not renormalised, as in Dynare.
+  * `estimate()` maximises the likelihood within the bounds with
+    `method = "L-BFGS-B"` (the default when bounds apply; other methods
+    cannot be combined with them). An estimate at a bound gets no standard
+    error, with a warning, and is shown as "(at bound)"; the fit's
+    `at_bound` names such parameters. The other standard errors, and the
+    delta-method standard errors of `irf()`, `policy_matrix()`,
+    `transition_matrix()` and `robust_vcov()`, treat them as known, like
+    fixed parameters. Without bounds, results are unchanged.
+
+* `read_dynare()` failed with "missing value where TRUE/FALSE needed" on
+  `.mod` files that are not UTF-8, such as Johannes Pfeifer's
+  `SGU_2004.mod`, whose header comment has an accented e in Latin-1,
+  whenever R runs in a UTF-8 locale (the default on Windows since R 4.2).
+  `.mod` files, `@#include`d files and MATLAB `.m` files are now read as
+  UTF-8 with a Latin-1 fallback for invalid lines, and a byte-order mark is
+  dropped.
+* `read_dynare()` no longer warns "NAs introduced by coercion" for MATLAB
+  string assignments among the parameter statements (e.g.
+  `country_string = 'Argentina'`); they stay MATLAB values. A model
+  parameter assigned a non-number is still an error.
+* `read_dynare()` merged every `shocks` block of a file, so a block that
+  sets up a later experiment (after the first `stoch_simul`,
+  `occbin_solver`, ...) overrode the shocks of the first one: 17 of the 68
+  files in Pfeifer's DSGE_mod collection were imported with the wrong
+  shock variances or surprise shocks. As for parameters, the shocks in force
+  at the first computing command are now used, and later blocks are listed
+  in `notes`.
+* OccBin on imported models: `steady_state(x)` in a regime equation or in
+  `occbin_constraints` had no value ("Missing parameter values: iv__ss",
+  then "could not find function steady_state"); it is now the steady state
+  of the reference regime, as in Dynare. A relax condition on the
+  constrained variable itself (`bind r <= ZLB; relax r > ZLB` with
+  `r = ZLB` when binding) is evaluated at the value the relaxed equation
+  implies, as Dynare does; before, the regime iteration did not converge.
+  Both Guerrieri-Iacoviello (2015) files of DSGE_mod now reproduce Dynare
+  7.0's piecewise-linear paths to 1e-10.
+* `model_covariance()` failed with a dimnames error on any model without
+  observed variables (every imported `.mod` file without `varobs`):
+  `paste0("y", seq_len(0))` is `"y"`, which invented an observable.
+* `model_covariance()` returned meaningless numbers for models with a unit
+  root (a price level, a cumulated variable, an HP-filter trend): the
+  Lyapunov equation has no solution then, and the result also contaminated
+  stationary variables (Gali 2008, ch. 5: money growth sd 408217 instead of
+  33.3). With a unit root, covariances and autocovariances are now sums of
+  impulse-response products, which converge for stationary variables;
+  variables whose responses do not die out get an infinite variance and
+  `NA` correlations, as in Dynare. Across the 55 comparable DSGE_mod
+  models, all standard deviations now match Dynare 7.0's.
+
 * `irf_2nd_order()` returned wrong responses: the shock was scaled by its
   standard deviation twice (so responses were too small by that factor,
   e.g. 100 times for a standard deviation of 0.01), and the quadratic term
