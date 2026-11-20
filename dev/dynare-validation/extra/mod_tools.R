@@ -16,16 +16,43 @@ stop_cmds <- c("stoch_simul", "estimation", "shock_decomposition",
 
 policy_cmds <- c("ramsey_policy", "discretionary_policy")
 
+# .mod files declare no encoding and are often Latin-1 (accented author
+# names in header comments); read invalid UTF-8 lines as Latin-1, as
+# read_dynare() does, so that the regular expressions below do not fail
+read_mod_lines <- function(path) {
+  x <- readLines(path, warn = FALSE, encoding = "UTF-8")
+  bad <- !validUTF8(x)
+  if (any(bad)) x[bad] <- iconv(x[bad], from = "latin1", to = "UTF-8")
+  x
+}
+
 # Cut the file at its first computing command, close any macro @#if/@#for
 # left open by the cut, and append a first-order stoch_simul (or the policy
 # command itself, with IRF options, for ramsey_policy/discretionary_policy).
 truncate_mod <- function(lines, order = 1L, irf = 20L) {
+  # Commands that only typeset or describe the model change nothing in it.
+  # Comment them out instead of cutting the file there: a shocks block or a
+  # steady_state_model often follows them (Jermann 1998, Basu-Bundick 2017,
+  # Born-Pfeifer 2018), and cutting there left the shocks with no variance.
+  neutral <- "^\\s*(write_latex_[A-Za-z_]+|collect_latex_files|model_info|model_diagnostics)\\b"
+  i <- 1L
+  while (i <= length(lines)) {
+    if (grepl(neutral, lines[i])) {
+      j <- i
+      while (!grepl(";", lines[j]) && j < length(lines)) j <- j + 1L
+      lines[i:j] <- paste("//", lines[i:j])
+      i <- j
+    }
+    i <- i + 1L
+  }
   pat <- paste0("^\\s*(", paste(stop_cmds, collapse = "|"), ")\\b")
   hit <- grep(pat, lines)
   in_block <- FALSE
   first <- NA
   for (i in seq_along(lines)) {
-    l <- lines[i]
+    # count /* and */ outside line comments: a banner such as "//*****"
+    # contains "/*" and used to switch every later command off
+    l <- sub("(//|%).*$", "", lines[i])
     if (!in_block && i %in% hit) { first <- i; break }
     opens <- lengths(regmatches(l, gregexpr("/\\*", l)))
     closes <- lengths(regmatches(l, gregexpr("\\*/", l)))
@@ -76,7 +103,7 @@ prepare_mod <- function(mod, suffix, order = 1L, irf = 20L) {
   file.copy(list.files(dirname(mod), full.names = TRUE), work, recursive = TRUE)
   base <- gsub("[^A-Za-z0-9_]", "_", tools::file_path_sans_ext(basename(mod)))
   name <- paste0(base, "_", suffix)
-  writeLines(truncate_mod(readLines(mod, warn = FALSE), order, irf),
+  writeLines(truncate_mod(read_mod_lines(mod), order, irf),
              file.path(work, paste0(name, ".mod")))
   ssm <- file.path(dirname(mod), paste0(
     tools::file_path_sans_ext(basename(mod)), "_steadystate.m"))
@@ -88,5 +115,5 @@ prepare_mod <- function(mod, suffix, order = 1L, irf = 20L) {
 
 is_perfect_foresight <- function(mod) {
   any(grepl("^\\s*(simul|perfect_foresight_setup|perfect_foresight_solver)\\b",
-            readLines(mod, warn = FALSE)))
+            read_mod_lines(mod)))
 }
