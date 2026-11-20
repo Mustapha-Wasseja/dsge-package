@@ -223,7 +223,7 @@ dyn_macro_include <- function(arg, state, dir) {
   if (is.na(path)) {
     stop("@#include file not found: ", f, call. = FALSE)
   }
-  src <- dyn_strip_comments(paste(readLines(path, warn = FALSE),
+  src <- dyn_strip_comments(paste(dyn_read_lines(path),
                                   collapse = "\n"))
   dyn_macro_run(dyn_macro_lines(src), state, dirname(path))
 }

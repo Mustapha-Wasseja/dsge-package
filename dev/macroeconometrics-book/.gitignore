@@ -1,1 +1,2 @@
 output/*.rds
+output/dynare/*/*_draws.csv

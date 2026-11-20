@@ -1465,7 +1465,7 @@ mat_call <- function(name, args, ctx, nargout = 1L) {
   for (d in ctx$path) {
     fp <- file.path(d, paste0(name, ".m"))
     if (file.exists(fp)) {
-      prog <- mat_parse(paste(readLines(fp, warn = FALSE), collapse = "\n"))
+      prog <- mat_parse(paste(dyn_read_lines(fp), collapse = "\n"))
       if (length(prog$funs) == 0L) break
       main <- prog$funs[[1L]]
       main$name <- name
@@ -2381,7 +2381,7 @@ mat_dynare_options <- function() {
 #' are in declaration order and include any the file recalibrates.
 #' @noRd
 dyn_matlab_steady_state <- function(path, param_names, endo, exo) {
-  code <- paste(readLines(path, warn = FALSE), collapse = "\n")
+  code <- paste(dyn_read_lines(path), collapse = "\n")
   prog <- tryCatch(mat_parse(code), error = function(e) {
     stop("Cannot parse the steady-state file ", basename(path), ": ",
          conditionMessage(e), call. = FALSE)
@@ -2470,7 +2470,7 @@ mat_from_readmat <- function(x) {
 #' Read Octave's text format (the default of Octave's save)
 #' @noRd
 mat_read_octave_text <- function(path) {
-  lines <- readLines(path, warn = FALSE)
+  lines <- dyn_read_lines(path)
   out <- list()
   i <- 1L
   hdr <- function(key) {
