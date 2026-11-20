@@ -1,0 +1,12 @@
+quantity,value
+log_mdd_laplace,-922.39669879215603
+log_mdd_mhm,-922.47682299980215
+wall_seconds,2501.7083100999998
+mh_replic,150000
+mh_nblck,1
+mh_jscale,0.20000000000000001
+mh_drop,0.33333333329999998
+first_obs,71
+presample,4
+lik_init,2
+nobs,160
