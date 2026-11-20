@@ -337,3 +337,9 @@ log-likelihood computed by dsge matches Dynare's to nine decimal places.
 
 Bug reports, feature requests and models that do not work are all welcome
 on GitHub.
+
+## About the author
+
+Mustapha Wasseja Mohammed is a macroeconomist working on structural models,
+Bayesian estimation and open-source tools for economic policy analysis, and
+the author and maintainer of dsge.
