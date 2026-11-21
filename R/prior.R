@@ -13,7 +13,10 @@
 #' Distribution parameterizations:
 #' \describe{
 #'   \item{normal}{`mean`, `sd`}
-#'   \item{beta}{`shape1`, `shape2` (alpha, beta parameters)}
+#'   \item{beta}{`shape1`, `shape2` (alpha, beta parameters), and optionally
+#'     `lower`, `upper` for a beta distribution on that interval instead of
+#'     (0, 1) (Dynare's `beta_pdf` with a third and fourth parameter):
+#'     \eqn{(x - lower)/(upper - lower)} is Beta(shape1, shape2).}
 #'   \item{gamma}{`shape`, `rate`}
 #'   \item{uniform}{`min`, `max`}
 #'   \item{inv_gamma}{`shape`, `scale` — density:
@@ -30,6 +33,7 @@
 #' @examples
 #' prior("normal", mean = 0, sd = 1)
 #' prior("beta", shape1 = 2, shape2 = 2)
+#' prior("beta", shape1 = 3, shape2 = 12, lower = 1, upper = 2)
 #' prior("inv_gamma", shape = 0.01, scale = 0.01)
 #' prior("inv_gamma1", mean = 0.1, sd = 2)
 #'
@@ -69,6 +73,16 @@ prior <- function(distribution, ...) {
     inv_gamma = "positive",
     inv_gamma1 = "positive"
   )
+  # a beta distribution on an interval other than (0, 1)
+  if (dist == "beta" && (!is.null(params$lower) || !is.null(params$upper))) {
+    if (is.null(params$lower)) params$lower <- 0
+    if (is.null(params$upper)) params$upper <- 1
+    if (!is.numeric(params$lower) || !is.numeric(params$upper) ||
+        !(params$lower < params$upper)) {
+      stop("beta prior needs lower < upper.", call. = FALSE)
+    }
+    if (params$lower != 0 || params$upper != 1) support <- "bounded"
+  }
 
   structure(
     list(distribution = dist, params = params, support = support),
@@ -85,7 +99,11 @@ dprior <- function(p, x) {
   pars <- p$params
   out <- switch(p$distribution,
     normal    = stats::dnorm(x, mean = pars$mean, sd = pars$sd, log = TRUE),
-    beta      = stats::dbeta(x, shape1 = pars$shape1, shape2 = pars$shape2, log = TRUE),
+    beta      = {
+      r <- prior_range(p)
+      stats::dbeta((x - r[1]) / (r[2] - r[1]), shape1 = pars$shape1,
+                   shape2 = pars$shape2, log = TRUE) - log(r[2] - r[1])
+    },
     gamma     = stats::dgamma(x, shape = pars$shape, rate = pars$rate, log = TRUE),
     uniform   = stats::dunif(x, min = pars$min, max = pars$max, log = TRUE),
     inv_gamma = dinvgamma_log(x, shape = pars$shape, scale = pars$scale),
@@ -108,13 +126,25 @@ rprior <- function(p, n = 1L) {
   pars <- p$params
   switch(p$distribution,
     normal    = stats::rnorm(n, mean = pars$mean, sd = pars$sd),
-    beta      = stats::rbeta(n, shape1 = pars$shape1, shape2 = pars$shape2),
+    beta      = {
+      r <- prior_range(p)
+      r[1] + (r[2] - r[1]) * stats::rbeta(n, shape1 = pars$shape1, shape2 = pars$shape2)
+    },
     gamma     = stats::rgamma(n, shape = pars$shape, rate = pars$rate),
     uniform   = stats::runif(n, min = pars$min, max = pars$max),
     inv_gamma = 1 / stats::rgamma(n, shape = pars$shape, rate = pars$scale),
     inv_gamma1 = sqrt(1 / stats::rgamma(n, shape = pars$nu / 2,
                                         rate = pars$s / 2))
   )
+}
+
+#' Support of a beta or uniform prior: c(lower, upper)
+#' @noRd
+prior_range <- function(p) {
+  pars <- p$params
+  if (p$distribution == "uniform") return(c(pars$min, pars$max))
+  c(if (is.null(pars$lower)) 0 else pars$lower,
+    if (is.null(pars$upper)) 1 else pars$upper)
 }
 
 #' Log density of inverse-gamma distribution
@@ -181,7 +211,7 @@ param_interval <- function(prior_obj) {
     unbounded = c(-Inf, Inf),
     positive  = c(0, Inf),
     unit      = c(0, 1),
-    bounded   = c(prior_obj$params$min, prior_obj$params$max)
+    bounded   = prior_range(prior_obj)
   )
   b <- prior_obj$bounds
   if (!is.null(b)) {
@@ -233,9 +263,8 @@ to_unconstrained <- function(x, prior_obj) {
     positive  = log(x),
     unit      = stats::qlogis(x),
     bounded   = {
-      lo <- prior_obj$params$min
-      hi <- prior_obj$params$max
-      stats::qlogis((x - lo) / (hi - lo))
+      r <- prior_range(prior_obj)
+      stats::qlogis((x - r[1]) / (r[2] - r[1]))
     }
   )
 }
@@ -250,9 +279,8 @@ from_unconstrained <- function(u, prior_obj) {
     positive  = exp(u),
     unit      = stats::plogis(u),
     bounded   = {
-      lo <- prior_obj$params$min
-      hi <- prior_obj$params$max
-      lo + (hi - lo) * stats::plogis(u)
+      r <- prior_range(prior_obj)
+      r[1] + (r[2] - r[1]) * stats::plogis(u)
     }
   )
 }
@@ -270,10 +298,9 @@ log_jacobian <- function(u, prior_obj) {
       log(p) + log(1 - p)  # log|J| for logit transform
     },
     bounded   = {
-      lo <- prior_obj$params$min
-      hi <- prior_obj$params$max
+      r <- prior_range(prior_obj)
       p <- stats::plogis(u)
-      log(hi - lo) + log(p) + log(1 - p)
+      log(r[2] - r[1]) + log(p) + log(1 - p)
     }
   )
 }

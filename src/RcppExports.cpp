@@ -41,8 +41,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // kalman_filter_dynare_cpp
-List kalman_filter_dynare_cpp(const arma::mat& y, const arma::mat& Z, const arma::mat& Tm, const arma::mat& RQR, const arma::mat& Hm, const arma::mat& P0, int presample);
-RcppExport SEXP _dsge_kalman_filter_dynare_cpp(SEXP ySEXP, SEXP ZSEXP, SEXP TmSEXP, SEXP RQRSEXP, SEXP HmSEXP, SEXP P0SEXP, SEXP presampleSEXP) {
+List kalman_filter_dynare_cpp(const arma::mat& y, const arma::mat& Z, const arma::mat& Tm, const arma::mat& RQR, const arma::mat& Hm, const arma::mat& P0, int presample, const arma::vec& a0);
+RcppExport SEXP _dsge_kalman_filter_dynare_cpp(SEXP ySEXP, SEXP ZSEXP, SEXP TmSEXP, SEXP RQRSEXP, SEXP HmSEXP, SEXP P0SEXP, SEXP presampleSEXP, SEXP a0SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -53,7 +53,20 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const arma::mat& >::type Hm(HmSEXP);
     Rcpp::traits::input_parameter< const arma::mat& >::type P0(P0SEXP);
     Rcpp::traits::input_parameter< int >::type presample(presampleSEXP);
-    rcpp_result_gen = Rcpp::wrap(kalman_filter_dynare_cpp(y, Z, Tm, RQR, Hm, P0, presample));
+    Rcpp::traits::input_parameter< const arma::vec& >::type a0(a0SEXP);
+    rcpp_result_gen = Rcpp::wrap(kalman_filter_dynare_cpp(y, Z, Tm, RQR, Hm, P0, presample, a0));
+    return rcpp_result_gen;
+END_RCPP
+}
+// unit_root_basis_cpp
+List unit_root_basis_cpp(const arma::mat& A, double threshold);
+RcppExport SEXP _dsge_unit_root_basis_cpp(SEXP ASEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type A(ASEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    rcpp_result_gen = Rcpp::wrap(unit_root_basis_cpp(A, threshold));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -141,7 +154,8 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_dsge_lyapunov_schur_cpp", (DL_FUNC) &_dsge_lyapunov_schur_cpp, 2},
     {"_dsge_kalman_filter_cpp", (DL_FUNC) &_dsge_kalman_filter_cpp, 7},
-    {"_dsge_kalman_filter_dynare_cpp", (DL_FUNC) &_dsge_kalman_filter_dynare_cpp, 7},
+    {"_dsge_kalman_filter_dynare_cpp", (DL_FUNC) &_dsge_kalman_filter_dynare_cpp, 8},
+    {"_dsge_unit_root_basis_cpp", (DL_FUNC) &_dsge_unit_root_basis_cpp, 2},
     {"_dsge_cyclic_reduction_cpp", (DL_FUNC) &_dsge_cyclic_reduction_cpp, 5},
     {"_dsge_contract2_cpp", (DL_FUNC) &_dsge_contract2_cpp, 7},
     {"_dsge_contract3_cpp", (DL_FUNC) &_dsge_contract3_cpp, 9},

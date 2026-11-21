@@ -147,9 +147,12 @@
 #' [estimate()] and [bayes_dsge()]: the data are restricted to the
 #' estimation sample and the first `presample` observations only
 #' initialise the Kalman filter. The filter starts from the stationary
-#' distribution (Dynare's `lik_init = 1`, the default) or, with
+#' distribution (Dynare's `lik_init = 1`, the default); with
 #' `lik_init = 2`, from Dynare's covariance of 10 times the identity on its
-#' state vector (the observed and predetermined variables); other
+#' state vector (the observed and predetermined variables); and with
+#' `lik_init = 3` or the `diffuse_filter` option, which models with unit
+#' roots need, with the exact diffuse initialisation of Durbin and Koopman
+#' (2012) on that state vector, as Dynare's diffuse filter. Other
 #' `lik_init` values are reported in `notes`. Set `x$model$kalman_init`
 #' to `NULL` to use the stationary initialisation instead. The bounds in
 #' `estimated_params` (overridden by an `estimated_params_bounds` block)
@@ -1546,10 +1549,14 @@ dyn_build <- function(p, observed = NULL) {
   estimation <- dyn_estimation_options(p$commands, cal_env)
   notes <- c(notes, estimation$notes)
   estimation$notes <- NULL
-  if (identical(estimation$lik_init, 2L)) {
+  if (isTRUE(estimation$lik_init %in% c(2L, 3L))) {
+    # both filter on Dynare's state vector (predetermined and observed
+    # variables): lik_init = 2 from 10 times the identity, lik_init = 3 with
+    # the exact diffuse initialisation
     underlying <- stats::setNames(obs_model, obs_model)
     underlying[me_obs] <- me_vars
-    model$kalman_init <- list(type = "lik_init_2", scale = 10,
+    model$kalman_init <- list(type = if (estimation$lik_init == 2L) "lik_init_2" else "diffuse",
+                              scale = 10,
                               pred_states = lag_states,
                               observed = underlying[obs_model],
                               noise_states = me_states)
@@ -2437,18 +2444,31 @@ dyn_translate_prior <- function(shape, mean, sd, p3, p4) {
     return(out)
   }
   if (shape == "beta") {
-    if ((!is.na(p3) && p3 != 0) || (!is.na(p4) && p4 != 1)) {
-      out$translation <- "generalised beta on a non-unit interval"
+    # beta_pdf on [p3, p4] (default [0, 1]): the mean and standard deviation
+    # are those of the parameter, so rescale them to the unit interval
+    lo <- if (is.na(p3)) 0 else p3
+    hi <- if (is.na(p4)) 1 else p4
+    if (!(lo < hi)) {
+      out$translation <- "invalid beta bounds"
       return(out)
     }
-    k <- mean * (1 - mean) / sd^2 - 1
-    if (mean <= 0 || mean >= 1 || k <= 0) {
+    m01 <- (mean - lo) / (hi - lo)
+    s01 <- sd / (hi - lo)
+    k <- m01 * (1 - m01) / s01^2 - 1
+    if (m01 <= 0 || m01 >= 1 || k <= 0) {
       out$translation <- "beta mean/sd are not feasible"
       return(out)
     }
-    out$prior <- prior("beta", shape1 = mean * k, shape2 = (1 - mean) * k)
-    out$translation <- sprintf("beta(shape1 = %g, shape2 = %g)", mean * k,
-                               (1 - mean) * k)
+    if (lo == 0 && hi == 1) {
+      out$prior <- prior("beta", shape1 = m01 * k, shape2 = (1 - m01) * k)
+      out$translation <- sprintf("beta(shape1 = %g, shape2 = %g)", m01 * k,
+                                 (1 - m01) * k)
+    } else {
+      out$prior <- prior("beta", shape1 = m01 * k, shape2 = (1 - m01) * k,
+                         lower = lo, upper = hi)
+      out$translation <- sprintf("beta(shape1 = %g, shape2 = %g) on [%g, %g]",
+                                 m01 * k, (1 - m01) * k, lo, hi)
+    }
     return(out)
   }
   if (shifted) {
@@ -2511,8 +2531,12 @@ dyn_estimation_options <- function(commands, cal_env) {
   if (length(est) == 0L) return(out)
   opts <- dyn_split_commas(est[[length(est)]]$options)
   kv <- list()
+  flags <- character(0)
   for (o in opts) {
-    if (!grepl("=", o)) next
+    if (!grepl("=", o)) {
+      flags <- c(flags, tolower(trimws(o)))
+      next
+    }
     kv[[tolower(trimws(sub("=.*$", "", o)))]] <- trimws(sub("^[^=]*=", "", o))
   }
   int_opt <- function(key, default) {
@@ -2524,11 +2548,15 @@ dyn_estimation_options <- function(commands, cal_env) {
   out$nobs <- int_opt("nobs", NA_integer_)
   out$datafile <- kv$datafile
   lik_init <- int_opt("lik_init", 1L)
+  # the diffuse_filter option is lik_init = 3
+  if ("diffuse_filter" %in% flags) lik_init <- 3L
   out$lik_init <- lik_init
-  if (!lik_init %in% c(1L, 2L)) {
+  if (!lik_init %in% c(1L, 2L, 3L)) {
     out$notes <- c(out$notes, paste0(
       "estimation uses lik_init = ", lik_init, "; dsge supports lik_init = 1 ",
-      "(stationary distribution) and 2 (10 times the identity) and uses 1."))
+      "(stationary distribution), 2 (10 times the identity) and 3 (diffuse ",
+      "filter) and uses 1."))
+    out$lik_init <- 1L
   }
   if (int_opt("prefilter", 0L) != 0L) {
     out$notes <- c(out$notes, paste0(

@@ -240,7 +240,10 @@ global_sensitivity <- function(model, priors, target,
   pars <- p$params
   switch(dist,
     normal    = stats::qnorm(u, pars$mean,   pars$sd),
-    beta      = stats::qbeta(u, pars$shape1, pars$shape2),
+    beta      = {
+      r <- prior_range(p)
+      r[1] + (r[2] - r[1]) * stats::qbeta(u, pars$shape1, pars$shape2)
+    },
     gamma     = stats::qgamma(u, shape = pars$shape, rate = pars$rate),
     uniform   = stats::qunif(u, pars$min,   pars$max),
     inv_gamma = 1 / stats::qgamma(1 - u, shape = pars$shape,

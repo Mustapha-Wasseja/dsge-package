@@ -72,6 +72,35 @@
   `scale_colour_dsge()` and `scale_fill_dsge()` apply the package style to
   any ggplot. ggplot2 is suggested, not required.
 
+## New features
+
+* Diffuse Kalman filter for models with unit roots (Dynare's
+  `diffuse_filter`, or `lik_init = 3`). `read_dynare()` now reads the option,
+  and `estimate()` and `bayes_dsge()` then use the exact diffuse
+  initialisation of Durbin and Koopman (2012) on Dynare's state vector.
+  * The unit roots are separated from the stable part with an ordered QZ
+    decomposition, and Pinf has Dynare's scaling, on which the diffuse
+    log-likelihood depends.
+  * The diffuse periods are filtered one observed variable at a time, so
+    any number of unit roots, seen by any subset of the observed
+    variables, is handled. The standard filter takes over once the diffuse
+    part is resolved.
+  * Unit-root directions that move no observed variable are not treated as
+    diffuse, as in Dynare.
+  * On an observed random walk and on a local linear trend observed with
+    measurement error, the log-likelihood matches Dynare 7.0's to 1e-12.
+  * Before, such models fell back to a covariance of 1e6 times the
+    identity.
+  * Jermann and Quadrini (2012, New Keynesian version) from Pfeifer's
+    DSGE_mod now estimates as in Dynare. Its log-likelihood at the posterior
+    mode is within 8e-7 of Dynare's, which is the precision of the file's
+    numerically solved steady state.
+* `prior("beta", ...)` takes optional `lower` and `upper`, for a beta
+  distribution on that interval (Dynare's `beta_pdf` with a third and
+  fourth parameter). `read_dynare()` imports such priors instead of
+  dropping them, matching mean and standard deviation on the interval as
+  Dynare does.
+
 ## Bug fixes
 
 * `estimate()` and `bayes_dsge()` now keep the parameters of a model
