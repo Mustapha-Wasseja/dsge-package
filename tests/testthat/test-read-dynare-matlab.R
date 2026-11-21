@@ -153,6 +153,24 @@ end
   sol2 <- solve_dsge(m, params = c(beta = 0.98))
   kss2 <- ((1 / 0.98 - 1 + 0.025) / 0.33)^(1 / (0.33 - 1))
   expect_equal(unname(sol2$steady_state["k"]), kss2, tolerance = 1e-8)
+
+  # One solve runs the file once. The file resets psi, and psi's incoming
+  # value used to be part of the cache key, so the steady state, its
+  # residual check, the parameter update and the linearisation each ran
+  # the file again.
+  env <- environment(m$model$ss_function)
+  runner <- env$runner
+  n_runs <- 0L
+  env$runner <- function(...) {
+    n_runs <<- n_runs + 1L
+    runner(...)
+  }
+  on.exit(env$runner <- runner, add = TRUE)
+  sol3 <- solve_dsge(m, params = c(beta = 0.97))
+  expect_equal(n_runs, 1L)
+  kss3 <- ((1 / 0.97 - 1 + 0.025) / 0.33)^(1 / (0.33 - 1))
+  expect_equal(unname(sol3$steady_state["k"]), kss3, tolerance = 1e-8)
+  expect_equal(unname(sol3$params["psi"]), 0.3 / 0.7)
 })
 
 test_that("lik_init = 2 reproduces Dynare's likelihood", {

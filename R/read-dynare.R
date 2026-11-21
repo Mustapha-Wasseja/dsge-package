@@ -1973,10 +1973,15 @@ dyn_matlab_ss_setup <- function(path, p, endo, params, ys0, exo0, fill_aux) {
   exo0 <- stats::setNames(as.numeric(exo0), p$exo)
   exo0[is.na(exo0)] <- 0
   ys0 <- as.numeric(ys0[endo])
+  derived <- character(0)  # filled in below, once the file has run
   cache <- new.env(parent = emptyenv())
   run <- function(pv) {
+    # Parameters the file sets itself enter at their calibrated values,
+    # whatever value the caller holds for them, as in the steady_state_model
+    # path. The file overwrites them anyway; passing the caller's values made
+    # every caller miss the cache, so one model solve ran the file four times.
     full <- base_full
-    keep <- intersect(names(pv), p$params)
+    keep <- setdiff(intersect(names(pv), p$params), derived)
     full[keep] <- pv[keep]
     if (!is.null(cache$key) && identical(cache$key, full)) return(cache$val)
     r <- runner(full, ys0, exo0)
@@ -1992,7 +1997,6 @@ dyn_matlab_ss_setup <- function(path, p, endo, params, ys0, exo0, fill_aux) {
   notes <- paste0("Steady state computed by running ", basename(path),
                   " with read_dynare()'s MATLAB interpreter.")
   r0 <- tryCatch(run(params), error = function(e) e)
-  derived <- character(0)
   derived_values <- numeric(0)
   if (inherits(r0, "error")) {
     notes <- c(notes, paste0("The steady-state file failed at the ",
