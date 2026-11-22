@@ -96,9 +96,12 @@ kalman_filter_dynare_state <- function(y, G, H, M, D, presample, init) {
   sys <- dynare_state_system(G, H, M, D, init)
   y <- as.matrix(y)
   storage.mode(y) <- "double"
+  if (identical(init$type, "diffuse")) {
+    return(kalman_filter_diffuse(y, sys, presample))
+  }
   res <- kalman_filter_dynare_cpp(y, sys$Z, sys$Tm, sys$RQR, sys$Hm,
                                   init$scale * diag(nrow(sys$Tm)),
-                                  as.integer(presample))
+                                  as.integer(presample), numeric(nrow(sys$Tm)))
   if (!is.finite(res$loglik)) return(list(loglik = -Inf))
   list(loglik = res$loglik, prediction_errors = res$prediction_errors,
        state_names = sys$alpha_names)
@@ -336,7 +339,7 @@ kalman_smoother <- function(y, G, H, M, D) {
 #' names of the elements of alpha; see `kalman_filter_dynare_state_r()`.
 #' @noRd
 dynare_state_system <- function(G, H, M, D, init) {
-  if (!identical(init$type, "lik_init_2")) {
+  if (!init$type %in% c("lik_init_2", "diffuse")) {
     stop("Unknown Kalman filter initialisation.", call. = FALSE)
   }
   states <- colnames(H)
@@ -360,9 +363,158 @@ dynare_state_system <- function(G, H, M, D, init) {
   # measurement errors: y_obs = underlying + noise state
   Zn <- (D %*% G)[, noise, drop = FALSE]
   Mn <- M[noise, , drop = FALSE]
-  list(Z = Z, Tm = Tm, RQR = R %*% t(R),
+  list(Z = Z, Tm = Tm, R = R, RQR = R %*% t(R),
        Hm = Zn %*% Mn %*% t(Mn) %*% t(Zn),
-       alpha_names = c(pred, extra))
+       alpha_names = c(pred, extra), n_pred = length(pred))
+}
+
+#' Diffuse initialisation on Dynare's state vector (for `lik_init = 3`)
+#'
+#' Returns Pinf and Pstar for alpha_1 in the exact diffuse initialisation
+#' of Durbin and Koopman (2012, ch. 5): alpha_1 = L delta + (stationary
+#' part), delta diffuse, Pinf = L L' and Pstar the covariance of the
+#' stationary part.
+#'
+#' The first n_pred elements of alpha (the predetermined variables) are
+#' dynamic; the others (observed variables that are not predetermined) are
+#' static, with zero columns in Tm. For the dynamic block d with transition
+#' Tdd, U = [U1 U2] is an orthonormal basis in which U1 spans the invariant
+#' subspace of the unit roots (moduli above 1 - 1e-6, Dynare's
+#' qz_criterium), so that in z = U1'd, x = U2'd
+#'   z_t = S11 z_{t-1} + S12 x_{t-1} + U1'R_d e_t,   x_t = S22 x_{t-1} + U2'R_d e_t,
+#' with x stationary. delta is z_1, the unit-root coordinates at t = 1. A
+#' static block s_t = T_sd d_{t-1} + R_s e_t loads on it through d_0, with
+#' z_0 = S11^-1 (z_1 - S12 x_0 - U1'R_d e_1):
+#'   s_1 = A z_1 + C x_0 + E e_1,  A = T_sd U1 S11^-1,
+#'   C = T_sd U2 - A S12,  E = R_s - A U1'R_d.
+#' So L = [U1; A], and Pstar collects the covariances of U2 x_1 and of
+#' C x_0 + E e_1 with x_0 drawn from the stationary distribution. This is
+#' Dynare's scaling of Pinf (the identity on the unit-root coordinates), on
+#' which the diffuse log-likelihood depends. As in Dynare, a unit-root
+#' coordinate that moves no observed variable is not treated as diffuse.
+#' @noRd
+diffuse_initialisation <- function(sys, threshold = 1 - 1e-6) {
+  Tm <- sys$Tm; R <- sys$R; Z <- sys$Z
+  mm <- nrow(Tm)
+  dyn <- seq_len(sys$n_pred)
+  sta <- setdiff(seq_len(mm), dyn)
+  basis <- unit_root_basis_cpp(Tm[dyn, dyn, drop = FALSE], threshold)
+  if (!isTRUE(basis$ok)) return(NULL)
+  nk <- basis$nk
+  nd <- length(dyn)
+  U <- basis$U
+  S <- t(U) %*% Tm[dyn, dyn, drop = FALSE] %*% U
+  Rd <- t(U) %*% R[dyn, , drop = FALSE]
+  zi <- seq_len(nk)
+  xi <- setdiff(seq_len(nd), zi)
+  S22 <- S[xi, xi, drop = FALSE]
+  R2 <- Rd[xi, , drop = FALSE]
+  Sxx <- if (length(xi)) compute_unconditional_P(S22, R2 %*% t(R2)) else matrix(0, 0, 0)
+  U1 <- U[, zi, drop = FALSE]
+  U2 <- U[, xi, drop = FALSE]
+
+  L <- matrix(0, mm, nk)
+  L[dyn, ] <- U1
+  Pstar <- matrix(0, mm, mm)
+  Pstar[dyn, dyn] <- U2 %*% Sxx %*% t(U2)
+  if (length(sta)) {
+    Tsd <- Tm[sta, dyn, drop = FALSE]
+    A <- if (nk) Tsd %*% U1 %*% solve(S[zi, zi, drop = FALSE]) else matrix(0, length(sta), 0)
+    C <- Tsd %*% U2 - A %*% S[zi, xi, drop = FALSE]
+    E <- R[sta, , drop = FALSE] - A %*% Rd[zi, , drop = FALSE]
+    L[sta, ] <- A
+    Pstar[sta, sta] <- C %*% Sxx %*% t(C) + E %*% t(E)
+    cross <- (C %*% Sxx %*% t(S22) + E %*% t(R2)) %*% t(U2)
+    Pstar[sta, dyn] <- cross
+    Pstar[dyn, sta] <- t(cross)
+  }
+  # Unit-root directions that move no observed variable, now or in the next
+  # period, are not diffuse (Dynare checks the next period). The directions
+  # kept are those in the row space of the responses W, so the result does
+  # not depend on the basis U1.
+  if (nk) {
+    W <- rbind(Z %*% L, Z %*% Tm[, dyn, drop = FALSE] %*% U1)
+    sv <- svd(W, nu = 0)
+    keep <- sv$v[, sv$d > 1e-8, drop = FALSE]
+    L <- L %*% keep
+  }
+  list(Pinf = L %*% t(L), Pstar = (Pstar + t(Pstar)) / 2, n_unit_roots = nk)
+}
+
+#' Exact diffuse Kalman filter on Dynare's state vector (`lik_init = 3`)
+#'
+#' The univariate treatment of Durbin and Koopman (2012, sections 5.2 and
+#' 6.4): during the diffuse periods each observed variable is processed in
+#' turn. With F_inf = z'Pinf z > 0 it resolves part of the diffuse state and
+#' contributes log F_inf to -2 log L; otherwise, with F_* = z'Pstar z + h > 0,
+#' it contributes log F_* + v^2/F_*, as in the standard filter. Once
+#' Z Pinf Z' has rank zero the standard filter takes over from (a, Pstar).
+#' Tolerances are Dynare's defaults: 1e-6 (diffuse_kalman_tol) for F_inf and
+#' for the rank of Pinf, 1e-10 (kalman_tol) for F_*. Each processed variable
+#' adds log(2 pi), as in the standard filter.
+#' @noRd
+kalman_filter_diffuse <- function(y, sys, presample, diffuse_tol = 1e-6,
+                                  kalman_tol = 1e-10) {
+  ini <- diffuse_initialisation(sys)
+  if (is.null(ini)) return(list(loglik = -Inf))
+  Z <- sys$Z; Tm <- sys$Tm; RQR <- sys$RQR
+  h <- unname(diag(sys$Hm))
+  if (any(abs(sys$Hm - diag(h, length(h))) > 1e-14)) {
+    stop("The diffuse filter needs uncorrelated measurement errors.", call. = FALSE)
+  }
+  n_T <- nrow(y)
+  a <- numeric(nrow(Tm))
+  Pinf <- ini$Pinf
+  Pstar <- ini$Pstar
+  rank_tol <- function(X) {
+    if (!length(X)) return(0L)
+    sum(svd(X, nu = 0, nv = 0)$d > diffuse_tol)
+  }
+  l2pi <- log(2 * pi)
+  loglik <- 0
+  t <- 0L
+  diffuse <- rank_tol(Pinf) > 0L
+  while (diffuse && t < n_T) {
+    t <- t + 1L
+    ll_t <- 0
+    for (i in seq_len(ncol(y))) {
+      zi <- Z[i, ]
+      v <- y[t, i] - sum(zi * a)
+      Minf <- as.numeric(Pinf %*% zi)
+      Mstar <- as.numeric(Pstar %*% zi)
+      Finf <- sum(zi * Minf)
+      Fstar <- sum(zi * Mstar) + h[i]
+      if (Finf > diffuse_tol) {
+        a <- a + Minf * (v / Finf)
+        Pstar <- Pstar + tcrossprod(Minf) * (Fstar / Finf^2) -
+          (tcrossprod(Mstar, Minf) + tcrossprod(Minf, Mstar)) / Finf
+        Pinf <- Pinf - tcrossprod(Minf) / Finf
+        ll_t <- ll_t + log(Finf) + l2pi
+      } else if (Fstar > kalman_tol) {
+        a <- a + Mstar * (v / Fstar)
+        Pstar <- Pstar - tcrossprod(Mstar) / Fstar
+        ll_t <- ll_t + log(Fstar) + v^2 / Fstar + l2pi
+      } else if (Fstar < 0 || Finf < 0) {
+        return(list(loglik = -Inf))
+      }
+    }
+    if (t > presample) loglik <- loglik - 0.5 * ll_t
+    a <- as.numeric(Tm %*% a)
+    Pstar <- Tm %*% Pstar %*% t(Tm) + RQR
+    Pstar <- (Pstar + t(Pstar)) / 2
+    Pinf <- Tm %*% Pinf %*% t(Tm)
+    diffuse <- rank_tol(Z %*% Pinf %*% t(Z)) > 0L
+  }
+  # Dynare gives up when the sample ends before the diffuse part is resolved
+  if (diffuse) return(list(loglik = -Inf))
+  if (t < n_T) {
+    rest <- kalman_filter_dynare_cpp(y[(t + 1L):n_T, , drop = FALSE], Z, Tm, RQR,
+                                     sys$Hm, Pstar, as.integer(max(0L, presample - t)), a)
+    loglik <- loglik + rest$loglik
+  }
+  loglik <- unname(loglik)
+  if (!is.finite(loglik)) loglik <- -Inf
+  list(loglik = loglik, diffuse_periods = t, state_names = sys$alpha_names)
 }
 
 #' Kalman filter on Dynare's state vector (for `lik_init = 2`)

@@ -139,9 +139,12 @@ file's \code{estimation} command are stored in \code{estimation} and used by
 \code{\link[=estimate]{estimate()}} and \code{\link[=bayes_dsge]{bayes_dsge()}}: the data are restricted to the
 estimation sample and the first \code{presample} observations only
 initialise the Kalman filter. The filter starts from the stationary
-distribution (Dynare's \code{lik_init = 1}, the default) or, with
+distribution (Dynare's \code{lik_init = 1}, the default); with
 \code{lik_init = 2}, from Dynare's covariance of 10 times the identity on its
-state vector (the observed and predetermined variables); other
+state vector (the observed and predetermined variables); and with
+\code{lik_init = 3} or the \code{diffuse_filter} option, which models with unit
+roots need, with the exact diffuse initialisation of Durbin and Koopman
+(2012) on that state vector, as Dynare's diffuse filter. Other
 \code{lik_init} values are reported in \code{notes}. Set \code{x$model$kalman_init}
 to \code{NULL} to use the stationary initialisation instead. The bounds in
 \code{estimated_params} (overridden by an \code{estimated_params_bounds} block)

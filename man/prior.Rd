@@ -23,7 +23,10 @@ Creates a prior distribution object for use in Bayesian DSGE estimation.
 Distribution parameterizations:
 \describe{
 \item{normal}{\code{mean}, \code{sd}}
-\item{beta}{\code{shape1}, \code{shape2} (alpha, beta parameters)}
+\item{beta}{\code{shape1}, \code{shape2} (alpha, beta parameters), and optionally
+\code{lower}, \code{upper} for a beta distribution on that interval instead of
+(0, 1) (Dynare's \code{beta_pdf} with a third and fourth parameter):
+\eqn{(x - lower)/(upper - lower)} is Beta(shape1, shape2).}
 \item{gamma}{\code{shape}, \code{rate}}
 \item{uniform}{\code{min}, \code{max}}
 \item{inv_gamma}{\code{shape}, \code{scale} — density:
@@ -38,6 +41,7 @@ variance) and \code{s}, \code{nu} are derived as in Dynare.}
 \examples{
 prior("normal", mean = 0, sd = 1)
 prior("beta", shape1 = 2, shape2 = 2)
+prior("beta", shape1 = 3, shape2 = 12, lower = 1, upper = 2)
 prior("inv_gamma", shape = 0.01, scale = 0.01)
 prior("inv_gamma1", mean = 0.1, sd = 2)
 

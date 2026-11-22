@@ -138,7 +138,9 @@ compute_prior_stats <- function(pr) {
     normal = list(mean = p$mean, sd = p$sd),
     beta = {
       a <- p$shape1; b <- p$shape2
-      list(mean = a / (a + b), sd = sqrt(a * b / ((a + b)^2 * (a + b + 1))))
+      r <- prior_range(pr)
+      list(mean = r[1] + (r[2] - r[1]) * a / (a + b),
+           sd = (r[2] - r[1]) * sqrt(a * b / ((a + b)^2 * (a + b + 1))))
     },
     gamma = list(mean = p$shape / p$rate,
                  sd = sqrt(p$shape) / p$rate),

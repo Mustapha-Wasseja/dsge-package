@@ -9,8 +9,12 @@ kalman_filter_cpp <- function(y, Z, H, Q, P0, presample, store) {
     .Call(`_dsge_kalman_filter_cpp`, y, Z, H, Q, P0, presample, store)
 }
 
-kalman_filter_dynare_cpp <- function(y, Z, Tm, RQR, Hm, P0, presample) {
-    .Call(`_dsge_kalman_filter_dynare_cpp`, y, Z, Tm, RQR, Hm, P0, presample)
+kalman_filter_dynare_cpp <- function(y, Z, Tm, RQR, Hm, P0, presample, a0) {
+    .Call(`_dsge_kalman_filter_dynare_cpp`, y, Z, Tm, RQR, Hm, P0, presample, a0)
+}
+
+unit_root_basis_cpp <- function(A, threshold) {
+    .Call(`_dsge_unit_root_basis_cpp`, A, threshold)
 }
 
 cyclic_reduction_cpp <- function(Am, Az, Ap, tol, max_it) {

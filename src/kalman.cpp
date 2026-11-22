@@ -132,20 +132,21 @@ List kalman_filter_cpp(const arma::mat& y, const arma::mat& Z,
     _["innovation_var"] = innovation_var);
 }
 
-// Kalman filter on Dynare's state vector (lik_init = 2): alpha_t = Tm
-// alpha_{t-1} + R e_t, y_t = Z alpha_t + measurement error with covariance
-// Hm, started from a(1|0) = 0 and P(1|0) = P0. Follows
-// kalman_filter_dynare_state() in R/kalman-filter.R.
+// Kalman filter on Dynare's state vector (lik_init = 2, and lik_init = 3
+// after its diffuse periods): alpha_t = Tm alpha_{t-1} + R e_t,
+// y_t = Z alpha_t + measurement error with covariance Hm, started from
+// a(1|0) = a0 and P(1|0) = P0. Follows kalman_filter_dynare_state() in
+// R/kalman-filter.R.
 // [[Rcpp::export]]
 List kalman_filter_dynare_cpp(const arma::mat& y, const arma::mat& Z,
                               const arma::mat& Tm, const arma::mat& RQR,
                               const arma::mat& Hm, const arma::mat& P0,
-                              int presample) {
-  const arma::uword n_T = y.n_rows, n_obs = y.n_cols, mm = Tm.n_rows;
+                              int presample, const arma::vec& a0) {
+  const arma::uword n_T = y.n_rows, n_obs = y.n_cols;
   arma::mat errors(n_T, n_obs, arma::fill::zeros);
   const double log2pi = std::log(2.0 * M_PI);
   const arma::mat Tt = Tm.t(), Zt = Z.t();
-  arma::vec a(mm, arma::fill::zeros);
+  arma::vec a = a0;
   arma::mat P = P0;
   double loglik = 0.0;
 
@@ -171,4 +172,31 @@ List kalman_filter_dynare_cpp(const arma::mat& y, const arma::mat& Z,
   }
   if (!std::isfinite(loglik)) loglik = R_NegInf;
   return List::create(_["loglik"] = loglik, _["prediction_errors"] = errors);
+}
+
+// Orthonormal basis U = [U1 U2] of the state space in which U1 spans the
+// invariant subspace of A for the eigenvalues of modulus above `threshold`
+// (unit roots, with threshold 1 - 1e-6), so that S = U' A U is block upper
+// triangular with those eigenvalues in its leading nk x nk block. It comes
+// from the QZ decomposition of the pencil (A, threshold * I) with the
+// eigenvalues outside the unit circle ordered first: A Z = Q' AA and
+// threshold * Z = Q' BB (BB upper triangular), so the leading columns of
+// U = Q' span the same invariant subspace as the leading columns of Z.
+// [[Rcpp::export]]
+List unit_root_basis_cpp(const arma::mat& A, double threshold) {
+  const arma::uword n = A.n_rows;
+  if (n == 0) return List::create(_["ok"] = true, _["U"] = A, _["nk"] = 0);
+  arma::cx_vec ev = arma::eig_gen(A);
+  arma::uword nk = 0;
+  for (arma::uword i = 0; i < n; ++i) if (std::abs(ev(i)) > threshold) ++nk;
+  arma::mat U = arma::eye(n, n);
+  if (nk > 0 && nk < n) {
+    arma::mat AA, BB, Q, Zq;
+    arma::mat B = threshold * arma::eye(n, n);
+    if (!arma::qz(AA, BB, Q, Zq, A, B, "ouc")) {
+      return List::create(_["ok"] = false, _["U"] = R_NilValue, _["nk"] = nk);
+    }
+    U = Q.t();
+  }
+  return List::create(_["ok"] = true, _["U"] = U, _["nk"] = nk);
 }
