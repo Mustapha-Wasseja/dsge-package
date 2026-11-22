@@ -2,6 +2,16 @@
 
 ## Performance
 
+* A MATLAB steady-state file (`<model>_steadystate.m`) that sets parameters
+  itself is now run once per model solve instead of four times. The
+  incoming values of those parameters were part of the cache key and
+  differed between callers (the steady state, its residual check, the
+  parameter update and the linearisation), although the file overwrites
+  them. They now enter at their calibrated values, as in the
+  `steady_state_model` path. For Jermann and Quadrini (2012, NK) from
+  Pfeifer's DSGE_mod, each log-posterior evaluation is about 2.3 times
+  faster, with an identical result.
+
 * The Kalman filter now runs in C++ (via Rcpp and RcppArmadillo), so dsge
   now contains compiled code. Results are unchanged: the Smets-Wouters
   (2007) log-likelihood still matches Dynare's to nine decimals, and the
