@@ -50,3 +50,39 @@ List cyclic_reduction_cpp(const arma::mat& Am, const arma::mat& Az,
   if (!X.is_finite()) return fail;
   return List::create(_["X"] = X, _["ok"] = true, _["iterations"] = it);
 }
+
+// Stable right deflating subspace of the pencil F - lambda E by an ordered
+// real generalized Schur (QZ) decomposition, as in Dynare's default solver
+// (see klein_qz_solve() in R/solve-klein.R, which calls this and checks the
+// result). The eigenvalues with |lambda| < crit are ordered first; with
+// crit = 1 + 1e-6 (Dynare's qz_criterium) unit roots count as stable. F is
+// divided by crit so that LAPACK's |lambda| < 1 selection applies.
+// Returns list(ok, Z, n_stable): the first n_stable columns of Z span the
+// stable subspace.
+// [[Rcpp::export]]
+List qz_stable_subspace_cpp(const arma::mat& F, const arma::mat& E,
+                            double crit) {
+  const List fail = List::create(_["ok"] = false, _["Z"] = R_NilValue,
+                                 _["n_stable"] = 0);
+  arma::mat AA, BB, Q, Z;
+  const arma::mat A = F / crit;
+  if (!arma::qz(AA, BB, Q, Z, A, E, "iuc")) return fail;
+  if (!Z.is_finite()) return fail;
+  // count the selected eigenvalues from the 1x1 and 2x2 diagonal blocks
+  const arma::uword n = AA.n_rows;
+  int k = 0;
+  arma::uword i = 0;
+  while (i < n) {
+    if (i + 1 < n && AA(i + 1, i) != 0.0) {
+      // a complex pair: |lambda|^2 = det(AA block) / det(BB block)
+      const double da = AA(i, i) * AA(i + 1, i + 1) - AA(i, i + 1) * AA(i + 1, i);
+      const double db = BB(i, i) * BB(i + 1, i + 1) - BB(i, i + 1) * BB(i + 1, i);
+      if (std::abs(da) < std::abs(db)) k += 2;
+      i += 2;
+    } else {
+      if (std::abs(AA(i, i)) < std::abs(BB(i, i))) k += 1;
+      i += 1;
+    }
+  }
+  return List::create(_["ok"] = true, _["Z"] = Z, _["n_stable"] = k);
+}

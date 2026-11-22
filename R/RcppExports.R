@@ -21,6 +21,10 @@ cyclic_reduction_cpp <- function(Am, Az, Ap, tol, max_it) {
     .Call(`_dsge_cyclic_reduction_cpp`, Am, Az, Ap, tol, max_it)
 }
 
+qz_stable_subspace_cpp <- function(F, E, crit) {
+    .Call(`_dsge_qz_stable_subspace_cpp`, F, E, crit)
+}
+
 contract2_cpp <- function(eq, i, j, v, P, Q, n_eq) {
     .Call(`_dsge_contract2_cpp`, eq, i, j, v, P, Q, n_eq)
 }
