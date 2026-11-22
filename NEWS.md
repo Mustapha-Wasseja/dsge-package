@@ -2,6 +2,19 @@
 
 ## Performance
 
+* `solve_dsge()` now finds the stable solution with an ordered QZ
+  (generalized Schur) decomposition, Dynare's default method, before
+  trying cyclic reduction and the spectral divide, which remain as
+  fallbacks. With a unit root, cyclic reduction converges only linearly and
+  often fails, and the spectral divide then ran as well.
+  * For Jermann and Quadrini (2012, NK) from Pfeifer's DSGE_mod, which has
+    one unit root, each log-posterior evaluation is 4 to 5 times faster.
+  * Solutions agree with the previous methods to about 1e-12. Across
+    Pfeifer's collection the results against Dynare 7.0 are unchanged, or
+    closer: in Ascari and Sbordone (2014), two variables no shock moves now
+    get a standard deviation of exactly 0, as in Dynare, instead of 5e-8.
+  * The decomposition uses RcppArmadillo, so there is no new dependency.
+
 * A MATLAB steady-state file (`<model>_steadystate.m`) that sets parameters
   itself is now run once per model solve instead of four times. The
   incoming values of those parameters were part of the cache key and

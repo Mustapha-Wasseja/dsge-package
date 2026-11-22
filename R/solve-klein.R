@@ -8,7 +8,8 @@
 #   y_t = G * x_t               (policy equation)
 #   x_{t+1} = H * x_t + M * e_{t+1}   (transition equation)
 #
-# Uses the method of undetermined coefficients.
+# Solved by an ordered QZ decomposition, with cyclic reduction, a spectral
+# divide and an undetermined-coefficients iteration as fallbacks.
 # Reference: Klein, P. (2000). "Using the generalized Schur form to solve a
 #   multivariate linear rational expectations model." JEDC 24:1405-1423.
 
@@ -44,14 +45,14 @@
 #'   }
 #'
 #' @details
-#' The stable solution is computed by cyclic reduction (as Dynare's
-#' `cycle_reduction` option); if that fails, for example with unit roots
-#' or a singular lead matrix, the stable deflating subspace of the model's
-#' matrix pencil is found with the inverse-free spectral divide of Bai,
-#' Demmel and Gu (1997), which needs no QZ decomposition; an
-#' undetermined-coefficients iteration is the last resort. As in Dynare,
-#' eigenvalues with modulus up to 1 + 1e-6 count as stable, so unit roots
-#' are allowed. Saddle-path stability requires that all eigenvalues of H
+#' The stable solution is computed from an ordered real generalized Schur
+#' (QZ) decomposition of the model's matrix pencil (Klein 2000), Dynare's
+#' default method. If that fails, for example when the states are linearly
+#' dependent, cyclic reduction (as Dynare's `cycle_reduction` option) and
+#' then the inverse-free spectral divide of Bai, Demmel and Gu (1997) are
+#' tried; an undetermined-coefficients iteration is the last resort. As in
+#' Dynare, eigenvalues with modulus up to 1 + 1e-6 count as stable, so unit
+#' roots are allowed. Saddle-path stability requires that all eigenvalues of H
 #' have modulus below 1 + `tol`.
 #'
 #' For nonlinear models, the solver first computes the deterministic
@@ -285,11 +286,19 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
   A0_A2 <- A0 - A2
   has_A4 <- !is.null(A4) && max(abs(A4)) > 1e-15
 
-  # Cyclic reduction (as Dynare's cycle_reduction) finds the stable
-  # solution directly; the fixed-point iteration below is the fallback.
-  cr <- klein_cyclic_reduction(A0, A1, A2, A3, B0, B1, B2, B3,
-                               if (has_A4) A4 else NULL, n_c, n_s)
+  # An ordered QZ decomposition (Dynare's default) finds the stable
+  # solution; cyclic reduction (Dynare's cycle_reduction) and the spectral
+  # divide are the fallbacks, and the fixed-point iteration below the last
+  # resort. QZ goes first because cyclic reduction converges only linearly
+  # with a unit root and often fails then, after which the spectral divide
+  # ran as well.
+  cr <- klein_qz_solve(A0, A1, A2, A3, B0, B1, B2, B3,
+                       if (has_A4) A4 else NULL, n_c, n_s)
   converged <- FALSE
+  if (is.null(cr)) {
+    cr <- klein_cyclic_reduction(A0, A1, A2, A3, B0, B1, B2, B3,
+                                 if (has_A4) A4 else NULL, n_c, n_s)
+  }
   if (is.null(cr)) {
     cr <- klein_spectral_divide(A0, A1, A2, A3, B0, B1, B2, B3,
                                 if (has_A4) A4 else NULL, n_c, n_s)
@@ -382,6 +391,46 @@ klein_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, C, D,
     eigenvalues = eigenvalues_H,
     stable = TRUE, n_stable = n_stable_eig
   )
+}
+
+#' First-order solution by an ordered QZ decomposition
+#'
+#' With z_t = (x_t, y_t) the model is E z_{t+1} = F z_t. The real
+#' generalized Schur decomposition of the pencil (F, E), with the
+#' eigenvalues of modulus below 1 + 1e-6 (Dynare's qz_criterium, so unit
+#' roots count as stable) ordered first, gives a basis Z1 = (Z_x; Z_y) of
+#' the stable deflating subspace; then G = Z_y Z_x^{-1} (Klein 2000), and
+#' H follows from the state equations. The decomposition runs in C++
+#' (src/klein.cpp). Returns NULL unless there are exactly as many stable
+#' eigenvalues as states, Z_x is invertible and the solution satisfies the
+#' control equations, so the caller can fall back.
+#' @noRd
+klein_qz_solve <- function(A0, A1, A2, A3, B0, B1, B2, B3, A4, n_c, n_s) {
+  ix <- seq_len(n_s)
+  iy <- n_s + seq_len(n_c)
+  if (is.null(A4)) A4 <- matrix(0, n_c, n_s)
+  E <- rbind(cbind(A4, A1), cbind(B0, -B1))
+  F <- rbind(cbind(-A3, A0 - A2), cbind(B3, B2))
+  if (!all(is.finite(E)) || !all(is.finite(F))) return(NULL)
+  q <- tryCatch(qz_stable_subspace_cpp(F, E, 1 + 1e-6),
+                error = function(e) NULL)
+  if (is.null(q) || !isTRUE(q$ok) || q$n_stable != n_s) return(NULL)
+  Z1 <- q$Z[, ix, drop = FALSE]
+  Zx <- Z1[ix, , drop = FALSE]
+  Zy <- Z1[iy, , drop = FALSE]
+  # with linearly dependent states (e.g. k + kp = constant) Z_x is
+  # singular; the spectral divide handles that case
+  rc <- tryCatch(rcond(Zx), error = function(e) 0)
+  if (!is.finite(rc) || rc < 1e-12) return(NULL)
+  G <- tryCatch(Zy %*% solve(Zx), error = function(e) NULL)
+  if (is.null(G) || !all(is.finite(G))) return(NULL)
+  H <- tryCatch(solve(B0 - B1 %*% G, B2 %*% G + B3), error = function(e) NULL)
+  if (is.null(H) || !all(is.finite(H))) return(NULL)
+  # accuracy check on the original system, as for the other methods
+  res_c <- (A0 - A2) %*% G - A1 %*% G %*% H - A3 - A4 %*% H
+  scale <- max(1, max(abs(E)), max(abs(F))) * max(1, max(abs(G)), max(abs(H)))
+  if (max(abs(res_c)) > 1e-8 * scale) return(NULL)
+  list(G = G, H = H)
 }
 
 #' First-order solution by cyclic reduction

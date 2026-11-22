@@ -85,6 +85,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// qz_stable_subspace_cpp
+List qz_stable_subspace_cpp(const arma::mat& F, const arma::mat& E, double crit);
+RcppExport SEXP _dsge_qz_stable_subspace_cpp(SEXP FSEXP, SEXP ESEXP, SEXP critSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type F(FSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type E(ESEXP);
+    Rcpp::traits::input_parameter< double >::type crit(critSEXP);
+    rcpp_result_gen = Rcpp::wrap(qz_stable_subspace_cpp(F, E, crit));
+    return rcpp_result_gen;
+END_RCPP
+}
 // contract2_cpp
 arma::mat contract2_cpp(const IntegerVector& eq, const IntegerVector& i, const IntegerVector& j, const NumericVector& v, const arma::mat& P, const arma::mat& Q, int n_eq);
 RcppExport SEXP _dsge_contract2_cpp(SEXP eqSEXP, SEXP iSEXP, SEXP jSEXP, SEXP vSEXP, SEXP PSEXP, SEXP QSEXP, SEXP n_eqSEXP) {
@@ -157,6 +170,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_dsge_kalman_filter_dynare_cpp", (DL_FUNC) &_dsge_kalman_filter_dynare_cpp, 8},
     {"_dsge_unit_root_basis_cpp", (DL_FUNC) &_dsge_unit_root_basis_cpp, 2},
     {"_dsge_cyclic_reduction_cpp", (DL_FUNC) &_dsge_cyclic_reduction_cpp, 5},
+    {"_dsge_qz_stable_subspace_cpp", (DL_FUNC) &_dsge_qz_stable_subspace_cpp, 3},
     {"_dsge_contract2_cpp", (DL_FUNC) &_dsge_contract2_cpp, 7},
     {"_dsge_contract3_cpp", (DL_FUNC) &_dsge_contract3_cpp, 9},
     {"_dsge_apply_hx_cpp", (DL_FUNC) &_dsge_apply_hx_cpp, 3},
