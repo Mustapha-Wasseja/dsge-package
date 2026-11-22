@@ -100,90 +100,81 @@ model_covariance.dsge_bayes <- function(x, variables = NULL,
 
   # Observable selection matrix: Z = D %*% G maps states to observables
   Z <- D %*% G
+  # (paste0("y", seq_len(0)) is "y", not character(0): a model without
+  # observed variables, e.g. any imported .mod file without varobs, got a
+  # phantom observable and the dimnames assignment below failed)
   obs_names <- rownames(D)
-  if (is.null(obs_names)) obs_names <- paste0("y", seq_len(nrow(D)))
+  if (is.null(obs_names)) {
+    obs_names <- if (nrow(D) > 0L) paste0("y", seq_len(nrow(D))) else character(0)
+  }
 
   # All control names for optional subsetting
   ctrl_names <- rownames(G)
-  if (is.null(ctrl_names)) ctrl_names <- paste0("c", seq_len(nrow(G)))
+  if (is.null(ctrl_names)) {
+    ctrl_names <- if (nrow(G) > 0L) paste0("c", seq_len(nrow(G))) else character(0)
+  }
 
-  # Shock covariance
-  Q <- M %*% t(M)
-
-  # Unconditional state covariance: P = H P H' + Q
-
-  P <- compute_unconditional_P(H, Q)
-
-  # Observable covariance: Gamma(0) = Z P Z'
-  Gamma0_obs <- Z %*% P %*% t(Z)
-  rownames(Gamma0_obs) <- colnames(Gamma0_obs) <- obs_names
-
-  # Full control covariance: G P G'
-  Gamma0_all <- G %*% P %*% t(G)
-  rownames(Gamma0_all) <- colnames(Gamma0_all) <- ctrl_names
-
-  # Determine which matrix to use
+  # Rows to report: the observables by default, else the chosen controls
   if (is.null(variables)) {
-    # Default: observables only
-    cov_mat <- Gamma0_obs
+    Zsel <- Z
     var_names <- obs_names
   } else {
-    # User-selected variables
-    # Check which are available
     all_avail <- c(obs_names, ctrl_names)
     missing <- setdiff(variables, all_avail)
     if (length(missing) > 0) {
       stop("Variables not found: ", paste(missing, collapse = ", "))
     }
-
-    # Map to indices in the full control covariance
     idx <- match(variables, ctrl_names)
     if (any(is.na(idx))) {
       stop("Could not match all variables to control names.")
     }
-    cov_mat <- Gamma0_all[idx, idx, drop = FALSE]
+    Zsel <- G[idx, , drop = FALSE]
     var_names <- variables
   }
 
-  # Ensure symmetry
-  cov_mat <- (cov_mat + t(cov_mat)) / 2
+  # With a unit root in H (a price level, a cumulated variable) the
+  # unconditional state covariance does not exist, and the Lyapunov solution
+  # returned a large meaningless number that also contaminated stationary
+  # variables (Gali 2008, ch. 5: money growth sd 408217 instead of 33.3).
+  # Covariances are then sums of products of impulse responses, which
+  # converge for stationary variables; variables whose responses do not die
+  # out get an infinite variance, as in Dynare.
+  roots <- if (nrow(H) > 0L) abs(eigen(H, only.values = TRUE)$values) else numeric(0)
+  if (length(roots) > 0L && max(roots) > 1 - 1e-6) {
+    gam <- .covariance_irf_sum(Zsel, H, M, n_lags)
+  } else {
+    P <- compute_unconditional_P(H, M %*% t(M))
+    gam <- list(Zsel %*% P %*% t(Zsel))
+    HkP <- P  # H^k P, updated as H (H^{k-1} P) to avoid forming H^k
+    for (k in seq_len(n_lags)) {
+      HkP <- H %*% HkP
+      gam[[k + 1L]] <- Zsel %*% HkP %*% t(Zsel)
+    }
+  }
+  for (k in seq_along(gam)) dimnames(gam[[k]]) <- list(var_names, var_names)
 
-  # Standard deviations
+  cov_mat <- gam[[1L]]
+  # Ensure symmetry (Inf and NA entries are symmetric already)
+  fin <- is.finite(cov_mat) & is.finite(t(cov_mat))
+  cov_mat[fin] <- ((cov_mat + t(cov_mat)) / 2)[fin]
+
+  # Standard deviations (Inf for a non-stationary variable)
   sds <- sqrt(pmax(diag(cov_mat), 0))
 
-  # Correlation matrix
+  # Correlation matrix (NA where a variance is infinite)
   cor_mat <- cov_mat
   for (i in seq_along(sds)) {
     for (j in seq_along(sds)) {
-      if (sds[i] > 0 && sds[j] > 0) {
-        cor_mat[i, j] <- cov_mat[i, j] / (sds[i] * sds[j])
-      } else {
-        cor_mat[i, j] <- 0
-      }
+      cor_mat[i, j] <- if (!is.finite(sds[i]) || !is.finite(sds[j])) NA_real_
+        else if (sds[i] > 0 && sds[j] > 0) cov_mat[i, j] / (sds[i] * sds[j])
+        else 0
     }
   }
-  diag(cor_mat) <- 1
+  diag(cor_mat) <- ifelse(is.finite(sds), 1, NA_real_)
 
   # Autocovariances at lags 1..K
   autocov <- list()
-  if (n_lags > 0) {
-    HkP <- P  # H^k P, updated as H (H^{k-1} P) to avoid forming H^k
-
-    # Determine the selection matrix for requested variables
-    if (is.null(variables)) {
-      Zsel <- Z
-    } else {
-      idx <- match(variables, ctrl_names)
-      Zsel <- G[idx, , drop = FALSE]
-    }
-
-    for (k in seq_len(n_lags)) {
-      HkP <- H %*% HkP
-      Gk <- Zsel %*% HkP %*% t(Zsel)
-      rownames(Gk) <- colnames(Gk) <- var_names
-      autocov[[paste0("lag_", k)]] <- Gk
-    }
-  }
+  for (k in seq_len(n_lags)) autocov[[paste0("lag_", k)]] <- gam[[k + 1L]]
 
   structure(
     list(
@@ -196,6 +187,65 @@ model_covariance.dsge_bayes <- function(x, variables = NULL,
     ),
     class = "dsge_covariance"
   )
+}
+
+#' Covariances and autocovariances as sums of impulse-response products
+#'
+#' Gamma(j) = Cov(y_{t+j}, y_t) = sum_k R_{k+j} R_k' with R_k = Zsel H^k M,
+#' for a transition matrix with a unit root. Rows whose responses do not
+#' die out (non-stationary) get variance Inf and NA covariances.
+#' @noRd
+.covariance_irf_sum <- function(Zsel, H, M, n_lags = 0L, max_iter = 200000L,
+                                tol = 1e-20) {
+  n <- nrow(Zsel)
+  # Responses after 2^24 periods: a stable root of at most 1 - 1e-6
+  # (Dynare's qz_criterium) has decayed below 1e-6 by then, while a unit
+  # root keeps the response alive. (2^30 periods was too far: rounding
+  # moves a double unit root, a Jordan block at 1 as in an HP-filter trend,
+  # about 1e-8 inside the unit circle, and over 1e9 periods it died out.)
+  Hp <- H
+  for (i in seq_len(24L)) Hp <- Hp %*% Hp
+  r_inf <- sqrt(rowSums((Zsel %*% Hp %*% M)^2))
+  r_0 <- sqrt(rowSums((Zsel %*% M)^2))
+  nonstat <- !is.finite(r_inf) | r_inf > 1e-6 * max(1, max(r_0))
+  stat <- !nonstat
+  # A stationary row's responses settle at the rounding leak of the unit
+  # root (about r_inf, typically 1e-14), not at zero. A variable no shock
+  # moves has a variance at rounding level itself, so the relative test
+  # below could never pass, and the sum ran to max_iter and warned (9 of the
+  # 22 unit-root models of DSGE_mod). Such a row has converged once its
+  # increment is down to that leak.
+  leak_inc <- (4 * r_inf)^2
+
+  gam <- replicate(n_lags + 1L, matrix(0, n, n), simplify = FALSE)
+  buf <- vector("list", n_lags + 1L)   # buf[[j + 1]] = R_{k - j}
+  X <- M
+  converged <- FALSE
+  for (k in 0:max_iter) {
+    R <- Zsel %*% X
+    buf <- c(list(R), buf[seq_len(n_lags)])
+    for (j in 0:n_lags) {
+      if (!is.null(buf[[j + 1L]])) gam[[j + 1L]] <- gam[[j + 1L]] + R %*% t(buf[[j + 1L]])
+    }
+    X <- H %*% X
+    if (k >= n_lags + 10L) {
+      inc <- rowSums(R^2)[stat]
+      if (all(inc <= pmax(tol * pmax(diag(gam[[1L]])[stat], 1e-300), leak_inc[stat]))) {
+        converged <- TRUE
+        break
+      }
+    }
+  }
+  if (!converged) {
+    warning("Model covariance with a unit root: the impulse-response sums ",
+            "did not converge in ", max_iter, " periods.", call. = FALSE)
+  }
+  for (j in seq_along(gam)) {
+    gam[[j]][nonstat, ] <- NA_real_
+    gam[[j]][, nonstat] <- NA_real_
+  }
+  diag(gam[[1L]])[nonstat] <- Inf
+  gam
 }
 
 #' @export

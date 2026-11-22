@@ -73,6 +73,16 @@ Kiyotaki-Moore (1997) used to differ by 5e-5: land market clearing
 matrix has entries near 5e5, and `irf()` formed its powers H^k, which lost
 accuracy to cancellation. `irf()` now iterates the state vector instead.
 
+Re-run on 2026-11-20 (Windows 11, Dynare 7.0, Octave 11.1, after the
+harness and `read_dynare()` fixes described under the higher-order
+section): 55 files match, none differ, 9 are perfect-foresight files, and
+Dynare fails in Octave on 4 (`verLessThan`, `ksdensity`, a missing `.mat`
+file, and Smets-Wouters, whose parameters only `estimated_params` sets).
+The first two run in Dynare 7.0 under MATLAB R2023b, and both match there
+too (Gali_2010_calib_target to 4.8e-15, Smets_Wouters_2007_45 to 1.8e-14
+relative), so 57 files match. Per-file results and one dsge script per file are kept outside this
+repository (the collection is GPL).
+
 `read_dynare()` imports 67 of the 68 files unchanged; the exception loads
 a `.mat` file that is not in the repository (Dynare fails on it too). Most
 matching models agree to 1e-9 or better; the models the importer
@@ -117,11 +127,63 @@ standard deviations have very large deviations).
 | Andreasen_2012_rare_disasters (134 variables) | 134 | 3.2e-13 | 3.4e-12 |
 
 In three further models (Jermann 1998, Gali 2015 ch. 3 nonlinear, Basu and
-Bundick 2017) the shocks have no variance before the first computing
-command, so only the steady state and the zero risk correction are
-compared; they agree to 2.4e-9 or better. First, second and third derivatives are
-all symbolic in both programs, so most models agree to rounding error;
-Ghironi_Melitz_2005's difference comes from its `_steadystate.m` file.
+Bundick 2017) only the steady state and the zero risk correction were
+compared, agreeing to 2.4e-9 or better: the harness cut these files at a
+`write_latex_*` command that comes before their shocks block, so their
+shocks had no variance (fixed in the re-run below). First, second and
+third derivatives are all symbolic in both programs, so most models agree
+to rounding error; Ghironi_Melitz_2005's difference comes from its
+`_steadystate.m` file.
+
+### Re-run: Pfeifer's own higher-order models (2026-11-20, Windows 11, Dynare 7.0, Octave 11.1)
+
+The eleven DSGE_mod files that Pfeifer himself solves above first order
+(`stoch_simul(order = 2)` or `order = 3`), all at order 2 and the five
+third-order ones also at order 3. "Relative" is the largest difference
+over all variables and 20 random points divided by max(1, largest
+deviation from the steady state); "risk correction" is the largest
+`0.5 * ghs2`, the constant that shifts the decision rule away from the
+deterministic steady state, and the last column is dsge's difference from
+Dynare in it.
+
+| Model | Variables | Relative, order 2 | Relative, order 3 | Risk correction | Its difference |
+|---|---:|---:|---:|---:|---:|
+| SGU_2004 (Schmitt-Grohe and Uribe's own example) | 3 | 1.4e-15 | | 0.241 | 9.7e-16 |
+| RBC_baseline_welfare (welfare `W` in levels) | 15 | 3.2e-08 | | 196 | 7.2e-06 |
+| RBC_state_dependent_GIRF | 9 | 1.7e-14 | | 0.0035 | 1.6e-16 |
+| Jermann_1998 | 27 | 3.6e-12 | | 0.449 | 2.7e-11 |
+| Caldara_et_al_2012 (Epstein-Zin, stochastic volatility) | 12 | 4.7e-10 | 2.6e-09 | 3.6e+05 | 1.8e-04 |
+| Born_Pfeifer_2018_welfare | 44 | 4.2e-14 | | 0.776 | 4.0e-14 |
+| BP2020_CES (`_steadystate.m`) | 43 | 1.4e-11 | 1.9e-12 | 3.2e-04 | 1.4e-13 |
+| Basu_Bundick_2017 (`_steadystate.m`) | 47 | 3.5e-09 | 1.0e-08 | 9.52 | 6.9e-09 |
+| Andreasen_2012_rare_disasters | 134 | 7.2e-13 | 5.7e-13 | 13.3 | 7.1e-12 |
+| Born_Pfeifer_RM_Comment (2014) | 19 | 1.1e-12 | 1.1e-12 | 0.035 | 1.8e-13 |
+| Gali_2008_chapter_5_commitment | | linear-quadratic Ramsey problem: no second-order terms, skipped | | | |
+
+Jermann, Basu-Bundick and Born-Pfeifer 2018 are now compared with their
+shocks. Getting there fixed three things in the harness and one in dsge:
+
+- `write_latex_*`, `collect_latex_files`, `model_info` and
+  `model_diagnostics` are commented out instead of ending the file
+  (`mod_tools.R`).
+- The block-comment check counted the `/*` inside banner lines such as
+  `//*****` and then ignored every later computing command, so
+  RBC_baseline_welfare and Born_Pfeifer_RM_Comment ran their whole scripts
+  (in Octave, into `fmincon` and full simulations). Line comments are now
+  stripped before counting.
+- `.mod` files in Latin-1 (accented author names in header comments) are
+  read as such; on Windows, Octave is started with `processx`, because
+  Octave 11 does not exit after Dynare 7's order-3 solver
+  (`k_order_perturbation`) has run, even on `exit(0)` or with one thread:
+  `run.m` writes `export_done` last and Octave is stopped when it appears.
+- dsge: `read_dynare()` itself failed on SGU_2004.mod in a UTF-8 locale
+  (see NEWS), and warned on MATLAB string assignments in
+  Born_Pfeifer_RM_Comment and Born_Pfeifer_2018_welfare.
+
+```sh
+DYNARE_MATLAB=C:/dynare/7.0/matlab OCTAVE=.../octave-cli.exe DSGE_LIB=<library> \
+  Rscript dev/dynare-validation/extra/validate_higher_order.R 2 DSGE_mod/SGU_2004/SGU_2004.mod ...
+```
 
 ## Smets & Wouters (2007), end to end (`extra/validate_smets_wouters.R`)
 

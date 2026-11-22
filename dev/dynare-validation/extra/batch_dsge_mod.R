@@ -8,7 +8,16 @@
 #
 # Usage: Rscript dev/dynare-validation/extra/batch_dsge_mod.R ROOT [OUT.csv] [LOGDIR]
 
-suppressMessages(devtools::load_all(quiet = TRUE))
+#
+# Environment: DYNARE_MATLAB (Dynare's matlab/ folder), OCTAVE (the Octave
+# executable), DSGE_LIB (use the dsge installed there instead of
+# devtools::load_all()).
+
+if (nzchar(Sys.getenv("DSGE_LIB"))) {
+  suppressMessages(library(dsge, lib.loc = Sys.getenv("DSGE_LIB")))
+} else {
+  suppressMessages(devtools::load_all(quiet = TRUE))
+}
 args <- commandArgs(trailingOnly = TRUE)
 root <- args[1]
 out_csv <- if (length(args) > 1L) args[2] else "batch_results.csv"
@@ -50,11 +59,27 @@ run_one <- function(mod) {
     "  fprintf(fid, '%s', f{j}); fprintf(fid, ',%.15g', oo_.irfs.(f{j}));",
     "  fprintf(fid, '\\n');",
     "end",
-    "fclose(fid);"), file.path(work, "run.m"))
+    "fclose(fid);",
+    "fid = fopen('export_done', 'w'); fclose(fid);"), file.path(work, "run.m"))
   old <- setwd(work)
   on.exit(setwd(old))
-  system2("timeout", c("600", "octave", "--no-gui", "--quiet", "run.m"),
-          stdout = "octave.log", stderr = "octave.log")
+  octave <- Sys.getenv("OCTAVE", "octave")
+  if (.Platform$OS.type == "windows") {
+    # no coreutils timeout; Octave is stopped once run.m has written its
+    # results (it may not exit by itself, see validate_higher_order.R)
+    p <- processx::process$new(octave, c("--no-gui", "--quiet", "--norc", "run.m"),
+                               wd = work, stdout = "octave.log",
+                               stderr = "octave_err.log")
+    t0 <- Sys.time()
+    while (p$is_alive() && !file.exists("export_done") &&
+           difftime(Sys.time(), t0, units = "secs") < 600) Sys.sleep(0.5)
+    if (p$is_alive()) { Sys.sleep(1); p$kill() }
+    cat(readLines("octave_err.log", warn = FALSE), file = "octave.log",
+        sep = "\n", append = TRUE)
+  } else {
+    system2("timeout", c("600", octave, "--no-gui", "--quiet", "run.m"),
+            stdout = "octave.log", stderr = "octave.log")
+  }
   if (nzchar(log_dir)) file.copy("octave.log", file.path(log_dir, paste0(base, ".log")),
                                  overwrite = TRUE)
   if (!file.exists("irfs.csv") || file.size("irfs.csv") == 0) {

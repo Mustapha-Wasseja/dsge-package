@@ -126,13 +126,15 @@ if (file.exists(mode_file) && !nzchar(Sys.getenv("SW_REFIT_MODE"))) {
   obj <- function(x) { v <- log_post(x); if (is.finite(v)) -v else 1e10 }
   scale <- pmin(stats::setNames(est$prior_sd, key), upper - lower)
   # Central-difference gradient, coordinates evaluated in parallel
+  # (forked workers; mclapply cannot fork on Windows, so serial there)
+  grad_cores <- if (.Platform$OS.type == "windows") 1L else n_cores
   grad <- function(x) {
     h <- 1e-5 * scale
     unlist(parallel::mclapply(seq_along(x), function(j) {
       up <- min(x[j] + h[j], upper[j]); dn <- max(x[j] - h[j], lower[j])
       xu <- x; xu[j] <- up; xd <- x; xd[j] <- dn
       (obj(xu) - obj(xd)) / (up - dn)
-    }, mc.cores = n_cores))
+    }, mc.cores = grad_cores))
   }
   x <- init
   for (round in 1:5) {                       # restart until no improvement

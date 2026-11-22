@@ -242,7 +242,7 @@ read_dynare <- function(file, text = NULL, observed = NULL, defines = NULL) {
     if (!file.exists(file)) {
       stop("File not found: ", file, call. = FALSE)
     }
-    src <- readLines(file, warn = FALSE)
+    src <- dyn_read_lines(file)
     source_name <- file
     src_dir <- dirname(file)
   } else {
@@ -264,6 +264,21 @@ read_dynare <- function(file, text = NULL, observed = NULL, defines = NULL) {
   build <- dyn_build(parsed, observed = observed)
   build$file <- source_name
   structure(build, class = "dsge_dynare")
+}
+
+# Read a Dynare or MATLAB source file. These files declare no encoding and
+# are often Latin-1 (an accented author name in a header comment is
+# enough); in a UTF-8 locale such a byte is an invalid string and R's
+# regular expressions then fail or return NA. Lines that are not valid
+# UTF-8 are therefore read as Latin-1, which always converts, and a UTF-8
+# byte-order mark is dropped.
+dyn_read_lines <- function(path) {
+  x <- readLines(path, warn = FALSE, encoding = "UTF-8")
+  bad <- !validUTF8(x)
+  if (any(bad)) x[bad] <- iconv(x[bad], from = "latin1", to = "UTF-8")
+  bom <- intToUtf8(0xFEFF)
+  if (length(x) && startsWith(x[1L], bom)) x[1L] <- substring(x[1L], 2L)
+  x
 }
 
 #' @export
@@ -600,6 +615,7 @@ dyn_parse_statements <- function(statements) {
   i <- 1L
   n <- length(statements)
   computed <- FALSE
+  simulated <- FALSE
   while (i <= n) {
     st <- statements[i]
     if (startsWith(st, "%native% ")) {
@@ -647,6 +663,18 @@ dyn_parse_statements <- function(statements) {
       }
       if (j > n) {
         stop("Block '", kw, "' is not closed with 'end;'.", call. = FALSE)
+      }
+      if (kw == "shocks" && simulated) {
+        # As for parameters, the model is imported with the shocks in force
+        # when the file first simulates it: a later shocks block (e.g.
+        # Guerrieri-Iacoviello's second shocks(surprise, overwrite), or
+        # Born-Pfeifer 2018's variances for a second stoch_simul) used to
+        # be merged in and override the first.
+        p$notes <- c(p$notes, paste0(
+          "shocks block after the first computing command ignored: ",
+          substr(paste(body, collapse = " "), 1L, 60L)))
+        i <- j + 1L
+        next
       }
       p$sequence <- c(p$sequence, paste0("block:", kw))
       if (kw == "model") {
@@ -733,6 +761,8 @@ dyn_parse_statements <- function(statements) {
                                                   statement = st)
     p$sequence <- c(p$sequence, paste0("cmd:", kw))
     if (kw %in% dyn_compute_cmds) computed <- TRUE
+    # commands that use the shocks (steady and check do not)
+    if (kw %in% setdiff(dyn_compute_cmds, c("steady", "check"))) simulated <- TRUE
     i <- i + 1L
   }
 
@@ -972,8 +1002,10 @@ dyn_build <- function(p, observed = NULL) {
       })
       if (!inherits(val, "error")) {
         dyn_matlab_sync(mctx, cal_env)
-        if (pe$name %in% p$params &&
-            !(is.numeric(val) || is.logical(val)) || length(val) != 1L) {
+        # A non-number for a model parameter is an error; any other
+        # non-number (a MATLAB string such as country_string = 'Argentina')
+        # stays a MATLAB value and is not coerced (that gave NA + a warning)
+        if (!(is.numeric(val) || is.logical(val)) || length(val) != 1L) {
           if (pe$name %in% p$params) {
             stop("Parameter '", pe$name, "' is not assigned a number: ",
                  pe$expr, call. = FALSE)
@@ -1450,8 +1482,15 @@ dyn_build <- function(p, observed = NULL) {
         stop("No value assigned to parameter(s): ",
              paste(miss, collapse = ", "), call. = FALSE)
       }
-      make_model(eq_set, as.list(params[setdiff(prm, est_names)]),
-                 start[intersect(names(start), prm)])
+      regime <- make_model(eq_set, as.list(params[setdiff(prm, est_names)]),
+                           start[intersect(names(start), prm)])
+      # STEADY_STATE(x) in a regime refers to the reference model's steady
+      # state, as in Dynare; without the link its constants had no value
+      # ("Missing parameter values: iv__ss, ...", Guerrieri-Iacoviello 2015)
+      if (length(ss_links) > 0L) {
+        regime <- dyn_link_steady_state(regime, ss_model, ss_links)
+      }
+      regime
     }, all_eqs)
 
   # Calibrated values of estimated parameters complete the calibration
@@ -1731,7 +1770,9 @@ dyn_link_steady_state <- function(model, ss_model, links) {
   inner_resolve <- model$resolve_values
   resolve <- function(values) {
     if (is.function(inner_resolve)) values <- inner_resolve(values)
-    pv <- values[param_names]
+    # an OccBin regime may lack a parameter of the reference model; the
+    # reference model's own calibration then supplies it
+    pv <- values[intersect(param_names, names(values))]
     if (is.null(cache$key) || !identical(cache$key, pv)) {
       ss <- steady_state(ss_model, params = pv)
       cache$key <- pv

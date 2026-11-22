@@ -11,8 +11,17 @@
 #
 # Usage: Rscript dev/dynare-validation/extra/validate_higher_order.R \
 #          [ORDER] file1.mod file2.mod ...
+#
+# Environment: DYNARE_MATLAB (Dynare's matlab/ folder), OCTAVE (the Octave
+# executable, default "octave"), DSGE_LIB (use the dsge installed in this
+# library instead of devtools::load_all() on the source tree).
 
-suppressMessages(devtools::load_all(quiet = TRUE))
+if (nzchar(Sys.getenv("DSGE_LIB"))) {
+  suppressMessages(library(dsge, lib.loc = Sys.getenv("DSGE_LIB")))
+  compute_unconditional_P <- dsge:::compute_unconditional_P
+} else {
+  suppressMessages(devtools::load_all(quiet = TRUE))
+}
 script_dir <- dirname(sub("^--file=", "", grep("^--file=", commandArgs(FALSE),
                                                value = TRUE)))
 source(file.path(script_dir, "mod_tools.R"))
@@ -42,7 +51,8 @@ export_m <- c(
   "  if isfield(a, 'orig_lead_lag') && ~isempty(a.orig_lead_lag), ol = a.orig_lead_lag; end",
   "  if isfield(a, 'orig_index') && ~isempty(a.orig_index), oi = a.orig_index; end",
   "  fprintf(fid, '%d,%d,%d,%d\\n', a.endo_index, a.type, oi, ol);",
-  "end; fclose(fid);")
+  "end; fclose(fid);",
+  "fid = fopen('export_done', 'w'); fclose(fid);")
 
 rd <- function(dir, nm) {
   f <- file.path(dir, paste0(nm, ".csv"))
@@ -63,8 +73,25 @@ compare_one <- function(mod, order) {
              file.path(prep$dir, "run.m"))
   old <- setwd(prep$dir)
   on.exit(setwd(old))
-  system2("timeout", c("900", "octave", "--no-gui", "--quiet", "run.m"),
-          stdout = "octave.log", stderr = "octave.log")
+  octave <- Sys.getenv("OCTAVE", "octave")
+  if (.Platform$OS.type == "windows") {
+    # No coreutils timeout here. Also, Octave 11 on Windows does not exit
+    # after Dynare 7's order-3 solver (k_order_perturbation) has run, even
+    # on exit(0) or with one thread; so run.m writes export_done as its
+    # last step and Octave is stopped once that file appears.
+    p <- processx::process$new(octave, c("--no-gui", "--quiet", "--norc", "run.m"),
+                               wd = prep$dir, stdout = "octave.log",
+                               stderr = "octave_err.log")
+    t0 <- Sys.time()
+    while (p$is_alive() && !file.exists("export_done") &&
+           difftime(Sys.time(), t0, units = "secs") < 900) Sys.sleep(0.5)
+    if (p$is_alive()) { Sys.sleep(1); p$kill() }
+    cat(readLines("octave_err.log", warn = FALSE), file = "octave.log",
+        sep = "\n", append = TRUE)
+  } else {
+    system2("timeout", c("900", octave, "--no-gui", "--quiet", "run.m"),
+            stdout = "octave.log", stderr = "octave.log")
+  }
   setwd(old)
   if (file.exists(file.path(prep$dir, "ghx.csv")) &&
       !file.exists(file.path(prep$dir, "ghxx.csv"))) {
@@ -136,6 +163,13 @@ compare_one <- function(mod, order) {
   ov <- as.integer(d$order_var)
   ys <- as.numeric(d$ys)
   vars <- intersect(imp$variables, rownames(sol$G))
+  # The risk correction alone: the constant 0.5 * g_sigma_sigma that shifts
+  # each variable away from the deterministic steady state
+  const_dyn <- stats::setNames(numeric(length(ys)), endo_names)
+  const_dyn[ov] <- 0.5 * as.numeric(d$ghs2)
+  const_dsge <- 0.5 * as.numeric(sol$g_ss)[match(vars, rownames(sol$G))]
+  risk_diff <- max(abs(const_dsge - const_dyn[vars]))
+  risk_size <- max(abs(const_dyn[vars]))
   worst <- 0
   scale <- 0
   for (k in seq_len(n_points)) {
@@ -200,7 +234,8 @@ compare_one <- function(mod, order) {
     worst <- max(worst, diff)
     scale <- max(scale, abs(y_dyn[vars] - ys[match(vars, endo_names)]))
   }
-  list(status = "ok", max_abs_diff = worst, scale = scale, n_vars = length(vars))
+  list(status = "ok", max_abs_diff = worst, scale = scale, n_vars = length(vars),
+       risk_diff = risk_diff, risk_size = risk_size)
 }
 
 out <- list()
@@ -217,6 +252,8 @@ for (mod in args) {
                       max_deviation = if (is.null(r$scale)) NA else signif(r$scale, 3),
                       relative = if (is.null(r$scale)) NA else
                         signif(r$max_abs_diff / max(1, r$scale), 3),
+                      risk_correction = if (is.null(r$risk_size)) NA else signif(r$risk_size, 3),
+                      risk_diff = if (is.null(r$risk_diff)) NA else signif(r$risk_diff, 3),
                       seconds = round(as.numeric(Sys.time() - t0, units = "secs")),
                       message = if (is.null(r$msg)) "" else substr(r$msg, 1, 80))
     print(row, row.names = FALSE)

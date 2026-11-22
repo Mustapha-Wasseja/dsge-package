@@ -1,0 +1,104 @@
+Dynare model imported from <work>\book_src\Macroeconometrics_book/Chapter6/Codes_Empirical_Examples/sw_table1.mod 
+  Endogenous:   40 
+  Shocks:       7 
+  Parameters:   34 ( 29 estimated )
+  Auxiliary:    20 ( eta_w_ma_lag1, eta_p_ma_lag1, cf_lag1, invef_lag1, yf_lag1, c_lag1, i_lag1, y_lag1, pinf_lag1, w_lag1, r_lag1, eps_a_lag1, eps_b_lag1, eps_g_lag1, eps_i_lag1, eps_r_lag1, eps_p_lag1, eps_w_lag1, kpf_lag1, k_lag1 )
+  Observed:     dy, dc, dinve, labobs, pinfobs, dw, robs 
+  Priors:       36 
+  Bounds:       36 (used by estimate() and bayes_dsge())
+  Commands:     estimation (recorded, not run)
+
+Use solve_dsge() on this object to solve at the calibration.
+
+Estimation options read from the file:
+List of 4
+ $ first_obs: int 71
+ $ presample: int 4
+ $ lik_init : int 2
+ $ datafile : chr "usmodel_data"
+
+Data: 230 quarters (1947Q3-2004Q4); estimation sample from 1965Q1, likelihood from 1966Q1 (presample 4)
+
+At the file's initial values: log-likelihood -916.4593, log-prior -30.3554
+
+Searching for the posterior mode (L-BFGS-B within the bounds)...
+  round 1: log posterior -841.0827 (improved by 105.7320)
+  round 2: log posterior -841.0826 (improved by 0.0001)
+  done in 48.2 minutes
+At the mode: log-likelihood -817.3581, log-prior -23.7245, log posterior -841.0826
+
+bayes_dsge(): 4 chains x 150000 iterations (50000 warm-up, thin 5) on 4 cores...
+  done in 125.6 minutes
+
+Acceptance rates: 0.269, 0.220, 0.257, 0.257 
+Posterior draws kept: 80000 (4 chains)
+R-hat: max 1.004 (rho_p); ESS: min 1190 (xi_p), median 2408
+
+Per chain (log posterior at the mode: -841.08):
+       mean_loglik mean_logpost max_logpost rho_a rho_b gamma_bar sigma_c
+chain1    -832.579     -858.904    -850.317 0.958 0.216     0.431   1.384
+chain2    -834.026     -859.898    -851.591 0.957 0.222     0.431   1.381
+chain3    -833.795     -859.820    -850.469 0.957 0.216     0.432   1.392
+chain4    -833.996     -859.661    -849.647 0.957 0.224     0.431   1.382
+All posterior draws lie within the estimated_params bounds.
+
+Table 1A -- Prior and posterior distribution of structural parameters (dsge)
+==================================================================================================
+Parameter                       Prior             Mode    Mean      5%     95%  R-hat    ESS
+-------------------------------------------------------------------------------------------------- 
+phi (investment adj. cost)      N(4, 1.5)        5.495   5.706   4.042   7.381  1.003   2550
+sigma_c (risk aversion)         N(1.5, 0.375)    1.424   1.385   1.170   1.600  1.002   2413
+h (habit)                       B(0.7, 0.1)      0.706   0.713   0.644   0.783  1.002   2662
+xi_w (wage Calvo)               B(0.5, 0.1)      0.737   0.702   0.597   0.812  1.004   1766
+sigma_l (labour supply elast.)  N(2, 0.75)       1.893   1.846   0.880   2.714  1.002   2297
+xi_p (price Calvo)              B(0.5, 0.1)      0.656   0.651   0.562   0.740  1.001   1190
+iota_w (wage indexation)        B(0.5, 0.15)     0.596   0.582   0.377   0.795  1.002   2586
+iota_p (price indexation)       B(0.5, 0.15)     0.218   0.240   0.102   0.381  1.002   2434
+psi (capital utilisation)       B(0.5, 0.15)     0.544   0.544   0.366   0.731  1.001   2496
+Phi (fixed cost)                N(1.25, 0.125)   1.608   1.607   1.472   1.735  1.001   2565
+r_pi (Taylor: inflation)        N(1.5, 0.25)     2.022   2.040   1.746   2.321  1.001   2686
+rho (interest smoothing)        B(0.75, 0.1)     0.815   0.810   0.770   0.850  1.003   2385
+r_y (Taylor: output gap)        N(0.125, 0.05)   0.089   0.088   0.051   0.125  1.001   2275
+r_dy (Taylor: d output gap)     N(0.125, 0.05)   0.222   0.224   0.177   0.270  1.002   2440
+pi_bar (SS inflation)           G(0.625, 0.1)    0.762   0.788   0.617   0.961  1.002   3045
+100(1/beta - 1)                 G(0.25, 0.1)     0.144   0.165   0.072   0.258  1.003   2313
+l_bar (SS hours)                N(0, 2)          0.748   0.505  -1.321   2.270  1.002   2756
+gamma_bar (trend growth)        N(0.4, 0.1)      0.435   0.431   0.407   0.455  1.001   2385
+alpha (capital share)           N(0.3, 0.05)     0.191   0.190   0.161   0.219  1.002   2376
+-------------------------------------------------------------------------------------------------- 
+
+Table 1B -- Prior and posterior distribution of shock processes (dsge)
+==================================================================================================
+Parameter                       Prior             Mode    Mean      5%     95%  R-hat    ESS
+-------------------------------------------------------------------------------------------------- 
+sigma_a (productivity)          IG(0.1, 2)       0.453   0.459   0.412   0.505  1.002   2424
+sigma_b (risk premium)          IG(0.1, 2)       0.241   0.240   0.200   0.279  1.001   2565
+sigma_g (exogenous spending)    IG(0.1, 2)       0.521   0.528   0.478   0.578  1.000   2738
+sigma_i (investment)            IG(0.1, 2)       0.455   0.451   0.371   0.530  1.000   2586
+sigma_r (monetary policy)       IG(0.1, 2)       0.239   0.245   0.220   0.270  1.002   2526
+sigma_p (price mark-up)         IG(0.1, 2)       0.140   0.140   0.112   0.168  1.002   2347
+sigma_w (wage mark-up)          IG(0.1, 2)       0.246   0.243   0.207   0.281  1.002   2115
+rho_a                           B(0.5, 0.2)      0.961   0.957   0.938   0.976  1.002   2404
+rho_b                           B(0.5, 0.2)      0.184   0.219   0.070   0.352  1.002   2078
+rho_g                           B(0.5, 0.2)      0.976   0.977   0.963   0.990  1.000   2299
+rho_i                           B(0.5, 0.2)      0.703   0.714   0.620   0.812  1.001   2402
+rho_r                           B(0.5, 0.2)      0.122   0.149   0.047   0.249  1.001   2478
+rho_p                           B(0.5, 0.2)      0.907   0.890   0.814   0.969  1.004   1343
+rho_w                           B(0.5, 0.2)      0.974   0.968   0.947   0.989  1.001   1260
+mu_p                            B(0.5, 0.2)      0.743   0.696   0.537   0.856  1.002   1572
+mu_w                            B(0.5, 0.2)      0.894   0.842   0.745   0.936  1.002   2324
+rho_ga                          N(0.5, 0.25)     0.523   0.523   0.378   0.668  1.002   2943
+-------------------------------------------------------------------------------------------------- 
+5% and 95%: bounds of the 90% highest posterior density interval, as in Dynare.
+
+Figure 6.2 parameters: published SW (2007) values (from the book's script) vs dsge
+ parameter sw2007_mode sw2007_5 sw2007_95 dsge_mode dsge_mean dsge_5 dsge_95
+      xi_p        0.65     0.56      0.74     0.656     0.651  0.562   0.740
+      xi_w        0.73     0.60      0.81     0.737     0.702  0.597   0.812
+         h        0.71     0.64      0.78     0.706     0.713  0.644   0.783
+       phi        5.48     3.97      7.42     5.495     5.706  4.042   7.381
+      r_pi        2.03     1.74      2.33     2.022     2.040  1.746   2.321
+       rho        0.81     0.77      0.85     0.815     0.810  0.770   0.850
+
+Saved <work>/dsge-book/dev/macroeconometrics-book/output/figure_6_2_prior_posterior_dsge.png 
+Saved <work>/dsge-book/dev/macroeconometrics-book/output/sw_prior_posterior_all.pdf 

@@ -3,6 +3,10 @@
 Companion code: <https://github.com/AlessiaPaccagnini/Macroeconometrics_book>
 (De Gruyter, forthcoming). Chapter 6 is the book's only DSGE chapter. Its
 model-based examples are run here with dsge, in R, without Dynare or MATLAB.
+The Smets-Wouters estimation is then checked against Dynare estimating
+the same file: Dynare 6.0 in Octave with the book's own settings
+(`ch6_compare_dynare.R`), and Dynare 7.0 in MATLAB and Octave with long
+chains (`ch6_compare_dynare_platforms.R`).
 
 | Book item | Book code | What it computes | Here |
 |---|---|---|---|
@@ -26,7 +30,13 @@ Rscript dev/macroeconometrics-book/ch6_figure_6_1_rbc_irf.R
 Rscript dev/macroeconometrics-book/ch6_smets_wouters_estimation.R
 Rscript dev/macroeconometrics-book/ch6_compare_sw_mode.R
 Rscript dev/macroeconometrics-book/ch6_compare_dynare.R   # needs Octave + Dynare
+Rscript dev/macroeconometrics-book/ch6_compare_dynare_platforms.R   # needs Dynare's runs, see below
 ```
+
+On Windows the mode search's gradient runs serially (`mclapply` cannot
+fork there), and `bayes_dsge()` runs its chains on PSOCK workers, which
+load the *installed* dsge: install this branch first (or put its library
+first in `R_LIBS`).
 
 The estimation needs `R.matlab` (to read `usmodel_data.mat`). Its posterior
 mode and draws are cached in `output/*.rds` (not committed), so a re-run only
@@ -337,6 +347,154 @@ the same, slightly higher-posterior point (log posterior -841.08 against
 | MA: wage mark-up | 0.888 | 0.893 | 0.893 |
 | Spending-productivity link | 0.526 | 0.523 | 0.523 |
 
+### Smets-Wouters (2007): Dynare 7.0 in MATLAB and Octave, with long chains
+
+The check above uses the book's 2 x 2000 draws, whose Monte Carlo error
+dominates the comparison of posteriors. This one adds long Dynare chains,
+runs Dynare in MATLAB with the book's exact settings as well as in
+Octave, and compares the posterior distributions item by item.
+
+`ch6_compare_dynare_platforms.R` sets dsge's estimation of `sw_table1.mod` beside
+Dynare 7.0's own estimation of the same file, all run on one Windows 11
+laptop (2026-11-20):
+
+| Run | Software | Posterior mode | MCMC |
+|---|---|---|---|
+| Book run | Dynare 7.0, MATLAB R2023b | `mode_compute = 1` (fmincon, active-set): the book's command unchanged | 2 x 2,000 draws, `mh_jscale = 0.2`, 20% dropped |
+| Book run in Octave | Dynare 7.0, Octave 11.1 | `mode_compute = 4` (csminwel; Octave has no fmincon), otherwise unchanged (`dynare/sw_table1_octave.mod`) | 2 x 2,000 draws |
+| Long Dynare chains | Dynare 7.0, MATLAB R2023b | the book run's mode and Hessian (`mode_compute = 0`) | 4 x 150,000 draws, `mh_jscale = 0.2`, first third dropped (`dynare/sw_long_template.mod`) |
+| dsge | dsge 1.2.1 (this branch), R 4.5.2 | L-BFGS-B within the bounds, from the file's initial values | `bayes_dsge()`, 4 x 150,000 iterations, 50,000 warm-up, thin 5 |
+
+The dsge run is a fresh run of `ch6_smets_wouters_estimation.R` on this
+machine (`output/ch6_smets_wouters_estimation_windows.log`: R-hat at most
+1.004, ESS 1190 to 3045). Tables 1A and 1B above come from the earlier
+Linux run; the two dsge runs differ by Monte Carlo error (e.g. the mean of
+`phi` is 5.722 there and 5.706 here). The four long Dynare chains have R-hat
+at most 1.013 and ESS 405 (`Mu_w`) to 2119 (median 1615), on the
+same footing as dsge's.
+
+**Same posterior kernel.** At six parameter vectors (the file's initial
+values, the three modes and both posterior means), Dynare's own
+`evaluate_likelihood()` and `priordens()`, in MATLAB and in Octave, return
+the log-likelihood and log-prior that dsge's Kalman filter and priors
+return. The largest difference is 1.9e-11 for the log-likelihood and
+2.6e-12 for the log-prior:
+
+| Point | Log-likelihood, dsge | Log-likelihood, Dynare (MATLAB and Octave) | Log-prior |
+|---|---:|---:|---:|
+| File's initial values | -916.459296828 | -916.459296828 | -30.3554309275 |
+| Dynare's mode (MATLAB) | -817.409584670 | -817.409584670 | -23.6715372416 |
+| Dynare's mode (Octave) | -817.411195008 | -817.411195008 | -23.6699271430 |
+| dsge's mode | -817.358112406 | -817.358112406 | -23.7245254338 |
+| Dynare's posterior mean | -821.709317336 | -821.709317336 | -21.2818028389 |
+| dsge's posterior mean | -821.777451599 | -821.777451599 | -21.1833184246 |
+
+**Same mode.** MATLAB's fmincon and Octave's csminwel end at the same point
+(log posterior -841.081122 in both; parameters equal to four decimals).
+dsge's L-BFGS-B stops 0.0015 lower, at -841.0826, where it meets its
+convergence tolerance; its largest parameter difference from Dynare's mode
+is 0.034 posterior standard deviations (`xi_w`), median 0.009. The Laplace
+approximation of the log marginal data density is -922.3967 (MATLAB),
+-922.3963 (Octave) and -922.4209 (dsge, numerical Hessian at its own mode).
+The 0.024 gap comes mostly from dsge's slightly lower point: the same
+numerical Hessian at Dynare's mode gives -922.3931.
+
+**Same posterior.** Against the four long Dynare chains, dsge's posterior
+means differ by a median of 0.016 posterior standard deviations (largest
+0.081, `beta_const`). 34 of the 36 differences are within two Monte Carlo
+standard errors; the other two (`beta_const` at 2.5, the sd of `eta_g` at
+2.1) are about what 36 comparisons give by chance. Posterior standard
+deviations agree to within 5% (ratio 0.970 to 1.050), and the ends of the
+90% HPD intervals differ by a median of 0.035 standard deviations (largest
+0.177).
+
+**The book's own Dynare run is the outlier.** Its 2 x 2,000 draws have R-hat
+up to 1.67 (`Mu_p`) and an ESS of 11 to 39 per parameter. Its posterior
+means are a median 0.24 posterior standard deviations from the long Dynare
+chains (up to 0.67, `xi_p`), and the Octave run of the same command, 0.17
+(up to 0.62, `phi_p`). Its modified harmonic mean estimate of the log
+marginal data density is -938.42 in MATLAB and -943.58 in Octave. As the
+file's own comment says, `mh_replic` has to be increased.
+
+![dsge vs Dynare posteriors](output/dynare_vs_dsge_posteriors.png)
+
+`output/dynare_vs_dsge_posteriors_all.pdf` shows all 36 parameters.
+
+#### Every estimated parameter, on every platform
+
+Modes, and posterior means with 90% HPD intervals from the long chains.
+`output/platform_comparison.md` and `.csv` add the book's 2 x 2,000 runs
+in MATLAB and Octave.
+
+| Parameter | Prior | Mode: Dynare, MATLAB (fmincon) | Mode: Dynare, Octave (csminwel) | Mode: dsge (L-BFGS-B) | Posterior mean [90% HPD]: Dynare | Posterior mean [90% HPD]: dsge |
+|---|---|---:|---:|---:|---:|---:|
+| phi | N(4, 1.5) | 5.488 | 5.488 | 5.495 | 5.717 [4.057, 7.406] | 5.706 [4.042, 7.381] |
+| sigma_c | N(1.5, 0.375) | 1.422 | 1.422 | 1.424 | 1.384 [1.173, 1.595] | 1.385 [1.170, 1.600] |
+| lambda | B(0.7, 0.1) | 0.706 | 0.706 | 0.706 | 0.712 [0.642, 0.783] | 0.713 [0.644, 0.783] |
+| xi_w | B(0.5, 0.1) | 0.734 | 0.734 | 0.737 | 0.704 [0.598, 0.815] | 0.702 [0.597, 0.812] |
+| sigma_l | N(2, 0.75) | 1.875 | 1.875 | 1.893 | 1.843 [0.890, 2.733] | 1.846 [0.880, 2.714] |
+| xi_p | B(0.5, 0.1) | 0.654 | 0.654 | 0.656 | 0.653 [0.564, 0.746] | 0.651 [0.562, 0.740] |
+| iota_w | B(0.5, 0.15) | 0.598 | 0.598 | 0.596 | 0.585 [0.384, 0.792] | 0.582 [0.377, 0.795] |
+| iota_p | B(0.5, 0.15) | 0.219 | 0.219 | 0.218 | 0.241 [0.095, 0.375] | 0.240 [0.102, 0.381] |
+| psi | B(0.5, 0.15) | 0.545 | 0.545 | 0.544 | 0.546 [0.361, 0.726] | 0.544 [0.366, 0.731] |
+| phi_p | N(1.25, 0.125) | 1.610 | 1.610 | 1.608 | 1.608 [1.481, 1.738] | 1.607 [1.472, 1.735] |
+| r_pi | N(1.5, 0.25) | 2.022 | 2.022 | 2.022 | 2.044 [1.744, 2.327] | 2.040 [1.746, 2.321] |
+| rho | B(0.75, 0.1) | 0.815 | 0.815 | 0.815 | 0.810 [0.771, 0.851] | 0.810 [0.770, 0.850] |
+| r_y | N(0.125, 0.05) | 0.088 | 0.088 | 0.089 | 0.089 [0.050, 0.127] | 0.088 [0.051, 0.125] |
+| r_dy | N(0.125, 0.05) | 0.222 | 0.222 | 0.222 | 0.224 [0.179, 0.270] | 0.224 [0.177, 0.270] |
+| pi_bar | G(0.625, 0.1) | 0.765 | 0.765 | 0.762 | 0.787 [0.614, 0.958] | 0.788 [0.617, 0.961] |
+| beta_const | G(0.25, 0.1) | 0.144 | 0.144 | 0.144 | 0.169 [0.074, 0.259] | 0.165 [0.072, 0.258] |
+| l_bar | N(0, 2) | 0.726 | 0.726 | 0.748 | 0.528 [-1.203, 2.335] | 0.505 [-1.321, 2.270] |
+| gamma_bar | N(0.4, 0.1) | 0.434 | 0.434 | 0.435 | 0.431 [0.408, 0.455] | 0.431 [0.407, 0.455] |
+| alpha | N(0.3, 0.05) | 0.191 | 0.191 | 0.191 | 0.190 [0.161, 0.220] | 0.190 [0.161, 0.219] |
+| sd eta_a | IG(0.1, 2) | 0.453 | 0.453 | 0.453 | 0.458 [0.412, 0.505] | 0.459 [0.412, 0.505] |
+| sd eta_b | IG(0.1, 2) | 0.242 | 0.242 | 0.241 | 0.239 [0.199, 0.279] | 0.240 [0.200, 0.279] |
+| sd eta_g | IG(0.1, 2) | 0.521 | 0.521 | 0.521 | 0.530 [0.479, 0.580] | 0.528 [0.478, 0.578] |
+| sd eta_i | IG(0.1, 2) | 0.455 | 0.455 | 0.455 | 0.452 [0.369, 0.532] | 0.451 [0.371, 0.530] |
+| sd eta_r | IG(0.1, 2) | 0.239 | 0.239 | 0.239 | 0.245 [0.220, 0.270] | 0.245 [0.220, 0.270] |
+| sd eta_p | IG(0.1, 2) | 0.140 | 0.140 | 0.140 | 0.141 [0.114, 0.168] | 0.140 [0.112, 0.168] |
+| sd eta_w | IG(0.1, 2) | 0.247 | 0.247 | 0.246 | 0.243 [0.207, 0.279] | 0.243 [0.207, 0.281] |
+| rho_a | B(0.5, 0.2) | 0.961 | 0.961 | 0.961 | 0.957 [0.939, 0.976] | 0.957 [0.938, 0.976] |
+| rho_b | B(0.5, 0.2) | 0.183 | 0.183 | 0.184 | 0.223 [0.074, 0.364] | 0.219 [0.070, 0.352] |
+| rho_g | B(0.5, 0.2) | 0.976 | 0.976 | 0.976 | 0.976 [0.963, 0.990] | 0.977 [0.963, 0.990] |
+| rho_i | B(0.5, 0.2) | 0.703 | 0.703 | 0.703 | 0.712 [0.618, 0.811] | 0.714 [0.620, 0.812] |
+| rho_r | B(0.5, 0.2) | 0.123 | 0.123 | 0.122 | 0.151 [0.047, 0.249] | 0.149 [0.047, 0.249] |
+| rho_p | B(0.5, 0.2) | 0.908 | 0.908 | 0.907 | 0.889 [0.811, 0.967] | 0.890 [0.814, 0.969] |
+| rho_w | B(0.5, 0.2) | 0.974 | 0.974 | 0.974 | 0.968 [0.947, 0.990] | 0.968 [0.947, 0.989] |
+| Mu_p | B(0.5, 0.2) | 0.744 | 0.744 | 0.743 | 0.700 [0.546, 0.854] | 0.696 [0.537, 0.856] |
+| Mu_w | B(0.5, 0.2) | 0.893 | 0.893 | 0.894 | 0.845 [0.756, 0.936] | 0.842 [0.745, 0.936] |
+| rho_ga | N(0.5, 0.25) | 0.523 | 0.523 | 0.523 | 0.523 [0.373, 0.666] | 0.523 [0.378, 0.668] |
+| Log posterior at the mode | | -841.0811 | -841.0811 | -841.0826 | | |
+| Laplace log marginal data density | | -922.3967 | -922.3963 | -922.4209 | | |
+
+The kernel, mode and posterior comparisons are also in
+`output/dynare_kernel_at_points.csv`, `output/dynare_mode_comparison.csv`
+and `output/dynare_posterior_comparison.csv`; the run is in
+`output/ch6_compare_dynare_platforms.log`, and Dynare's own logs and exports are in
+`output/dynare/` (the draws themselves, about 90 MB, are not committed).
+
+#### Running the comparison
+
+The Dynare side uses the files in `dynare/` (MATLAB or Octave, Dynare 7.0;
+set `DYNARE_ROOT` if Dynare is not in `C:\dynare\7.0`):
+
+1. Copy the book's `sw_table1.mod`, its three included files and
+   `usmodel_data.mat` into a folder and run it with `run_dynare.m`
+   (`SW_RUN_DIR` = that folder, `SW_FNAME` = `sw_table1`). For Octave, use
+   `sw_table1_octave.mod` as `sw_table1.mod`.
+2. For the long chains, make four folders with the same files, the book
+   run's `sw_table1/Output/sw_table1_mode.mat` and `sw_long<k>.mod` (from
+   `sw_long_template.mod`, seed 2007 + k), and run each with `run_dynare.m`
+   (they can run at the same time; about 42 minutes each in MATLAB).
+3. Export each run with `export_all.m` (`SW_EXPORT_LIST` lists
+   `run folder|file name|results .mat|output folder|thinning`; output to
+   `output/dynare/matlab` or `output/dynare/octave`, thinning 5 for the
+   long chains).
+4. Run `ch6_smets_wouters_estimation.R`, then `ch6_compare_dynare_platforms.R`. It
+   writes `points.csv` into the Dynare output folders; re-run step 3 for
+   the two book runs (so Dynare evaluates its kernel at those points) and
+   then `ch6_compare_dynare_platforms.R` again.
+
 ### Figure 6.2: prior vs posterior
 
 The book's figure draws a normal approximation around the published
@@ -351,7 +509,9 @@ all 36 parameters with the package's own `plot(fit, type = "prior_posterior")`.
 
 - **Mode search:** L-BFGS-B within the bounds instead of MATLAB's
   `fmincon` active-set algorithm. It starts from the same values and
-  stays within the same bounds.
+  stays within the same bounds, and stops 0.0015 log points below the
+  mode that fmincon and csminwel both reach (largest parameter difference
+  0.034 posterior standard deviations).
 - **Sampler:** `bayes_dsge()`'s adaptive random-walk MH (proposal tuned
   during warm-up, in an unconstrained parameterisation) instead of
   Dynare's fixed-scale RWMH with `mh_jscale = 0.2`, and far longer chains.

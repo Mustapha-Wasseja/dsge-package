@@ -702,3 +702,115 @@ test_that("steady_state works on imported Dynare models", {
   ss2 <- steady_state(rbc, params = c(beta = 0.98))
   expect_lt(ss2$values[["k"]], ss$values[["k"]])
 })
+
+test_that("read_dynare() reads Latin-1 and BOM-prefixed files", {
+  body <- c("var y; varexo e; parameters rho; rho = 0.9;",
+            "model; y = rho*y(-1) + e; end;",
+            "shocks; var e; stderr 0.01; end;")
+  txt <- function(x) charToRaw(paste0(paste(x, collapse = "\n"), "\n"))
+  # a Latin-1 e-acute (byte 0xE9) in a header comment, as in the
+  # Schmitt-Grohe/Uribe (2004) file of Pfeifer's DSGE_mod collection
+  latin1 <- tempfile(fileext = ".mod")
+  writeBin(c(charToRaw("// Schmitt-Groh"), as.raw(0xE9), txt("/Uribe (2004)"),
+             txt(body)), latin1)
+  m <- read_dynare(latin1)
+  expect_s3_class(m, "dsge_dynare")
+  expect_true("y" %in% m$variables)
+
+  bom <- tempfile(fileext = ".mod")
+  writeBin(c(as.raw(c(0xEF, 0xBB, 0xBF)), txt(body)), bom)
+  expect_true("y" %in% read_dynare(bom)$variables)
+
+  # an @#include'd file in Latin-1
+  d <- tempfile()
+  dir.create(d)
+  writeBin(c(charToRaw("// R"), as.raw(0xE9), txt("sum"), txt(body[1])),
+           file.path(d, "defs.mod"))
+  writeLines(c('@#include "defs.mod"', body[-1]), file.path(d, "main.mod"))
+  expect_true("y" %in% read_dynare(file.path(d, "main.mod"))$variables)
+})
+
+test_that("read_dynare() leaves MATLAB string assignments alone", {
+  # Born-Pfeifer (2014) sets country_string = 'Argentina' among its
+  # parameters; it used to be coerced to NA with a warning
+  src <- "var y; varexo e; parameters rho; rho = 0.9;
+          country_string = 'Argentina';
+          model; y = rho*y(-1) + e; end;
+          shocks; var e; stderr 0.01; end;"
+  expect_no_warning(m <- read_dynare(text = src))
+  expect_true("y" %in% m$variables)
+  expect_error(read_dynare(text = sub("rho = 0.9", "rho = 'high'", src)),
+               "not assigned a number")
+})
+
+test_that("read_dynare() keeps the shocks in force at the first computing command", {
+  src <- "var y; varexo e; parameters rho; rho = 0.5;
+          model; y = rho*y(-1) + e; end;
+          shocks; var e; stderr 0.01; end;
+          stoch_simul(order = 1);
+          shocks; var e; stderr 0.05; end;
+          stoch_simul(order = 1);"
+  m <- read_dynare(text = src)
+  expect_equal(unname(m$shock_sd["e"]), 0.01)
+  expect_true(any(grepl("shocks block after the first computing command", m$notes)))
+})
+
+test_that("OccBin: steady_state() in regimes and constraints, first surprise block", {
+  # as in Guerrieri-Iacoviello (2015): a floor at phi * steady_state(i),
+  # and a second shocks(surprise, overwrite) block for a later run
+  src <- "var y i; varexo e; parameters rho phi; rho = 0.8; phi = 0.98;
+          model;
+          y = 1 + rho*(y(-1) - 1) + e;
+          [name='floor', relax='lb'] i = y;
+          [name='floor', bind='lb'] i = phi*steady_state(i);
+          end;
+          steady_state_model; y = 1; i = 1; end;
+          occbin_constraints;
+          name 'lb'; bind y < phi*steady_state(i); relax y > phi*steady_state(i);
+          end;
+          shocks(surprise, overwrite); var e; periods 1; values -0.1; end;
+          occbin_setup; occbin_solver(simul_periods = 20);
+          shocks(surprise, overwrite); var e; periods 1; values 0.1; end;
+          occbin_setup; occbin_solver(simul_periods = 20);"
+  m <- read_dynare(text = src)
+  oc <- simulate_occbin(m, horizon = 20L)
+  expect_equal(unname(oc$states[1, "e"]), -0.1)      # the first block
+  b <- oc$binding[, 1]
+  # y = 1 - 0.1 * 0.8^(t-1) is below 0.98 for t = 1..8
+  expect_equal(which(b), 1:8)
+  expect_equal(unname(oc$controls[b, "i"]), rep(0.98 - 1, 8), tolerance = 1e-10)
+  expect_equal(unname(oc$controls[!b, "i"]), unname(oc$controls[!b, "y"]),
+               tolerance = 1e-10)
+})
+
+test_that("OccBin: a relax condition on the constrained variable uses its shadow value", {
+  # As in Guerrieri-Iacoviello's NK model ("bind r <= ZLB; relax r > ZLB"
+  # with r = ZLB when binding): Dynare evaluates the relax condition at the
+  # value the relaxed equation implies. Without that, i sits at the floor
+  # and the regime only flips on rounding error.
+  src <- "var y i; varexo e; parameters rho phi; rho = 0.8; phi = 0.98;
+          model;
+          y = 1 + rho*(y(-1) - 1) + e;
+          [name='floor', relax='lb'] i = y;
+          [name='floor', bind='lb'] i = phi*steady_state(i);
+          end;
+          steady_state_model; y = 1; i = 1; end;
+          occbin_constraints;
+          name 'lb'; bind i <= phi*steady_state(i); relax i > phi*steady_state(i);
+          end;
+          shocks(surprise, overwrite); var e; periods 1; values -0.1; end;
+          occbin_setup; occbin_solver(simul_periods = 20);"
+  oc <- simulate_occbin(read_dynare(text = src), horizon = 20L)
+  expect_true(oc$converged)
+  expect_equal(which(oc$binding[, 1]), 1:8)
+})
+
+test_that("model_covariance() works on an imported model without varobs", {
+  # paste0("y", seq_len(0)) is "y": a model with no observables used to get
+  # a phantom observable and fail with a dimnames error
+  m <- read_dynare(text = "var y; varexo e; parameters rho; rho = 0.5;
+                           model; y = rho*y(-1) + e; end;
+                           shocks; var e; stderr 0.1; end;")
+  cv <- model_covariance(solve_dsge(m), variables = "y")
+  expect_equal(unname(cv$std_dev), 0.1 / sqrt(1 - 0.5^2), tolerance = 1e-10)
+})
